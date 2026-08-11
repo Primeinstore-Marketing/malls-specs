@@ -1,0 +1,307 @@
+/* Specification Platform — design tokens
+   Generated from the Phase 3 token layer. Do not hand-edit.
+   Every colour pairing in this file is verified against WCAG 2.1 AA. */
+
+:root {
+  /* ── typography ─────────────────────────────────────── */
+  --font-display: "Wix Madefor Display", "Poppins", system-ui, sans-serif;
+  --font-body: "Montserrat", "Lato", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  --text-display-2xl: clamp(3.25rem, 8vw, 6.25rem);            /* 52–100px · Landing headline */
+  --text-display-2xl-weight: 900;
+  --text-display-2xl-tracking: -0.04em;
+  --text-display-2xl-leading: 0.92;
+  --text-display-xl: 2.25rem;            /* 36px · Page title */
+  --text-display-xl-weight: 800;
+  --text-display-xl-tracking: -0.03em;
+  --text-display-xl-leading: 1.1;
+  --text-display-lg: 1.75rem;            /* 28px · Specification title */
+  --text-display-lg-weight: 800;
+  --text-display-lg-tracking: -0.02em;
+  --text-display-lg-leading: 1.15;
+  --text-display-md: 1.5rem;            /* 24px · Statistic numeral */
+  --text-display-md-weight: 900;
+  --text-display-md-tracking: -0.03em;
+  --text-display-md-leading: 1.0;
+  --text-display-sm: 1.25rem;            /* 20px · Section heading, sheet title */
+  --text-display-sm-weight: 700;
+  --text-display-sm-tracking: -0.01em;
+  --text-display-sm-leading: 1.25;
+  --text-body-lg: 1rem;            /* 16px · Lead paragraph, description */
+  --text-body-lg-weight: 400;
+  --text-body-lg-tracking: 0;
+  --text-body-lg-leading: 1.6;
+  --text-body-md: 0.875rem;            /* 14px · Base — body copy, controls, nav */
+  --text-body-md-weight: 400;
+  --text-body-md-tracking: 0;
+  --text-body-md-leading: 1.6;
+  --text-body-sm: 0.8125rem;            /* 13px · Dense rows, table cells, help text */
+  --text-body-sm-weight: 400;
+  --text-body-sm-tracking: 0;
+  --text-body-sm-leading: 1.55;
+  --text-label-lg: 0.8125rem;            /* 13px · Section label with rule */
+  --text-label-lg-weight: 700;
+  --text-label-lg-tracking: 0.08em;
+  --text-label-lg-leading: 1.2;
+  --text-label-md: 0.75rem;            /* 12px · Table header, group label, chip */
+  --text-label-md-weight: 700;
+  --text-label-md-tracking: 0.1em;
+  --text-label-md-leading: 1.2;
+  --text-label-sm: 0.6875rem;            /* 11px · Smallest permitted — sidebar label */
+  --text-label-sm-weight: 700;
+  --text-label-sm-tracking: 0.12em;
+  --text-label-sm-leading: 1.2;
+  --text-mono-md: 0.8125rem;            /* 13px · Reference codes, dimensions, tokens */
+  --text-mono-md-weight: 500;
+  --text-mono-md-tracking: 0;
+  --text-mono-md-leading: 1.5;
+
+  /* ── spacing (4px base) ─────────────────────────────── */
+  --space-0: 0px;
+  --space-px: 1px;
+  --space-0.5: 2px;
+  --space-1: 4px;
+  --space-1.5: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ── radii ──────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 9999px;
+
+  /* ── elevation ──────────────────────────────────────── */
+  --shadow-0: none;   /* Flat — default for cards and rows */
+  --shadow-1: 0 1px 0 rgba(13,30,63,.06), 0 1px 2px rgba(13,30,63,.06);   /* Top bar, sticky headers */
+  --shadow-2: 0 2px 4px rgba(13,30,63,.06), 0 4px 12px rgba(13,30,63,.08);   /* Popover, dropdown, tooltip */
+  --shadow-3: 0 8px 24px rgba(13,30,63,.12);   /* Off-canvas drawer, command palette */
+  --shadow-4: 0 16px 48px rgba(13,30,63,.18);   /* Modal sheet */
+
+  /* ── motion ─────────────────────────────────────────── */
+  --duration-instant: 80ms;   /* Colour-only state change */
+  --duration-fast: 140ms;   /* Hover, focus, button and nav states */
+  --duration-normal: 220ms;   /* Popover, tooltip, badge change */
+  --duration-slow: 300ms;   /* Route transition, accordion, sheet */
+  --duration-slower: 420ms;   /* Drawer, media zoom */
+  --ease-expressive: cubic-bezier(.16, 1, .3, 1);   /* Structural movement — panels, routes, accordions */
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);   /* State change — hover, focus, fills */
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);   /* Dismissal, collapse */
+
+  /* ── z-index ────────────────────────────────────────── */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-topbar: 200;
+  --z-scrim: 300;
+  --z-drawer: 310;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-tooltip: 550;
+  --z-toast: 600;
+
+  /* ── containers ─────────────────────────────────────── */
+  --container-prose: 720px;   /* Long-form text — notes, descriptions */
+  --container-panel: 640px;   /* Specification data panel at its default 50% */
+  --container-sheet: 1020px;   /* Editor sheet */
+  --container-admin: 960px;   /* Management sheet */
+  --container-page: 1440px;   /* Page content maximum */
+  --container-full: 1728px;   /* Shell maximum before margins grow */
+
+  /* ── layout ─────────────────────────────────────────── */
+  --sidebar-width: 260px;
+  --sidebar-width-md: 220px;
+  --topbar-height: 52px;
+  --topbar-height-md: 48px;
+  --topbar-height-sm: 44px;
+  --panel-split: 50%;
+  --panel-split-xl: 58%;   /* variant A, >=1440px */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
+
+/* ── colour · light (default) ─────────────────────────── */
+:root, [data-theme='light'] {
+  --color-bg: #FFFFFF;
+  --color-bg-subtle: #F5F7FC;
+  --color-bg-muted: #EEF1F8;
+  --color-bg-strong: #E3E8F4;
+  --color-bg-inverse: #16294C;
+  --color-fg: #0D1E3F;
+  --color-fg-muted: #4B5870;
+  --color-fg-subtle: #6A7589;
+  --color-fg-on-accent: #FFFFFF;
+  --color-fg-on-inverse: #FFFFFF;
+  --color-border: #E7E8EC;
+  --color-border-strong: #CFD2D9;
+  --color-border-control: #8C94A4;
+  --color-border-focus: #2861FD;
+  --color-accent: #2861FD;
+  --color-accent-hover: #1A4FD6;
+  --color-accent-active: #1540B0;
+  --color-accent-subtle: #EDF2FF;
+  --color-accent-border: #B9CCFF;
+  --color-accent-fg: #1A4FD6;
+  --color-brand: #1B3769;
+  --color-brand-hover: #16294C;
+  --color-brand-subtle: #EBEFF7;
+  --color-brand-surface: #1B3769;
+  --color-brand-surface-hover: #22437C;
+  --color-brand-on-surface: #FFFFFF;
+  --color-brand-on-surface-muted: #C3D0E8;
+  --color-info-fg: #2861FD;
+  --color-info-bg: #EDF2FF;
+  --color-info-border: #B9CCFF;
+  --color-success-fg: #0F7A4D;
+  --color-success-bg: #E8F6EF;
+  --color-success-border: #A8DCC4;
+  --color-warning-fg: #8A5A00;
+  --color-warning-bg: #FCF2DF;
+  --color-warning-border: #EBD199;
+  --color-danger-fg: #B3261E;
+  --color-danger-bg: #FDECEA;
+  --color-danger-border: #F2B8B4;
+  --color-neutral-fg: #42506B;
+  --color-neutral-bg: #F0F2F7;
+  --color-neutral-border: #CDD4E2;
+
+  --status-draft-fg: var(--color-neutral-fg);
+  --status-draft-bg: var(--color-neutral-bg);
+  --status-draft-border: var(--color-neutral-border);
+  --status-review-fg: var(--color-warning-fg);
+  --status-review-bg: var(--color-warning-bg);
+  --status-review-border: var(--color-warning-border);
+  --status-published-fg: var(--color-success-fg);
+  --status-published-bg: var(--color-success-bg);
+  --status-published-border: var(--color-success-border);
+  --status-deprecated-fg: var(--color-danger-fg);
+  --status-deprecated-bg: var(--color-danger-bg);
+  --status-deprecated-border: var(--color-danger-border);
+  --status-superseded-fg: var(--color-info-fg);
+  --status-superseded-bg: var(--color-info-bg);
+  --status-superseded-border: var(--color-info-border);
+}
+
+/* ── colour · dark ────────────────────────────────────── */
+[data-theme='dark'] {
+  --color-bg: #0C1424;
+  --color-bg-subtle: #121B2E;
+  --color-bg-muted: #18243C;
+  --color-bg-strong: #1F2D4A;
+  --color-bg-inverse: #E9EEF9;
+  --color-fg: #E9EEF9;
+  --color-fg-muted: #9CA2AF;
+  --color-fg-subtle: #7A808E;
+  --color-fg-on-accent: #08111F;
+  --color-fg-on-inverse: #0C1424;
+  --color-border: #2B3342;
+  --color-border-strong: #454D5B;
+  --color-border-control: #5C6371;
+  --color-border-focus: #7FA6FF;
+  --color-accent: #7FA6FF;
+  --color-accent-hover: #9CBAFF;
+  --color-accent-active: #B7CDFF;
+  --color-accent-subtle: #16243F;
+  --color-accent-border: #2E4A80;
+  --color-accent-fg: #9CBAFF;
+  --color-brand: #C9D6EE;
+  --color-brand-hover: #E2EAF8;
+  --color-brand-subtle: #16243F;
+  --color-brand-surface: #111B2E;
+  --color-brand-surface-hover: #1A2842;
+  --color-brand-on-surface: #E9EEF9;
+  --color-brand-on-surface-muted: #A3B0C9;
+  --color-info-fg: #8FB2FF;
+  --color-info-bg: #14213A;
+  --color-info-border: #2E4A80;
+  --color-success-fg: #63C79B;
+  --color-success-bg: #0E2620;
+  --color-success-border: #1F5B44;
+  --color-warning-fg: #E0B25C;
+  --color-warning-bg: #251E0E;
+  --color-warning-border: #5E4718;
+  --color-danger-fg: #F08279;
+  --color-danger-bg: #2A1414;
+  --color-danger-border: #6B2B26;
+  --color-neutral-fg: #A8B4CC;
+  --color-neutral-bg: #18202F;
+  --color-neutral-border: #39445C;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #0C1424;
+    --color-bg-subtle: #121B2E;
+    --color-bg-muted: #18243C;
+    --color-bg-strong: #1F2D4A;
+    --color-bg-inverse: #E9EEF9;
+    --color-fg: #E9EEF9;
+    --color-fg-muted: #9CA2AF;
+    --color-fg-subtle: #7A808E;
+    --color-fg-on-accent: #08111F;
+    --color-fg-on-inverse: #0C1424;
+    --color-border: #2B3342;
+    --color-border-strong: #454D5B;
+    --color-border-control: #5C6371;
+    --color-border-focus: #7FA6FF;
+    --color-accent: #7FA6FF;
+    --color-accent-hover: #9CBAFF;
+    --color-accent-active: #B7CDFF;
+    --color-accent-subtle: #16243F;
+    --color-accent-border: #2E4A80;
+    --color-accent-fg: #9CBAFF;
+    --color-brand: #C9D6EE;
+    --color-brand-hover: #E2EAF8;
+    --color-brand-subtle: #16243F;
+    --color-brand-surface: #111B2E;
+    --color-brand-surface-hover: #1A2842;
+    --color-brand-on-surface: #E9EEF9;
+    --color-brand-on-surface-muted: #A3B0C9;
+    --color-info-fg: #8FB2FF;
+    --color-info-bg: #14213A;
+    --color-info-border: #2E4A80;
+    --color-success-fg: #63C79B;
+    --color-success-bg: #0E2620;
+    --color-success-border: #1F5B44;
+    --color-warning-fg: #E0B25C;
+    --color-warning-bg: #251E0E;
+    --color-warning-border: #5E4718;
+    --color-danger-fg: #F08279;
+    --color-danger-bg: #2A1414;
+    --color-danger-border: #6B2B26;
+    --color-neutral-fg: #A8B4CC;
+    --color-neutral-bg: #18202F;
+    --color-neutral-border: #39445C;
+  }
+}
+
+/* ── reduced motion ───────────────────────────────────── */
+/* Absent from the reference system. Every transition there plays unconditionally. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── focus ────────────────────────────────────────────── */
+/* The reference system suppresses default outlines without replacing them. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-xs);
+}
