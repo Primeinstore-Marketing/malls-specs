@@ -1,0 +1,20 @@
+{
+  "name": "@spec-platform/data-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "verify": "tsx verify.ts",
+    "check": "npm run typecheck && npm run verify"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
