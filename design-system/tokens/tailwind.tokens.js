@@ -86,9 +86,9 @@ module.exports = {
       "spacing": {
         "0": "var(--space-0)",
         "px": "var(--space-px)",
-        "0.5": "var(--space-0.5)",
+        "0.5": "var(--space-0_5)",
         "1": "var(--space-1)",
-        "1.5": "var(--space-1.5)",
+        "1.5": "var(--space-1_5)",
         "2": "var(--space-2)",
         "3": "var(--space-3)",
         "4": "var(--space-4)",

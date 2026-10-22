@@ -4,6 +4,13 @@ from tokens import (LIGHT, DARK, STATUS, TYPE, SPACE, RADII, ELEV, MOTION,
                     BREAK, ZINDEX, CONTAINER, ratio, audit, verify)
 
 OUT = os.environ.get("OUT", "tokens")
+
+
+def space_var(k):
+    """CSS custom-property name for a spacing step. A "." isn't valid in an
+    unescaped custom-property name — `--space-1.5` is silently dropped by the
+    browser — so half steps use "_" instead (`--space-1_5`)."""
+    return "--space-" + str(k).replace(".", "_")
 os.makedirs(OUT, exist_ok=True)
 
 # ── tokens.css ───────────────────────────────────────────────────────────
@@ -27,7 +34,7 @@ def css():
     L.append("")
     L.append("  /* ── spacing (4px base) ─────────────────────────────── */")
     for k, v in SPACE:
-        L.append(f"  --space-{k}: {v}px;")
+        L.append(f"  {space_var(k)}: {v}px;")
     L.append("")
     L.append("  /* ── radii ──────────────────────────────────────────── */")
     for k, v in RADII:
@@ -111,7 +118,7 @@ def tailwind():
     colors = {k: f"var(--color-{k})" for k in LIGHT}
     status = {k: {"fg": f"var(--status-{k}-fg)", "bg": f"var(--status-{k}-bg)",
                   "border": f"var(--status-{k}-border)"} for k, _, _ in STATUS}
-    spacing = {k: f"var(--space-{k})" for k, _ in SPACE}
+    spacing = {k: f"var({space_var(k)})" for k, _ in SPACE}
     radius = {k: f"var(--radius-{k})" for k, _ in RADII}
     shadow = {k: f"var(--shadow-{k})" for k, _, _ in ELEV}
     fontsize = {k: [f"var(--text-{k})", {"lineHeight": lh, "letterSpacing": ls, "fontWeight": str(w)}]
