@@ -62,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : null}
 
             <aside
-              aria-label="Category navigation"
+              aria-label="Mall navigation"
               inert={drawerInert}
               className={`fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] md:z-sticky md:translate-x-0 md:border-r md:border-border-strong md:shadow-none lg:top-[var(--topbar-height)] lg:w-[var(--sidebar-width)] ${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full'

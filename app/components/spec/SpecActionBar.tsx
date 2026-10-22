@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Specification } from '@data-model';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button, LinkButton } from '@/components/ui/Button';
+import { getMallForSpec } from '@/lib/malls';
 import { BookmarkButton } from './BookmarkButton';
 
 function BackIcon() {
@@ -17,6 +18,7 @@ function BackIcon() {
 
 export function SpecActionBar({ spec, backHref }: { spec: Specification; backHref: string }) {
   const [copied, setCopied] = useState(false);
+  const mall = getMallForSpec(spec.id);
 
   const copyLink = async () => {
     try {
@@ -47,6 +49,11 @@ export function SpecActionBar({ spec, backHref }: { spec: Specification; backHre
       <StatusBadge status={spec.status} />
 
       <div className="ml-auto flex items-center gap-2">
+        {mall ? (
+          <LinkButton href={`/?mall=${mall.id}&screen=${spec.id}`} variant="ghost">
+            Show on map
+          </LinkButton>
+        ) : null}
         <BookmarkButton specId={spec.id} />
         <Button variant="ghost" onClick={copyLink}>
           {copied ? 'Copied' : 'Copy link'}
