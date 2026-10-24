@@ -4,6 +4,8 @@ import { MALL_LOCATIONS } from './mallLocations';
 import type { MallLocation } from './mallLocations';
 import { FLOOR_PLANS, SCREEN_PINS } from './screenPins';
 import { DRAFT_PINS } from './draftPins';
+import { MALL_MAPS } from './mallMaps';
+import type { MallMapImage, MallMapPin } from './mallMaps';
 import type { FloorPlanOverlay, PinSource, ScreenPin } from './screenPins';
 
 /**
@@ -44,7 +46,11 @@ export interface Mall {
   readonly floorPlan: FloorPlanOverlay | null;
   /** Only screens with a known position; the rest are "not yet placed". */
   readonly pins: Readonly<Record<string, ScreenPin>>;
+  /** The mall's own illustrated directory map, if we have one (see mallMaps.ts). */
+  readonly mallMap: { readonly image: MallMapImage; readonly pins: Readonly<Record<string, MallMapPin>> } | null;
 }
+
+export type { MallMapImage, MallMapPin };
 
 interface MallSource {
   readonly id: string;
@@ -108,6 +114,37 @@ const MALL_SOURCES: readonly MallSource[] = [
   },
 ];
 
+/**
+ * Admin changes from the API (see `lib/liveData.ts`): confirmed positions,
+ * and which mall each added screen belongs to. Positions here beat both
+ * the hand-confirmed SCREEN_PINS and the automatic drafts.
+ */
+interface LivePlacement {
+  readonly pins: Readonly<Record<string, ScreenPin>>;
+  readonly addedSpecIds: Readonly<Record<string, readonly string[]>>;
+  /** Positions on mall directory maps, set on the site. */
+  readonly planPins: Readonly<Record<string, MallMapPin>>;
+}
+
+let livePlacement: LivePlacement = { pins: {}, addedSpecIds: {}, planPins: {} };
+
+export function setLivePlacement(placement: LivePlacement) {
+  livePlacement = placement;
+}
+
+const GROUP_CATEGORY: Readonly<Record<MallGroup, string>> = {
+  malls: 'category-malls',
+  hyprop: 'category-hyprop-malls',
+  formats: 'category-malls',
+};
+
+/** Where a new screen in this mall is filed in the catalogue. */
+export function getMallFiling(mallId: string): { categoryId: string; subGroupId: string | null } | null {
+  const source = MALL_SOURCES.find((candidate) => candidate.id === mallId);
+  if (!source) return null;
+  return { categoryId: GROUP_CATEGORY[source.group], subGroupId: source.subGroupId ?? null };
+}
+
 function subGroupSpecIds(subGroupId: string, catalogue: Catalogue): string[] {
   return Object.values(catalogue.specifications)
     .filter((spec) => spec.archivedAt === null && spec.subGroupId === (subGroupId as SubGroupId))
@@ -116,17 +153,20 @@ function subGroupSpecIds(subGroupId: string, catalogue: Catalogue): string[] {
 
 export function getMalls(catalogue: Catalogue = getCatalogue()): readonly Mall[] {
   return MALL_SOURCES.map((source) => {
-    const specIds = [
-      ...(source.subGroupId ? subGroupSpecIds(source.subGroupId, catalogue) : []),
-      ...(source.specIds ?? []),
-    ].filter((id) => {
+    const specIds = Array.from(
+      new Set([
+        ...(source.subGroupId ? subGroupSpecIds(source.subGroupId, catalogue) : []),
+        ...(source.specIds ?? []),
+        ...(livePlacement.addedSpecIds[source.id] ?? []),
+      ]),
+    ).filter((id) => {
       const spec = catalogue.specifications[id];
       return spec != null && spec.archivedAt === null;
     });
     const pins: Record<string, ScreenPin> = {};
     for (const id of specIds) {
       // A confirmed position always beats the automatic draft.
-      const pin = SCREEN_PINS[id] ?? DRAFT_PINS[id];
+      const pin = livePlacement.pins[id] ?? SCREEN_PINS[id] ?? DRAFT_PINS[id];
       if (pin) pins[id] = pin;
     }
     return {
@@ -137,8 +177,21 @@ export function getMalls(catalogue: Catalogue = getCatalogue()): readonly Mall[]
       location: MALL_LOCATIONS[source.id] ?? null,
       floorPlan: FLOOR_PLANS[source.id] ?? null,
       pins,
+      mallMap: mallMapFor(source.id, specIds),
     };
   }).filter((mall) => mall.specIds.length > 0);
+}
+
+function mallMapFor(mallId: string, specIds: readonly string[]): Mall['mallMap'] {
+  const image = MALL_MAPS[mallId];
+  if (!image) return null;
+  const pins: Record<string, MallMapPin> = {};
+  for (const id of specIds) {
+    // A position placed on the site beats the starting one in mallMaps.ts.
+    const pin = livePlacement.planPins[id] ?? image.pins[id];
+    if (pin) pins[id] = pin;
+  }
+  return { image, pins };
 }
 
 export function getMall(id: string, catalogue: Catalogue = getCatalogue()): Mall | null {

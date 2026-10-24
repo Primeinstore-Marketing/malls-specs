@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { useSearchPalette } from '@/components/search/SearchPaletteContext';
-import { useAuthDialog } from '@/components/auth/AuthDialogContext';
+import { AccountMenu } from '@/components/auth/AccountMenu';
 import { withBasePath } from '@/lib/basePath';
 
 function MenuIcon() {
@@ -26,7 +26,6 @@ function SearchIcon() {
 
 export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
   const { setOpen: setSearchOpen } = useSearchPalette();
-  const { setOpen: setAuthOpen } = useAuthDialog();
 
   return (
     <header
@@ -78,9 +77,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => setAuthOpen(true)}>
-            Sign in
-          </Button>
+          <AccountMenu />
         </div>
       </div>
     </header>

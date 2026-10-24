@@ -6,6 +6,7 @@ import type { GeoJSONSource, LngLatBoundsLike, Map as MapLibreMap, Marker } from
 import type { Specification } from '@data-model';
 import { withBasePath } from '@/lib/basePath';
 import { getScreenSize } from '@/lib/malls';
+import { getScreenLayout } from '@/lib/screenLayouts';
 import type { Mall, MallLocation, PinSource, ScreenPin } from '@/lib/malls';
 import { Stepper, ZoomControls } from './MapControls';
 
@@ -41,55 +42,64 @@ function outlineData(location: MallLocation | null): GeoJSON.FeatureCollection {
   };
 }
 
-function readToken(name: string, fallback: string) {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
-
 /**
- * Builds a marker: the screen drawn at its real aspect ratio, captioned.
- * A placeholder position is drawn hollow and dashed with a "?", so it can't
- * be mistaken for a known location.
+ * Builds a screen pin: a name label, the screen drawn at its real aspect
+ * ratio with a soft pulse behind it, and a stem down to the exact spot (the
+ * marker is anchored at the stem's tip). Styled by `.screen-pin*` in
+ * globals.css. Placeholders render as an amber "?" badge instead.
  */
 function createMarkerElement(spec: Specification, source: PinSource, onClick: () => void): HTMLButtonElement {
   const size = getScreenSize(spec);
+  const placeholder = source === 'placeholder';
   const ratio = size ? size.width / size.height : 16 / 9;
-  const width = ratio >= 40 / 26 ? 40 : Math.max(10, 26 * ratio);
-  const height = ratio >= 40 / 26 ? Math.max(8, 40 / ratio) : 26;
+  // Fit the screen inside a 48 × 32 box, keeping its proportions.
+  const width = placeholder ? 24 : ratio >= 48 / 32 ? 48 : Math.max(14, 32 * ratio);
+  const height = placeholder ? 24 : ratio >= 48 / 32 ? Math.max(10, 48 / ratio) : 32;
 
-  const button = document.createElement('button');
+  const part = (tag: string, className: string) => {
+    const element = document.createElement(tag);
+    element.className = className;
+    return element;
+  };
+
+  const button = part('button', 'screen-pin mall-screen-marker') as HTMLButtonElement;
   button.type = 'button';
-  button.className = 'mall-screen-marker group relative flex flex-col items-center outline-none';
+  button.dataset.placeholder = String(placeholder);
   button.setAttribute('aria-label', `${spec.title}${size ? `, ${size.width} × ${size.height}` : ''}`);
   button.addEventListener('click', (event) => {
     event.stopPropagation();
     onClick();
   });
 
-  const screen = document.createElement('span');
-  const placeholder = source === 'placeholder';
-  screen.className = `flex items-center justify-center rounded-[3px] shadow-2 ring-2 ring-white transition-transform duration-normal ease-expressive ${
-    placeholder
-      ? 'rounded-full border-2 border-dashed border-fg-subtle bg-bg text-[12px] font-bold text-fg-muted'
-      : size
-        ? 'bg-brand'
-        : 'border border-dashed border-border-control bg-bg-muted'
-  }`;
+  const label = part('span', 'screen-pin__label');
+  label.append(spec.title);
+  if (size && !placeholder) {
+    const resolution = part('span', 'screen-pin__res');
+    resolution.textContent = `${size.width}×${size.height}`;
+    label.append(resolution);
+  }
+
+  const body = part('span', 'screen-pin__body');
+  const screen = part('span', 'screen-pin__screen');
+  screen.style.width = `${width}px`;
+  screen.style.height = `${height}px`;
   if (placeholder) screen.textContent = '?';
-  // A placeholder's shape would suggest more than we know, so it's a plain badge.
-  screen.style.width = `${placeholder ? 22 : width}px`;
-  screen.style.height = `${placeholder ? 22 : height}px`;
-  button.appendChild(screen);
+  // Multi-panel screens draw their panels, as on the spec page.
+  const layout = !placeholder && size ? getScreenLayout(spec.id) : null;
+  if (layout && size) {
+    screen.classList.add('screen-pin__screen--panels');
+    for (const panel of layout.panels) {
+      const element = part('span', 'screen-pin__panel');
+      element.style.left = `${(panel.x / size.width) * 100 + 0.8}%`;
+      element.style.top = `${(panel.y / size.height) * 100}%`;
+      element.style.width = `${(panel.width / size.width) * 100 - 1.6}%`;
+      element.style.height = `${(panel.height / size.height) * 100}%`;
+      screen.append(element);
+    }
+  }
+  body.append(part('span', 'screen-pin__halo'), screen);
 
-  const label = document.createElement('span');
-  // Placeholders cluster near the mall centre, so their names only show on
-  // hover or when selected — otherwise the labels pile into an unreadable knot.
-  label.className = `pointer-events-none absolute top-full mt-1 whitespace-nowrap rounded-full bg-bg px-2 py-0.5 text-label-sm text-fg shadow-1 ${
-    placeholder ? 'opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-visible:opacity-100' : ''
-  }`;
-  label.textContent = spec.title;
-  button.appendChild(label);
-
+  button.append(label, body, part('span', 'screen-pin__stem'), part('span', 'screen-pin__dot'));
   return button;
 }
 
@@ -104,6 +114,8 @@ export interface MallMapProps {
   readonly editMode: boolean;
   readonly onPinMove: (specId: string, lng: number, lat: number) => void;
   readonly onStartPlacing: () => void;
+  /** Signed-in admin — only they are offered placing. */
+  readonly canEdit: boolean;
 }
 
 export function MallMap({
@@ -117,6 +129,7 @@ export function MallMap({
   editMode,
   onPinMove,
   onStartPlacing,
+  canEdit,
 }: MallMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -143,6 +156,7 @@ export function MallMap({
   useEffect(() => {
     let cancelled = false;
     let observer: ResizeObserver | null = null;
+    let loadTimer: number | undefined;
 
     import('maplibre-gl')
       .then(({ default: maplibre }) => {
@@ -165,7 +179,15 @@ export function MallMap({
 
         map.on('load', () => {
           if (cancelled) return;
-          const accent = readToken('--color-accent', '#2861fd');
+          // The brand blue, not the theme token: the street map is always
+          // light, and the dark theme's accent is too pale against it.
+          const accent = '#2861fd';
+          // Fade the map's own shop and place icons so the screens stand out.
+          for (const layer of map.getStyle().layers ?? []) {
+            if (layer.type !== 'symbol' || !/poi/i.test(layer.id)) continue;
+            map.setPaintProperty(layer.id, 'icon-opacity', 0.4);
+            map.setPaintProperty(layer.id, 'text-opacity', 0.55);
+          }
           map.addSource(OUTLINE_SOURCE, { type: 'geojson', data: outlineData(location) });
           map.addLayer({
             id: 'mall-outline-fill',
@@ -181,11 +203,12 @@ export function MallMap({
           });
           setReady(true);
         });
-        map.on('error', (event) => {
-          // Tile hiccups are routine; only a style failure leaves the map blank.
-          if (!map.isStyleLoaded() && !map.loaded()) setFailed(true);
-          console.warn('[map]', event.error?.message ?? event);
-        });
+        // A failed tile or two is routine and MapLibre retries; only a map
+        // that never finishes loading counts as failed.
+        map.on('error', (event) => console.warn('[map]', event.error?.message ?? event));
+        loadTimer = window.setTimeout(() => {
+          if (!cancelled && !map.loaded() && !map.isStyleLoaded()) setFailed(true);
+        }, 20_000);
         map.on('click', (event) => {
           if (placingRef.current) onPinMoveRef.current(placingRef.current, event.lngLat.lng, event.lngLat.lat);
           else onFocusRef.current(null);
@@ -200,6 +223,7 @@ export function MallMap({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadTimer);
       observer?.disconnect();
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current.clear();
@@ -251,7 +275,7 @@ export function MallMap({
       if (!pin) continue;
       const element = createMarkerElement(spec, pin.source, () => onFocusRef.current(spec.id));
       const label = element.getAttribute('aria-label') ?? spec.title;
-      const marker = new MarkerClass({ element, anchor: 'center', draggable: editMode })
+      const marker = new MarkerClass({ element, anchor: 'bottom', draggable: editMode })
         .setLngLat([pin.lng, pin.lat])
         .addTo(map);
       // `addTo` overwrites the element's aria-label with a generic "Map marker".
@@ -270,20 +294,17 @@ export function MallMap({
       const element = marker.getElement();
       const isFocused = specId === focusedId;
       element.style.zIndex = isFocused ? '2' : '1';
-      const label = element.lastElementChild as HTMLElement | null;
-      if (label) label.style.opacity = isFocused ? '1' : '';
-      const screen = element.firstElementChild as HTMLElement | null;
-      if (screen) {
-        screen.style.transform = isFocused ? 'scale(1.5)' : '';
-        screen.classList.toggle('ring-accent', isFocused);
-        screen.classList.toggle('ring-white', !isFocused);
-      }
+      element.dataset.focused = String(isFocused);
       element.setAttribute('aria-pressed', String(isFocused));
     });
   }, [focusedId, pins, ready, specs, editMode]);
 
   // Camera: fly to the focused screen, or frame the whole mall.
   const focusedPin = focusedId ? pins[focusedId] : undefined;
+  // Follow the position, not the object: live data reloads hand us new pin
+  // objects with the same coordinates, and the camera shouldn't move for those.
+  const focusLng = focusedPin?.lng;
+  const focusLat = focusedPin?.lat;
   const lastMallId = useRef(mall.id);
   useEffect(() => {
     const map = mapRef.current;
@@ -291,9 +312,9 @@ export function MallMap({
     const switchingMall = lastMallId.current !== mall.id;
     lastMallId.current = mall.id;
     const pace = switchingMall ? { duration: MALL_SWITCH_MS } : { speed: 1.1 };
-    if (focusedPin) {
+    if (focusLng != null && focusLat != null) {
       map.flyTo({
-        center: [focusedPin.lng, focusedPin.lat],
+        center: [focusLng, focusLat],
         zoom: Math.max(map.getZoom(), SCREEN_ZOOM),
         padding: FIT_PADDING,
         curve: 1.6,
@@ -302,7 +323,7 @@ export function MallMap({
     } else {
       map.fitBounds(boundsOf(location), { padding: FIT_PADDING, maxZoom: MAX_FIT_ZOOM, curve: 1.6, ...pace });
     }
-  }, [ready, mall.id, location, focusedId, focusedPin]);
+  }, [ready, mall.id, location, focusedId, focusLng, focusLat]);
 
   const fitMall = () => {
     mapRef.current?.fitBounds(boundsOf(location), { padding: FIT_PADDING, maxZoom: MAX_FIT_ZOOM });
@@ -311,8 +332,8 @@ export function MallMap({
 
   const focusedIndex = specs.findIndex((spec) => spec.id === focusedId);
   const focusedSpec = focusedIndex >= 0 ? specs[focusedIndex] : null;
-  // No position, or only a placeholder: offer to place it properly.
-  const focusedUnplaced = focusedSpec != null && needsPlacing(focusedSpec.id);
+  // No position, or only a placeholder: offer admins a way to place it.
+  const focusedUnplaced = canEdit && focusedSpec != null && needsPlacing(focusedSpec.id);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg-subtle">

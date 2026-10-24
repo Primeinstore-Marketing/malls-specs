@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAuthDialog } from '@/components/auth/AuthDialogContext';
+import { useAdminSession } from '@/components/auth/AdminSession';
 
 interface FooterLink {
   readonly label: string;
@@ -31,6 +32,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
 
 export function Footer() {
   const { setOpen: setAuthOpen } = useAuthDialog();
+  const { isAdmin, signOut } = useAdminSession();
 
   return (
     <footer className="mt-16 border-t border-border bg-bg-subtle">
@@ -51,10 +53,10 @@ export function Footer() {
                   ) : link.label === 'Sign in' ? (
                     <button
                       type="button"
-                      onClick={() => setAuthOpen(true)}
+                      onClick={() => (isAdmin ? void signOut() : setAuthOpen(true))}
                       className="text-body-sm text-fg-muted transition-colors duration-fast ease-standard hover:text-fg"
                     >
-                      {link.label}
+                      {isAdmin ? 'Sign out' : link.label}
                     </button>
                   ) : (
                     <span className="cursor-default text-body-sm text-fg-muted">{link.label}</span>

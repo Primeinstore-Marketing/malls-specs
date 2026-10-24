@@ -1,4 +1,6 @@
 import type { Asset } from '@data-model';
+import { fileUrl } from '@/lib/api';
+import { formatFileSize } from '@/lib/fileSize';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SCROLL_MARGIN } from './scrollMargin';
@@ -12,12 +14,20 @@ export function AttachmentsSection({ attachments }: { attachments: readonly Asse
       ) : (
         <ul className="flex flex-col gap-2">
           {attachments.map((asset) => (
-            <li
-              key={asset.id}
-              className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-body-sm"
-            >
-              <span className="flex-1 truncate text-fg">{asset.filename || 'Untitled file'}</span>
-              <span className="text-label-md uppercase text-fg-subtle">{asset.kind}</span>
+            <li key={asset.id}>
+              <a
+                href={fileUrl(asset.storageKey)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-body-sm transition-colors duration-fast ease-standard hover:border-accent hover:bg-bg-subtle"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-fg">{asset.caption || asset.filename || 'Untitled file'}</span>
+                  {asset.caption ? <span className="block truncate text-[11px] text-fg-subtle">{asset.filename}</span> : null}
+                </span>
+                <span className="shrink-0 font-mono text-[11px] text-fg-subtle">{formatFileSize(asset.sizeBytes)}</span>
+                <span className="shrink-0 text-label-md uppercase text-fg-subtle">{asset.kind}</span>
+              </a>
             </li>
           ))}
         </ul>

@@ -3,12 +3,15 @@
 import { useSearchParams } from 'next/navigation';
 import { SPEC_STATUSES } from '@data-model';
 import type { CategoryId, SubGroupId, TagId, SpecStatus } from '@data-model';
-import { getCatalogue, getCategoryNames, getSpecificationSummaries } from '@/lib/catalogue';
+import { getCategoryNames, getSpecificationSummaries } from '@/lib/catalogue';
 import { SpecificationList } from './SpecificationList';
+import { specHref, useLiveData } from '@/lib/liveData';
 
 export function BrowseResultsView() {
   const searchParams = useSearchParams();
-  const catalogue = getCatalogue();
+  // Live, so admin edits and added screens show here too.
+  const live = useLiveData();
+  const { catalogue } = live;
 
   const category = searchParams.get('category') ?? '';
   const subGroup = searchParams.get('subGroup') ?? '';
@@ -26,5 +29,12 @@ export function BrowseResultsView() {
   });
   const filtersApplied = Boolean(category || subGroup || statusParam || tag);
 
-  return <SpecificationList items={items} filtersApplied={filtersApplied} categoryNames={getCategoryNames(catalogue)} />;
+  return (
+    <SpecificationList
+      items={items}
+      hrefFor={(id) => specHref(id, live)}
+      filtersApplied={filtersApplied}
+      categoryNames={getCategoryNames(catalogue)}
+    />
+  );
 }

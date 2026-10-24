@@ -3,30 +3,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Specification } from '@data-model';
-import { getCatalogue } from '@/lib/catalogue';
+import { api, ApiError } from '@/lib/api';
+import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { getMalls } from '@/lib/malls';
 import type { ScreenPin } from '@/lib/malls';
+import { useAdminSession } from '@/components/auth/AdminSession';
 import { MallIndex } from './MallIndex';
 import { MallMap } from './MallMap';
 import { GridCanvas } from './GridCanvas';
 import { ScreenPanel } from './ScreenPanel';
+import type { AdminControls, SaveState } from './ScreenPanel';
+import { ScreenEditor } from './ScreenEditor';
 
 /**
  * Home page: the mall index, or — with `?mall=` — that mall's map.
  * `?screen=` holds the focused screen so any view is a shareable link (the
  * spec page's "Show on map" button deep-links here). `?edit=1` turns on
- * pin placement; see `lib/screenPins.ts`.
+ * placing screens, for signed-in admins only.
  */
 export function MallExplorer() {
-  const catalogue = useMemo(() => getCatalogue(), []);
+  const live = useLiveData();
+  const { catalogue } = live;
   const malls = useMemo(() => getMalls(catalogue), [catalogue]);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const editMode = searchParams.get('edit') === '1';
+  const { isAdmin, admin, sessionExpired } = useAdminSession();
+  const editMode = isAdmin && searchParams.get('edit') === '1';
 
-  // Pins moved or placed in edit mode this session, on top of SCREEN_PINS.
-  const [pinEdits, setPinEdits] = useState<Readonly<Record<string, ScreenPin>>>({});
+  // Positions being saved, shown immediately while the server confirms.
+  const [pendingPins, setPendingPins] = useState<Readonly<Record<string, ScreenPin>>>({});
+  const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' });
+  const [editor, setEditor] = useState<{ mode: 'edit' | 'add'; specId?: string } | null>(null);
 
   const mall = malls.find((candidate) => candidate.id === searchParams.get('mall')) ?? null;
   const specs = useMemo(
@@ -39,19 +47,27 @@ export function MallExplorer() {
   const pins = useMemo(() => {
     const merged: Record<string, ScreenPin> = { ...mall?.pins };
     for (const spec of specs) {
-      const edit = pinEdits[spec.id];
-      if (edit) merged[spec.id] = edit;
+      const pending = pendingPins[spec.id];
+      if (pending) merged[spec.id] = pending;
     }
     return merged;
-  }, [mall, specs, pinEdits]);
+  }, [mall, specs, pendingPins]);
+  // Visitors only see screens with a real (or store-matched) position; the
+  // parked "?" placeholders are an admin to-do list.
+  const mapPins = useMemo(() => {
+    if (isAdmin) return pins;
+    const visible: Record<string, ScreenPin> = {};
+    for (const [specId, pin] of Object.entries(pins)) if (pin.source !== 'placeholder') visible[specId] = pin;
+    return visible;
+  }, [pins, isAdmin]);
   const screenParam = searchParams.get('screen');
   const focusedId = specs.some((spec) => spec.id === screenParam) ? screenParam : null;
 
   const hrefFor = useCallback(
-    (mallId: string, specId: string | null) => {
+    (mallId: string, specId: string | null, edit = editMode) => {
       const params = new URLSearchParams({ mall: mallId });
       if (specId) params.set('screen', specId);
-      if (editMode) params.set('edit', '1');
+      if (edit) params.set('edit', '1');
       return `${pathname}?${params.toString()}`;
     },
     [pathname, editMode],
@@ -76,18 +92,66 @@ export function MallExplorer() {
   );
 
   const toggleEdit = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (editMode) params.delete('edit');
-    else params.set('edit', '1');
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    if (!mall) return;
+    router.replace(hrefFor(mall.id, focusedId, !editMode), { scroll: false });
   };
 
-  const movePin = useCallback((specId: string, lng: number, lat: number) => {
-    setPinEdits((current) => ({
-      ...current,
-      [specId]: { ...current[specId], lng: Number(lng.toFixed(6)), lat: Number(lat.toFixed(6)), source: 'confirmed' },
-    }));
-  }, []);
+  /** Runs an admin change, then reloads live data so everyone's view matches the server. */
+  const runChange = useCallback(
+    async (label: string, change: () => Promise<unknown>) => {
+      setSaveState({ kind: 'saving', message: label });
+      try {
+        await change();
+        await refreshLiveData();
+        setSaveState({ kind: 'saved', message: 'Saved — live for everyone now.' });
+        return true;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) sessionExpired();
+        setSaveState({ kind: 'error', message: error instanceof Error ? error.message : 'Couldn’t save.' });
+        return false;
+      }
+    },
+    [sessionExpired],
+  );
+
+  const movePin = useCallback(
+    async (specId: string, lng: number, lat: number) => {
+      const level = pins[specId]?.level ?? null;
+      const position = { lng: Number(lng.toFixed(6)), lat: Number(lat.toFixed(6)), source: 'confirmed' as const };
+      setPendingPins((current) => ({ ...current, [specId]: position }));
+      await runChange('Saving position…', () => api.putPin(specId, position.lng, position.lat, level));
+      setPendingPins((current) => {
+        const next = { ...current };
+        delete next[specId];
+        return next;
+      });
+    },
+    [pins, runChange],
+  );
+
+  const controls: AdminControls | null =
+    isAdmin && admin
+      ? {
+          placing: editMode,
+          togglePlacing: toggleEdit,
+          saveState,
+          dismissSaveState: () => setSaveState({ kind: 'idle' }),
+          editSpec: (specId) => setEditor({ mode: 'edit', specId }),
+          addScreen: () => setEditor({ mode: 'add' }),
+          resetPin: (specId) => void runChange('Resetting position…', () => api.deletePin(specId)),
+          revertSpec: (specId, isAdded) => {
+            const question = isAdded
+              ? 'Delete this screen? This removes it for everyone.'
+              : 'Undo all edits to this screen and go back to the original spec?';
+            if (!window.confirm(question)) return;
+            void runChange(isAdded ? 'Deleting…' : 'Reverting…', () => api.deleteSpec(specId)).then((ok) => {
+              if (ok && isAdded) setFocus(null);
+            });
+          },
+          isAdded: (specId) => live.addedSpecIds.has(specId),
+          isEdited: (specId) => live.editedSpecIds.has(specId),
+        }
+      : null;
 
   useEffect(() => {
     if (!mall) return;
@@ -110,10 +174,10 @@ export function MallExplorer() {
   }, [mall, step, setFocus]);
 
   if (!mall) {
-    return <MallIndex malls={malls} specifications={catalogue.specifications} />;
+    return <MallIndex malls={malls} specifications={catalogue.specifications} isAdmin={isAdmin} />;
   }
 
-  const editedHere = specs.filter((spec) => pinEdits[spec.id] != null).map((spec) => spec.id);
+  const editorSpec = editor?.specId ? catalogue.specifications[editor.specId] : undefined;
 
   return (
     <div className="flex h-[calc(100dvh-var(--topbar-height-sm))] flex-col md:h-[calc(100dvh-var(--topbar-height-md))] lg:h-[calc(100dvh-var(--topbar-height))] lg:flex-row">
@@ -124,12 +188,13 @@ export function MallExplorer() {
             mall={mall}
             location={mall.location}
             specs={specs}
-            pins={pins}
+            pins={mapPins}
             focusedId={focusedId}
             onFocus={setFocus}
             onStep={step}
             editMode={editMode}
-            onPinMove={movePin}
+            canEdit={isAdmin}
+            onPinMove={(specId, lng, lat) => void movePin(specId, lng, lat)}
             onStartPlacing={toggleEdit}
           />
         ) : (
@@ -157,15 +222,33 @@ export function MallExplorer() {
           malls={malls}
           specs={specs}
           pins={pins}
-          tags={catalogue.tags}
           focusedId={focusedId}
           onFocus={setFocus}
           onMallChange={(mallId) => router.push(hrefFor(mallId, null), { scroll: false })}
-          editMode={editMode}
-          editedSpecIds={editedHere}
-          onToggleEdit={toggleEdit}
+          admin={controls}
         />
       </aside>
+
+      {editor && admin && (editor.mode === 'add' || editorSpec) ? (
+        <ScreenEditor
+          mode={editor.mode}
+          mall={mall}
+          spec={editorSpec}
+          tags={Object.values(catalogue.tags)}
+          existingIds={new Set(Object.keys(catalogue.specifications))}
+          adminEmail={admin.email}
+          onCancel={() => setEditor(null)}
+          onSave={async (spec) => {
+            const isNew = editor.mode === 'add';
+            // Throws on failure so the form can show the error and stay open.
+            await api.putSpec(spec, { mallId: mall.id, isNew });
+            await refreshLiveData();
+            setEditor(null);
+            setSaveState({ kind: 'saved', message: isNew ? 'Screen added. Click the map to place it.' : 'Saved — live for everyone now.' });
+            if (isNew) router.replace(hrefFor(mall.id, spec.id, mall.location != null), { scroll: false });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

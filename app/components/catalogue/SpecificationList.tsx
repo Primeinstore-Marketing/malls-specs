@@ -8,12 +8,15 @@ const COLUMNS = ['Specification', 'Code', 'Category', 'Status', 'Updated'] as co
 
 export function SpecificationList({
   items,
+  hrefFor = (id) => `/spec/${id}`,
   emptyTitle = 'No specifications yet',
   emptyDescription = 'Specifications will appear here once they are added to the catalogue through the admin interface.',
   filtersApplied = false,
   categoryNames,
 }: {
   items: readonly SpecificationSummary[];
+  /** Where each row links. Client views pass `specHref` so admin-added screens reach their page. */
+  hrefFor?: (specId: string) => string;
   emptyTitle?: string;
   emptyDescription?: string;
   filtersApplied?: boolean;
@@ -58,7 +61,7 @@ export function SpecificationList({
             {items.map((spec) => (
               <li key={spec.id} className="border-t border-border first:border-t-0">
                 <Link
-                  href={`/spec/${spec.id}`}
+                  href={hrefFor(spec.id)}
                   className="grid items-center gap-2 px-4 py-3 text-body-sm text-fg transition-colors duration-fast ease-standard hover:bg-bg-subtle sm:gap-4"
                   style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}
                 >
