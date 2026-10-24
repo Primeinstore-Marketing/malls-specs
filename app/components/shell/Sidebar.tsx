@@ -4,11 +4,12 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { Specification } from '@data-model';
-import { getCatalogue } from '@/lib/catalogue';
+import { useLiveData } from '@/lib/liveData';
 import { getMalls, getMallForSpec, getScreenSize, MALL_GROUP_LABELS } from '@/lib/malls';
 import type { Mall, MallGroup } from '@/lib/malls';
 import { projectOutline } from '@/components/map/MallOutlinePreview';
 import { PinStatusDot } from '@/components/map/PinStatusDot';
+import { useAdminSession } from '@/components/auth/AdminSession';
 
 /**
  * The site's main navigation: every mall, grouped by network, each opening
@@ -79,7 +80,8 @@ interface ActiveLocation {
 }
 
 function MallNav({ active }: { active: ActiveLocation }) {
-  const catalogue = useMemo(() => getCatalogue(), []);
+  const { catalogue } = useLiveData();
+  const { isAdmin } = useAdminSession();
   const malls = useMemo(() => getMalls(catalogue), [catalogue]);
   const pathname = usePathname();
   const [query, setQuery] = useState('');
@@ -239,7 +241,7 @@ function MallNav({ active }: { active: ActiveLocation }) {
                                         : 'text-brand-on-surface-muted hover:bg-white/[0.06] hover:text-brand-on-surface'
                                     }`}
                                   >
-                                    <PinStatusDot pin={mall.pins[spec.id]} />
+                                    {isAdmin ? <PinStatusDot pin={mall.pins[spec.id]} /> : null}
                                     <span className="min-w-0 flex-1 truncate">{spec.title}</span>
                                     <span className="shrink-0 font-mono text-[10px] opacity-70">
                                       {size ? `${size.width}×${size.height}` : '—'}

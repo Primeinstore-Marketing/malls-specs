@@ -13,7 +13,20 @@ import type { Revision } from '@data-model';
  * later without touching a component.
  */
 export function getCatalogue(): Catalogue {
+  return liveCatalogue ?? seededCatalogue;
+}
+
+/** The built-in data, before any admin edits. */
+export function getSeedCatalogue(): Catalogue {
   return seededCatalogue;
+}
+
+// Set by `lib/liveData.ts` once admin edits have loaded from the API, so
+// every reader gets the merged catalogue without being rewritten.
+let liveCatalogue: Catalogue | null = null;
+
+export function setLiveCatalogue(catalogue: Catalogue | null) {
+  liveCatalogue = catalogue;
 }
 
 export interface CategoryTreeNode {

@@ -10,6 +10,7 @@ import { useMediaQuery } from '@/lib/useMediaQuery';
 import { SearchPaletteProvider } from '@/components/search/SearchPaletteContext';
 import { CommandPalette } from '@/components/search/CommandPalette';
 import { AuthDialogProvider } from '@/components/auth/AuthDialogContext';
+import { AdminSessionProvider } from '@/components/auth/AdminSession';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { CollectionsProvider } from '@/components/collections/CollectionsContext';
 
@@ -48,6 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <SearchPaletteProvider>
       <AuthDialogProvider>
+        <AdminSessionProvider>
         <CollectionsProvider>
           <div className="min-h-screen">
             <TopBar onMenuToggle={() => setMobileNavOpen((open) => !open)} />
@@ -57,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="Close navigation"
                 onClick={() => setMobileNavOpen(false)}
-                className="fixed inset-0 z-scrim bg-fg/40"
+                className="fixed inset-0 z-scrim bg-[rgba(6,12,28,0.55)] backdrop-blur-md"
               />
             ) : null}
 
@@ -83,6 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SignInDialog />
           </div>
         </CollectionsProvider>
+        </AdminSessionProvider>
       </AuthDialogProvider>
     </SearchPaletteProvider>
   );

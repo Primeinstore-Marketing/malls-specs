@@ -80,3 +80,161 @@
     stroke-dashoffset: 0;
   }
 }
+
+/* ── Screen pins on the mall map ────────────────────────────────────────
+   Built as plain DOM by MapLibre markers (components/map/MallMap.tsx), so
+   styled here. Fixed colours rather than theme tokens: the street map is
+   always light, and the dark-theme accent is too pale to stand out on it. */
+.screen-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 10px rgba(13, 30, 63, 0.3));
+}
+.screen-pin:focus-visible {
+  outline: none;
+}
+.screen-pin__label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: #0d1e3f;
+  color: #fff;
+  font: 700 12px/1.2 var(--font-body);
+  white-space: nowrap;
+  transition: background-color 140ms, transform 300ms var(--ease-expressive), opacity 140ms;
+}
+.screen-pin__res {
+  font: 500 10.5px/1 var(--font-mono);
+  color: #9fb4ff;
+}
+.screen-pin__body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.screen-pin__halo {
+  position: absolute;
+  inset: -10px;
+  border-radius: 12px;
+  background: rgba(40, 97, 253, 0.3);
+  pointer-events: none;
+}
+.screen-pin__screen {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #5b86ff 0%, #2861fd 55%, #1a4fd6 100%);
+  box-shadow: 0 0 0 3px rgba(40, 97, 253, 0.25), 0 6px 16px rgba(40, 97, 253, 0.45);
+  transition: transform 300ms var(--ease-expressive), box-shadow 200ms;
+}
+/* A little glare, so it reads as a screen rather than a box. */
+.screen-pin__screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%);
+}
+.screen-pin__stem {
+  width: 2px;
+  height: 10px;
+  background: #0d1e3f;
+}
+.screen-pin__dot {
+  width: 9px;
+  height: 9px;
+  margin-top: -1px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: #2861fd;
+}
+.screen-pin:hover .screen-pin__screen,
+.screen-pin:focus-visible .screen-pin__screen {
+  transform: scale(1.12);
+}
+.screen-pin:focus-visible .screen-pin__label {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2861fd;
+}
+.screen-pin[data-focused='true'] .screen-pin__screen {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(40, 97, 253, 0.35), 0 10px 24px rgba(40, 97, 253, 0.6);
+}
+.screen-pin[data-focused='true'] .screen-pin__label {
+  background: #2861fd;
+  transform: translateY(-8px);
+}
+.screen-pin[data-focused='true'] .screen-pin__res {
+  color: #dbe4ff;
+}
+/* Placeholders (admin-only): an amber "?" badge, name on hover. */
+.screen-pin[data-placeholder='true'] .screen-pin__screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #b45309;
+  border-radius: 9999px;
+  background: #fffbeb;
+  color: #b45309;
+  font: 800 12px/1 var(--font-body);
+  box-shadow: none;
+}
+.screen-pin[data-placeholder='true'] .screen-pin__screen::after,
+.screen-pin[data-placeholder='true'] .screen-pin__halo {
+  display: none;
+}
+.screen-pin[data-placeholder='true'] .screen-pin__dot {
+  background: #b45309;
+}
+.screen-pin[data-placeholder='true'] .screen-pin__label {
+  opacity: 0;
+}
+.screen-pin[data-placeholder='true']:hover .screen-pin__label,
+.screen-pin[data-placeholder='true']:focus-visible .screen-pin__label,
+.screen-pin[data-placeholder='true'][data-focused='true'] .screen-pin__label {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .screen-pin__halo {
+    animation: screen-pin-pulse 2.4s ease-out infinite;
+  }
+}
+@keyframes screen-pin-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* Multi-panel screens (lib/screenLayouts.ts): the panels carry the fill. */
+.screen-pin__screen--panels {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.screen-pin__screen--panels::after {
+  display: none;
+}
+.screen-pin__panel {
+  position: absolute;
+  border: 1.5px solid #fff;
+  border-radius: 2px;
+  background: linear-gradient(160deg, #6a91ff 0%, #2861fd 60%, #1a4fd6 100%);
+  box-shadow: 0 3px 8px rgba(40, 97, 253, 0.45);
+}

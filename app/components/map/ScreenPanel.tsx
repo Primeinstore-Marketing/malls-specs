@@ -1,15 +1,33 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import type { Specification, Tag } from '@data-model';
-import { TagChip } from '@/components/ui/TagChip';
+import type { Specification } from '@data-model';
 import { LinkButton } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
-import { formatAspectRatio, getScreenSize, MALL_GROUP_LABELS } from '@/lib/malls';
-import { PIN_SOURCE_LABELS } from '@/lib/malls';
+import { formatAspectRatio, getScreenSize, MALL_GROUP_LABELS, PIN_SOURCE_LABELS } from '@/lib/malls';
 import type { Mall, ScreenPin } from '@/lib/malls';
+import { specHref, useLiveData } from '@/lib/liveData';
 import { PinStatusDot } from './PinStatusDot';
+import { DownloadButtons } from '@/components/spec/DownloadButtons';
+import { getAssets } from '@/lib/catalogue';
+
+export type SaveState =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'saving' | 'saved' | 'error'; readonly message: string };
+
+/** What a signed-in admin can do from the panel. Null for everyone else. */
+export interface AdminControls {
+  readonly placing: boolean;
+  readonly togglePlacing: () => void;
+  readonly saveState: SaveState;
+  readonly dismissSaveState: () => void;
+  readonly editSpec: (specId: string) => void;
+  readonly addScreen: () => void;
+  readonly resetPin: (specId: string) => void;
+  readonly revertSpec: (specId: string, isAdded: boolean) => void;
+  readonly isAdded: (specId: string) => boolean;
+  readonly isEdited: (specId: string) => boolean;
+}
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -39,30 +57,33 @@ function positionExplanation(pin: ScreenPin): string | null {
   }
 }
 
+const SMALL_BUTTON =
+  'w-fit rounded-md border border-border-strong px-2.5 py-1 text-body-sm font-medium text-fg transition-colors duration-fast ease-standard hover:border-border-control hover:bg-bg-subtle';
+
 function ScreenDetail({
   spec,
   mall,
   pin,
-  tags,
   index,
   total,
   onBack,
-  editMode,
-  onToggleEdit,
+  admin,
 }: {
   spec: Specification;
   mall: Mall;
   pin: ScreenPin | undefined;
-  tags: readonly Tag[];
   index: number;
   total: number;
   onBack: () => void;
-  editMode: boolean;
-  onToggleEdit: () => void;
+  admin: AdminControls | null;
 }) {
-  const explanation = pin ? positionExplanation(pin) : null;
+  const live = useLiveData();
+  const downloads = getAssets(spec.downloadIds, live.catalogue);
   const size = getScreenSize(spec);
   const requirements = spec.blocks.flatMap((block) => block.lines.filter((line) => line.kind === 'item'));
+  const explanation = pin ? positionExplanation(pin) : null;
+  const isAdded = admin?.isAdded(spec.id) ?? false;
+  const isEdited = admin?.isEdited(spec.id) ?? false;
 
   return (
     <div className="flex flex-col gap-5">
@@ -76,20 +97,23 @@ function ScreenDetail({
         </button>
         <span className="text-label-md uppercase text-fg-subtle">
           Screen {index + 1} of {total}
+          {isAdded ? ' · added by an admin' : isEdited ? ' · edited' : ''}
         </span>
-        <h2 className="text-display-sm text-fg">{spec.title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-display-sm text-fg">{spec.title}</h2>
+          {admin ? (
+            <button type="button" onClick={() => admin.editSpec(spec.id)} className={`${SMALL_BUTTON} shrink-0`}>
+              Edit
+            </button>
+          ) : null}
+        </div>
+        {spec.description ? <p className="text-body-sm text-fg-muted">{spec.description}</p> : null}
       </div>
 
-      {tags.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <TagChip key={tag.id} tag={tag} />
-          ))}
-        </div>
-      ) : null}
+      <DownloadButtons downloads={downloads} compact />
 
       <dl className="rounded-lg border border-border px-3">
-        <DetailRow label="Resolution" value={size ? `${size.width} × ${size.height} px` : 'Not in source sheet'} />
+        <DetailRow label="Resolution" value={size ? `${size.width} × ${size.height} px` : 'Not set'} />
         {size ? <DetailRow label="Aspect ratio" value={formatAspectRatio(size)} /> : null}
         {size ? (
           <DetailRow
@@ -97,27 +121,39 @@ function ScreenDetail({
             value={size.width === size.height ? 'Square' : size.width > size.height ? 'Landscape' : 'Portrait'}
           />
         ) : null}
-        <DetailRow label="Map position" value={locationLabel(pin, mall)} />
+        {admin ? <DetailRow label="Map position" value={locationLabel(pin, mall)} /> : null}
         {pin?.level ? <DetailRow label="Level" value={pin.level} /> : null}
       </dl>
 
-      {explanation ? (
+      {/* How a position was found is admin housekeeping, not something visitors need. */}
+      {admin && explanation ? (
         <div className="flex flex-col gap-2 rounded-lg bg-bg-subtle p-3">
           <p className="text-body-sm text-fg-muted">{explanation}</p>
           {mall.location ? (
-            editMode ? (
-              <p className="text-body-sm font-medium text-fg">
-                Drag it on the map, or click the map where it really is.
-              </p>
+            admin.placing ? (
+              <p className="text-body-sm font-medium text-fg">Click the map where it really is, or drag it.</p>
             ) : (
-              <button
-                type="button"
-                onClick={onToggleEdit}
-                className="w-fit rounded-md border border-border-strong px-2.5 py-1 text-body-sm font-medium text-fg hover:border-border-control hover:bg-bg"
-              >
+              <button type="button" onClick={admin.togglePlacing} className={SMALL_BUTTON}>
                 Fix position
               </button>
             )
+          ) : null}
+        </div>
+      ) : null}
+
+      {admin && pin?.source === 'confirmed' && mall.location ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {!admin.placing ? (
+            <button type="button" onClick={admin.togglePlacing} className={SMALL_BUTTON}>
+              Move
+            </button>
+          ) : (
+            <span className="text-body-sm text-fg-muted">Drag the screen on the map to move it.</span>
+          )}
+          {!isAdded ? (
+            <button type="button" onClick={() => admin.resetPin(spec.id)} className={SMALL_BUTTON}>
+              Reset to automatic position
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -133,9 +169,19 @@ function ScreenDetail({
         </div>
       ) : null}
 
-      <LinkButton href={`/spec/${spec.id}`} variant="primary" className="w-fit">
+      <LinkButton href={specHref(spec.id, live)} variant="primary" className="w-fit">
         Open full specification
       </LinkButton>
+
+      {admin && (isAdded || isEdited) ? (
+        <button
+          type="button"
+          onClick={() => admin.revertSpec(spec.id, isAdded)}
+          className="w-fit text-body-sm text-danger-fg underline-offset-2 hover:underline"
+        >
+          {isAdded ? 'Delete this screen' : 'Undo all edits to this screen'}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -145,15 +191,13 @@ function MallOverview({
   specs,
   pins,
   onSelect,
-  editMode,
-  onToggleEdit,
+  admin,
 }: {
   mall: Mall;
   specs: readonly Specification[];
   pins: Readonly<Record<string, ScreenPin>>;
   onSelect: (specId: string) => void;
-  editMode: boolean;
-  onToggleEdit: () => void;
+  admin: AdminControls | null;
 }) {
   const confirmedCount = specs.filter((spec) => pins[spec.id]?.source === 'confirmed').length;
   const toCheckCount = specs.length - confirmedCount;
@@ -166,21 +210,24 @@ function MallOverview({
         <p className="text-body-sm text-fg-muted">
           {specs.length} {specs.length === 1 ? 'screen' : 'screens'}
           {mall.location
-            ? ` · ${confirmedCount} of ${specs.length} positions confirmed`
+            ? admin
+              ? ` · ${confirmedCount} of ${specs.length} positions confirmed`
+              : ''
             : mall.group === 'formats'
               ? ' · standard formats, not tied to one mall'
               : ' · this mall isn’t on OpenStreetMap, so screens are shown in a grid'}
         </p>
       </div>
 
-      {mall.location && editMode ? (
+      {admin && mall.location && admin.placing ? (
         <div className="flex flex-col gap-1 rounded-lg border border-accent-border bg-accent-subtle p-3 text-body-sm text-fg">
           <span className="font-semibold">Placing screens</span>
           <span className="text-fg-muted">
-            Pick a screen below, then click the map where it is. Drag any screen on the map to move it.
+            Pick a screen below, then click the map where it is. Drag any screen to move it. Each move saves
+            straight away.
           </span>
         </div>
-      ) : mall.location && toCheckCount > 0 ? (
+      ) : admin && mall.location && toCheckCount > 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border-control p-3">
           <span className="text-body-sm text-fg-muted">
             {toCheckCount} {toCheckCount === 1 ? 'position is' : 'positions are'} automatic and{' '}
@@ -188,7 +235,7 @@ function MallOverview({
           </span>
           <button
             type="button"
-            onClick={onToggleEdit}
+            onClick={admin.togglePlacing}
             className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-body-sm font-medium text-fg-on-accent hover:bg-accent-hover"
           >
             Check positions
@@ -197,7 +244,16 @@ function MallOverview({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <SectionLabel>Screens</SectionLabel>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <SectionLabel>Screens</SectionLabel>
+          </div>
+          {admin ? (
+            <button type="button" onClick={admin.addScreen} className="text-body-sm font-semibold text-accent-fg hover:underline">
+              + Add screen
+            </button>
+          ) : null}
+        </div>
         <ol className="flex flex-col">
           {specs.map((spec, index) => {
             const size = getScreenSize(spec);
@@ -215,13 +271,13 @@ function MallOverview({
                   <span className="shrink-0 font-mono text-mono-md text-fg-muted">
                     {size ? `${size.width}×${size.height}` : 'TBC'}
                   </span>
-                  {mall.location ? <PinStatusDot pin={pins[spec.id]} className="text-fg-subtle" /> : null}
+                  {admin && mall.location ? <PinStatusDot pin={pins[spec.id]} className="text-fg-subtle" /> : null}
                 </button>
               </li>
             );
           })}
         </ol>
-        {mall.location ? (
+        {admin && mall.location ? (
           <div className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2 text-[11px] text-fg-subtle">
             <span className="inline-flex items-center gap-1.5">
               <PinStatusDot pin={{ lng: 0, lat: 0, source: 'confirmed' }} /> Confirmed
@@ -239,39 +295,22 @@ function MallOverview({
   );
 }
 
-function PinSnippet({ specIds, pins }: { specIds: readonly string[]; pins: Readonly<Record<string, ScreenPin>> }) {
-  const [copied, setCopied] = useState(false);
-  const snippet = specIds
-    .map((id) => {
-      const pin = pins[id];
-      const level = pin.level ? `, level: '${pin.level}'` : '';
-      return `  '${id}': { lng: ${pin.lng}, lat: ${pin.lat}, source: 'confirmed'${level} },`;
-    })
-    .join('\n');
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
-
+function SaveStatus({ state, onDismiss }: { state: SaveState; onDismiss: () => void }) {
+  if (state.kind === 'idle') return null;
+  const tone =
+    state.kind === 'error'
+      ? 'border-danger-border bg-danger-bg text-danger-fg'
+      : state.kind === 'saved'
+        ? 'border-success-border bg-success-bg text-success-fg'
+        : 'border-border bg-bg-subtle text-fg-muted';
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-accent-border bg-accent-subtle p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-label-md uppercase text-accent-fg">Moved this session</span>
-        <button type="button" onClick={copy} className="text-body-sm font-semibold text-accent-fg hover:underline">
-          {copied ? 'Copied' : 'Copy'}
+    <div role="status" className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-body-sm ${tone}`}>
+      <span>{state.message}</span>
+      {state.kind !== 'saving' ? (
+        <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">
+          ✕
         </button>
-      </div>
-      <p className="text-body-sm text-fg-muted">
-        Paste into <code className="font-mono">SCREEN_PINS</code> in <code className="font-mono">app/lib/screenPins.ts</code>{' '}
-        (replacing any existing line for the same screen). Changes are lost on reload until then.
-      </p>
-      <pre className="overflow-x-auto rounded-md bg-bg p-2 font-mono text-[11px] leading-relaxed text-fg">{snippet}</pre>
+      ) : null}
     </div>
   );
 }
@@ -281,28 +320,13 @@ export interface ScreenPanelProps {
   readonly malls: readonly Mall[];
   readonly specs: readonly Specification[];
   readonly pins: Readonly<Record<string, ScreenPin>>;
-  readonly tags: Readonly<Record<string, Tag>>;
   readonly focusedId: string | null;
   readonly onFocus: (specId: string | null) => void;
   readonly onMallChange: (mallId: string) => void;
-  readonly editMode: boolean;
-  readonly editedSpecIds: readonly string[];
-  readonly onToggleEdit: () => void;
+  readonly admin: AdminControls | null;
 }
 
-export function ScreenPanel({
-  mall,
-  malls,
-  specs,
-  pins,
-  tags,
-  focusedId,
-  onFocus,
-  onMallChange,
-  editMode,
-  editedSpecIds,
-  onToggleEdit,
-}: ScreenPanelProps) {
+export function ScreenPanel({ mall, malls, specs, pins, focusedId, onFocus, onMallChange, admin }: ScreenPanelProps) {
   const focusedIndex = specs.findIndex((spec) => spec.id === focusedId);
   const focused = focusedIndex >= 0 ? specs[focusedIndex] : null;
   const groups = (Object.keys(MALL_GROUP_LABELS) as (keyof typeof MALL_GROUP_LABELS)[])
@@ -336,14 +360,14 @@ export function ScreenPanel({
             ))}
           </select>
         </label>
-        {mall.location ? (
+        {admin && mall.location ? (
           <button
             type="button"
-            onClick={onToggleEdit}
-            aria-pressed={editMode}
-            title={editMode ? 'Finish placing screens' : 'Place or move screens on the map'}
+            onClick={admin.togglePlacing}
+            aria-pressed={admin.placing}
+            title={admin.placing ? 'Finish placing screens' : 'Place or move screens on the map'}
             className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-body-sm transition-colors duration-fast ease-standard ${
-              editMode
+              admin.placing
                 ? 'border-accent bg-accent text-fg-on-accent hover:bg-accent-hover'
                 : 'border-border-strong text-fg-muted hover:border-border-control hover:text-fg'
             }`}
@@ -352,35 +376,26 @@ export function ScreenPanel({
               <path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21Z" />
               <circle cx="12" cy="9.5" r="2.5" />
             </svg>
-            {editMode ? 'Done' : 'Place'}
+            {admin.placing ? 'Done' : 'Place'}
           </button>
         ) : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 py-5">
-        {editMode && editedSpecIds.length > 0 ? <PinSnippet specIds={editedSpecIds} pins={pins} /> : null}
+        {admin ? <SaveStatus state={admin.saveState} onDismiss={admin.dismissSaveState} /> : null}
         {focused ? (
           <ScreenDetail
             key={focused.id}
             spec={focused}
             mall={mall}
             pin={pins[focused.id]}
-            tags={focused.tagIds.map((id) => tags[id]).filter((tag): tag is Tag => tag != null)}
             index={focusedIndex}
             total={specs.length}
             onBack={() => onFocus(null)}
-            editMode={editMode}
-            onToggleEdit={onToggleEdit}
+            admin={admin}
           />
         ) : (
-          <MallOverview
-            mall={mall}
-            specs={specs}
-            pins={pins}
-            onSelect={onFocus}
-            editMode={editMode}
-            onToggleEdit={onToggleEdit}
-          />
+          <MallOverview mall={mall} specs={specs} pins={pins} onSelect={onFocus} admin={admin} />
         )}
       </div>
     </div>

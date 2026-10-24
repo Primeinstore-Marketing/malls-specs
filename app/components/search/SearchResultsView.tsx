@@ -2,14 +2,17 @@
 
 import { useSearchParams } from 'next/navigation';
 import { toSummary } from '@data-model';
-import { getCatalogue, getCategoryNames } from '@/lib/catalogue';
+import { getCategoryNames } from '@/lib/catalogue';
 import { buildSearchIndex, searchIndex } from '@/lib/search';
 import { SpecificationList } from '@/components/catalogue/SpecificationList';
+import { specHref, useLiveData } from '@/lib/liveData';
 
 export function SearchResultsView() {
   const searchParams = useSearchParams();
   const query = (searchParams.get('q') ?? '').trim();
-  const catalogue = getCatalogue();
+  // Live, so admin edits and added screens show here too.
+  const live = useLiveData();
+  const { catalogue } = live;
 
   const items = query
     ? searchIndex(query, buildSearchIndex(catalogue))
@@ -31,6 +34,7 @@ export function SearchResultsView() {
       </p>
 
       <SpecificationList
+        hrefFor={(id) => specHref(id, live)}
         items={items}
         emptyTitle={query ? 'No matching specifications' : 'No search query'}
         emptyDescription={

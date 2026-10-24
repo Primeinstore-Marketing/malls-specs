@@ -66,7 +66,17 @@ function StatTile({ value, label }: { value: number; label: string }) {
   );
 }
 
-function MallCard({ mall, specs, index }: { mall: Mall; specs: readonly Specification[]; index: number }) {
+function MallCard({
+  mall,
+  specs,
+  index,
+  isAdmin,
+}: {
+  mall: Mall;
+  specs: readonly Specification[];
+  index: number;
+  isAdmin: boolean;
+}) {
   const confirmed = specs.filter((spec) => mall.pins[spec.id]?.source === 'confirmed').length;
   const resolutions = Array.from(
     new Set(
@@ -134,7 +144,7 @@ function MallCard({ mall, specs, index }: { mall: Mall; specs: readonly Specific
             <span className="font-mono text-[11px] text-fg-subtle">Resolution TBC</span>
           )}
 
-          {mall.location ? (
+          {isAdmin && mall.location ? (
             <div className="mt-auto flex items-center gap-3 pt-1">
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-bg-muted">
                 <div
@@ -156,9 +166,12 @@ function MallCard({ mall, specs, index }: { mall: Mall; specs: readonly Specific
 export function MallIndex({
   malls,
   specifications,
+  isAdmin,
 }: {
   malls: readonly Mall[];
   specifications: Readonly<Record<string, Specification>>;
+  /** Position-checking progress is shown to admins only. */
+  isAdmin: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
@@ -225,14 +238,14 @@ export function MallIndex({
         />
         <div className="relative mx-auto flex max-w-page flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
           <div className="flex flex-col gap-4">
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-accent-border bg-accent-subtle py-1 pl-1.5 pr-3 text-label-md uppercase text-accent-fg">
-              <span className="h-[5px] w-[5px] animate-pulse rounded-full bg-accent" aria-hidden="true" />
-              Primedia Malls
-            </span>
             <h1 className="max-w-3xl text-display-2xl text-fg">
-              Every screen,
+              Primedia Malls
               <br />
-              <span className="text-transparent [-webkit-text-stroke:2px_var(--color-fg-subtle)]">mall by mall.</span>
+              {/* Outline drawn under a background-coloured fill: the font's overlapping
+                  contours would otherwise show as stray lines inside the letters. */}
+              <span className="tracking-normal text-bg-subtle [-webkit-text-stroke:4px_var(--color-fg-subtle)] [paint-order:stroke_fill]">
+                Specs
+              </span>
             </h1>
             <p className="max-w-prose text-body-lg text-fg-muted">
               Choose a mall to fly through its map and see each screen&rsquo;s size, format and booking requirements.
@@ -242,7 +255,7 @@ export function MallIndex({
           <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
             <StatTile value={locationCount} label="Locations" />
             <StatTile value={screenCount} label="Screens" />
-            <StatTile value={confirmedCount} label="Positions confirmed" />
+            {isAdmin ? <StatTile value={confirmedCount} label="Positions confirmed" /> : null}
           </div>
         </div>
       </header>
@@ -296,7 +309,7 @@ export function MallIndex({
               </div>
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {groupMalls.map((mall) => (
-                  <MallCard key={mall.id} mall={mall} specs={specsFor(mall)} index={cardIndex++} />
+                  <MallCard key={mall.id} mall={mall} specs={specsFor(mall)} index={cardIndex++} isAdmin={isAdmin} />
                 ))}
               </ul>
             </section>

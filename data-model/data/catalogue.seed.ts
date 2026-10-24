@@ -210,7 +210,8 @@ const monteCasinoSpecs: SeedSpec[] = [
 
 const pavilionSpecs: SeedSpec[] = [
   { key: 'pavilion-food-court', title: 'Food Court', width: 1920, height: 1080, approval: true },
-  { key: 'pavilion-fountain-court', title: 'Fountain Court', width: 1080, height: 1920, approval: true },
+  // 1920×1080 per the Oct 2026 "Updated Specs" PDF (the original sheet had it portrait, 1080×1920).
+  { key: 'pavilion-fountain-court', title: 'Fountain Court', width: 1920, height: 1080, approval: true },
   { key: 'pavilion-full-pillar', title: 'Full Pillar', width: 1280, height: 1472, approval: true },
 ];
 

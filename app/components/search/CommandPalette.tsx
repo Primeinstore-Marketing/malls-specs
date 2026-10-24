@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCatalogue } from '@/lib/catalogue';
+import { specHref, useLiveData } from '@/lib/liveData';
 import { buildSearchIndex, searchIndex } from '@/lib/search';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useSearchPalette } from './SearchPaletteContext';
@@ -23,7 +23,8 @@ export function CommandPalette() {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const index = useMemo(() => buildSearchIndex(getCatalogue()), []);
+  const live = useLiveData();
+  const index = useMemo(() => buildSearchIndex(live.catalogue), [live.catalogue]);
   const results = useMemo(() => searchIndex(query, index).slice(0, 8), [query, index]);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function CommandPalette() {
 
   const select = (id: string) => {
     setOpen(false);
-    router.push(`/spec/${id}`);
+    router.push(specHref(id, live));
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -78,7 +79,7 @@ export function CommandPalette() {
   };
 
   return (
-    <div className="fixed inset-0 z-modal flex items-start justify-center bg-fg/40 px-4 pt-[15vh]" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-modal flex items-start justify-center bg-[rgba(6,12,28,0.55)] backdrop-blur-md px-4 pt-[15vh]" onClick={() => setOpen(false)}>
       <div
         role="dialog"
         aria-modal="true"

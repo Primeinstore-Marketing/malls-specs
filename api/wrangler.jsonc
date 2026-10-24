@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "malls-specs-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "vars": {
+    // The GitHub Pages site and the local dev server. Add any custom domain here.
+    "ALLOWED_ORIGINS": "https://mo-pikcel.github.io,http://localhost:3000"
+  },
+  // Uploaded pictures and files. Behind the FileStore interface in
+  // src/files.ts, so moving to R2 later only changes that file and this.
+  "kv_namespaces": [{ "binding": "FILES", "id": "d94dcda5c0464234a9d1f060538ba2ed" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "malls-specs",
+      "database_id": "8000d625-2589-4f48-9237-70b7930dd9bd",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}
