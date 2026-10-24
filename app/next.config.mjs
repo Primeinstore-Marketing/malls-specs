@@ -12,6 +12,10 @@ const nextConfig = {
         basePath,
         assetPrefix: basePath ? `${basePath}/` : undefined,
         images: { unoptimized: true },
+        // Each page becomes a folder with an index.html (and index.txt). Under a
+        // sub-path like /malls-specs, the home page's prefetch data otherwise
+        // resolves to /malls-specs.txt — outside the site — and 404s.
+        trailingSlash: true,
       }
     : {}),
 };
