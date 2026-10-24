@@ -5,8 +5,9 @@
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   "vars": {
-    // The GitHub Pages site and the local dev server. Add any custom domain here.
-    "ALLOWED_ORIGINS": "https://mo-pikcel.github.io,http://localhost:3000"
+    // The GitHub Pages site (Primeinstore-Marketing; the earlier Mo-pikcel copy
+    // is still allowed) and the local dev server. Add any custom domain here.
+    "ALLOWED_ORIGINS": "https://primeinstore-marketing.github.io,https://mo-pikcel.github.io,http://localhost:3000"
   },
   // Uploaded pictures and files. Behind the FileStore interface in
   // src/files.ts, so moving to R2 later only changes that file and this.
