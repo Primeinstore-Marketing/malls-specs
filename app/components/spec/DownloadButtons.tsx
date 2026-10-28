@@ -28,7 +28,7 @@ export function DownloadButtons({ downloads, compact = false }: { downloads: rea
   );
 
   return (
-    <div className={`flex flex-wrap gap-2 ${compact ? 'flex-col' : ''}`}>
+    <div className={`flex gap-2 ${compact ? 'flex-col' : 'flex-col sm:flex-row sm:flex-wrap'}`}>
       {ordered.map((asset, index) => {
         const primary = index === 0;
         return (
@@ -40,7 +40,7 @@ export function DownloadButtons({ downloads, compact = false }: { downloads: rea
               primary
                 ? 'border-accent bg-accent text-fg-on-accent hover:bg-accent-hover'
                 : 'border-border-strong bg-bg text-fg hover:border-accent hover:bg-bg-subtle'
-            } ${compact ? 'w-full' : ''}`}
+            } ${compact ? 'w-full' : 'w-full sm:w-auto'}`}
           >
             <DownloadIcon />
             <span className="flex min-w-0 flex-col text-left">

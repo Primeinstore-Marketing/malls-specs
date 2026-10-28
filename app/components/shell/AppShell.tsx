@@ -16,7 +16,10 @@ import { CollectionsProvider } from '@/components/collections/CollectionsContext
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  // The sidebar sits beside the content from 1024px (laptops, landscape
+  // tablets); below that it's a slide-out drawer, so phones and portrait
+  // tablets get the full width for content.
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
   const pathname = usePathname();
 
   useEffect(() => {
@@ -66,16 +69,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <aside
               aria-label="Mall navigation"
               inert={drawerInert}
-              className={`fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] md:z-sticky md:translate-x-0 md:border-r md:border-border-strong md:shadow-none lg:top-[var(--topbar-height)] lg:w-[var(--sidebar-width)] ${
+              className={`fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)] lg:z-sticky lg:w-[var(--sidebar-width)] lg:translate-x-0 lg:border-r lg:border-border-strong lg:shadow-none ${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
             >
-              <Sidebar />
+              <Sidebar onNavigate={() => setMobileNavOpen(false)} />
             </aside>
 
             <main
               id="main-content"
-              className="flex min-h-screen flex-col pt-[var(--topbar-height-sm)] md:ml-[var(--sidebar-width-md)] md:pt-[var(--topbar-height-md)] lg:ml-[var(--sidebar-width)] lg:pt-[var(--topbar-height)]"
+              className="flex min-h-screen flex-col pt-[var(--topbar-height-sm)] md:pt-[var(--topbar-height-md)] lg:ml-[var(--sidebar-width)] lg:pt-[var(--topbar-height)]"
             >
               <div className="flex-1">{children}</div>
               {showFooter ? <Footer /> : null}
