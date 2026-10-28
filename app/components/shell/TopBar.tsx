@@ -38,11 +38,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         Skip to content
       </a>
 
-      <div className="flex w-[var(--sidebar-width-md)] shrink-0 items-center bg-brand-surface px-4 lg:w-[var(--sidebar-width)]">
+      <div className="flex shrink-0 items-center bg-brand-surface px-3 sm:px-4 lg:w-[var(--sidebar-width)]">
         <button
           type="button"
           onClick={onMenuToggle}
-          className="mr-2 -ml-1 flex h-8 w-8 items-center justify-center rounded-md text-brand-on-surface md:hidden"
+          className="mr-2 -ml-1 flex h-8 w-8 items-center justify-center rounded-md text-brand-on-surface lg:hidden"
           aria-label="Toggle category navigation"
         >
           <MenuIcon />
@@ -53,13 +53,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
             alt="Primedia Malls"
             width={140}
             height={29}
-            className="h-[26px] w-auto"
+            className="h-[22px] w-auto sm:h-[26px]"
             priority
           />
         </Link>
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4">
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4">
         <Link href="/" className="hidden shrink-0 text-body-sm font-medium text-fg sm:block">
           Home
         </Link>
@@ -67,10 +67,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex h-8 w-full max-w-md items-center gap-2 rounded-md border border-border-strong bg-bg-subtle px-3 text-body-sm text-fg-subtle transition-colors duration-fast ease-standard hover:border-border-control hover:text-fg-muted"
+          aria-label="Search specifications"
+          className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center gap-2 rounded-md border border-border-strong bg-bg-subtle text-body-sm text-fg-subtle transition-colors duration-fast ease-standard hover:border-border-control hover:text-fg-muted sm:ml-0 sm:w-full sm:max-w-md sm:shrink sm:justify-start sm:px-3"
         >
           <SearchIcon />
-          <span className="flex-1 truncate text-left">Search specifications…</span>
+          <span className="hidden flex-1 truncate text-left sm:inline">Search specifications…</span>
           <kbd className="hidden rounded border border-border-strong bg-bg px-1.5 py-0.5 text-label-md text-fg-subtle sm:inline">
             ⌘K
           </kbd>

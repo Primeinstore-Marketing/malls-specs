@@ -6,6 +6,14 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const COLUMNS = ['Specification', 'Code', 'Category', 'Status', 'Updated'] as const;
 
+function formatDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export function SpecificationList({
   items,
   hrefFor = (id) => `/spec/${id}`,
@@ -35,10 +43,7 @@ export function SpecificationList({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border">
-        <div
-          className="hidden bg-bg-muted px-4 py-2 text-label-md uppercase text-fg-subtle sm:grid"
-          style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}
-        >
+        <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-4 bg-bg-muted px-4 py-2 text-label-md uppercase text-fg-subtle md:grid">
           {COLUMNS.map((col) => (
             <span key={col}>{col}</span>
           ))}
@@ -60,23 +65,29 @@ export function SpecificationList({
           <ul>
             {items.map((spec) => (
               <li key={spec.id} className="border-t border-border first:border-t-0">
+                {/* Phones and tablets: name, with network and date beneath and the status
+                    on the right. From md up: the full five-column table. */}
                 <Link
                   href={hrefFor(spec.id)}
-                  className="grid items-center gap-2 px-4 py-3 text-body-sm text-fg transition-colors duration-fast ease-standard hover:bg-bg-subtle sm:gap-4"
-                  style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-body-sm text-fg transition-colors duration-fast ease-standard hover:bg-bg-subtle md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:gap-4"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{spec.title || 'Untitled specification'}</span>
                     {spec.description ? (
-                      <span className="block truncate text-body-sm text-fg-subtle">{spec.description}</span>
+                      <span className="hidden truncate text-body-sm text-fg-subtle md:block">{spec.description}</span>
                     ) : null}
+                    <span className="block truncate text-body-sm text-fg-subtle md:hidden">
+                      {[(spec.categoryId && categoryNames?.[spec.categoryId]) || null, formatDate(spec.updatedAt)]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
                   </span>
-                  <span className="truncate text-mono-md text-fg-subtle">{spec.code || '—'}</span>
-                  <span className="truncate text-fg-subtle">
+                  <span className="hidden truncate text-mono-md text-fg-subtle md:block">{spec.code || '—'}</span>
+                  <span className="hidden truncate text-fg-subtle md:block">
                     {(spec.categoryId && categoryNames?.[spec.categoryId]) ?? '—'}
                   </span>
                   <StatusBadge status={spec.status} />
-                  <span className="truncate text-fg-subtle">{spec.updatedAt ?? '—'}</span>
+                  <span className="hidden truncate text-fg-subtle md:block">{formatDate(spec.updatedAt) ?? '—'}</span>
                 </Link>
               </li>
             ))}

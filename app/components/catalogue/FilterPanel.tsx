@@ -99,9 +99,7 @@ export function FilterPanel({ tree, tags }: { tree: readonly CategoryTreeNode[];
         >
           Clear all
         </button>
-      ) : (
-        <p className="text-body-sm text-fg-subtle sm:ml-2">Filters activate once specifications are added.</p>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -79,7 +79,7 @@ interface ActiveLocation {
   readonly specId: string | null;
 }
 
-function MallNav({ active }: { active: ActiveLocation }) {
+function MallNav({ active, onNavigate }: { active: ActiveLocation; onNavigate?: () => void }) {
   const { catalogue } = useLiveData();
   const { isAdmin } = useAdminSession();
   const malls = useMemo(() => getMalls(catalogue), [catalogue]);
@@ -145,7 +145,17 @@ function MallNav({ active }: { active: ActiveLocation }) {
   };
 
   return (
-    <nav aria-label="Find a screen" className="flex h-full w-full flex-col">
+    <nav
+      aria-label="Find a screen"
+      className="flex h-full w-full flex-col"
+      // Following any link (a mall, a screen, All malls, List view) closes the
+      // phone/tablet drawer. Choosing a screen only changes the query string, so
+      // the shell's close-on-route-change wouldn't fire. Expand arrows and the
+      // filter are buttons, so the drawer stays open while browsing.
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('a')) onNavigate?.();
+      }}
+    >
       <div className="flex flex-col gap-3 border-b border-white/10 px-3 pb-3 pt-4">
         <label className="relative block">
           <span className="sr-only">Find a mall or screen</span>
@@ -282,20 +292,20 @@ function MallNav({ active }: { active: ActiveLocation }) {
 }
 
 /** Reads which mall/screen is on screen: `/?mall=&screen=` or `/spec/:id`. */
-function MallNavWithLocation() {
+function MallNavWithLocation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const specMatch = pathname.match(/^\/spec\/([^/]+)/);
   const specId = specMatch ? decodeURIComponent(specMatch[1]) : pathname === '/' ? searchParams.get('screen') : null;
   const mallId = specMatch ? (getMallForSpec(specId ?? '')?.id ?? null) : pathname === '/' ? searchParams.get('mall') : null;
-  return <MallNav active={{ mallId, specId }} />;
+  return <MallNav active={{ mallId, specId }} onNavigate={onNavigate} />;
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   // `useSearchParams` needs a Suspense boundary for the static export.
   return (
-    <Suspense fallback={<MallNav active={{ mallId: null, specId: null }} />}>
-      <MallNavWithLocation />
+    <Suspense fallback={<MallNav active={{ mallId: null, specId: null }} onNavigate={onNavigate} />}>
+      <MallNavWithLocation onNavigate={onNavigate} />
     </Suspense>
   );
 }

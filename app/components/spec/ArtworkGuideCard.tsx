@@ -36,9 +36,9 @@ export function ArtworkGuideCard({ spec }: { spec: Specification }) {
 
   return (
     <section id="artwork" aria-labelledby="artwork-title" className="overflow-hidden rounded-2xl border border-border">
-      <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* The screen, to scale, on a dark stage. */}
-        <div className="relative flex min-h-[220px] items-center justify-center bg-brand-surface p-8 md:min-h-[300px]">
+        <div className="relative flex min-h-[220px] items-center justify-center bg-brand-surface p-8 xl:min-h-[300px]">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:16px_16px]"
