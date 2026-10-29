@@ -34,7 +34,7 @@ export type MallGroup = 'malls' | 'hyprop' | 'formats';
 export const MALL_GROUP_LABELS: Readonly<Record<MallGroup, string>> = {
   malls: 'Malls',
   hyprop: 'Hyprop Malls',
-  formats: 'Network-wide formats',
+  formats: 'Generic specs',
 };
 
 export interface Mall {
@@ -109,9 +109,9 @@ const MALL_SOURCES: readonly MallSource[] = [
   { id: 'woodlands', name: 'Woodlands', group: 'hyprop', specIds: ['spec-woodlands'] },
   {
     id: 'network-formats',
-    name: 'Standard formats',
+    name: 'Generic specs',
     group: 'formats',
-    specIds: ['spec-landscape-digital-icon-mtv', 'spec-portrait-digital-engage', 'spec-other-pillars'],
+    specIds: ['spec-digi-impact', 'spec-portrait-digital-engage', 'spec-landscape-digital-icon-mtv', 'spec-other-pillars'],
   },
 ];
 
