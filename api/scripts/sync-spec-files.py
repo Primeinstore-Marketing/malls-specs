@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 Syncs the downloads on each screen's spec page with the "Updated Specs"
-folder: the spec sheet PDF, After Effects template and Illustrator template.
+folder: the spec sheet PDF and the After Effects template. Illustrator
+(.ai) files are deliberately left off the site.
 
     python3 api/scripts/sync-spec-files.py ["~/Desktop/Updated Specs"] [--dry-run]
 
 For every file in the FOLDER list below, the live download of the same type
-(PDF / AEP / AI) on that screen is compared byte for byte:
+(PDF / AEP) on that screen is compared byte for byte:
   - missing   -> uploaded
   - different -> the new version is uploaded and the old one removed
   - identical -> left alone
@@ -36,11 +37,10 @@ UPLOADED_BY = 'sync-spec-files.py'
 TYPES = {
     '.pdf': ('application/pdf', 'document', 'Spec sheet (PDF)'),
     '.aep': ('application/vnd.adobe.aftereffects.project', 'other', 'After Effects template'),
-    '.ai': ('application/postscript', 'document', 'Illustrator template'),
 }
 
-# Folder inside "Updated Specs" -> the screen(s) its PDF / AEP / AI belong to.
-# Each folder holds one spec: "<name>.pdf", "<name>.aep", "<name>.ai".
+# Folder inside "Updated Specs" -> the screen(s) its PDF / AEP belong to.
+# Each folder holds one spec: "<name>.pdf" and "<name>.aep".
 FOLDER = {
     'Bayside Digi Impact': ['spec-bayside-digi-impact'],
     'Boardwalk': ['spec-boardwalk'],
