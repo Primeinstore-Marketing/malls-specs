@@ -199,7 +199,7 @@ export function MallExplorer() {
             title={mall.name}
             subtitle={
               mall.group === 'formats'
-                ? 'Standard formats · used across the network'
+                ? 'Generic specs · used across the network'
                 : 'Not on OpenStreetMap · screens shown as a grid'
             }
             specs={specs}
