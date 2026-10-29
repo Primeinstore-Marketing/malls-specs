@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "snapshot": "node scripts/snapshot-live.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^4.7.1",

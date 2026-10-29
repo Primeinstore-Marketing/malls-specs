@@ -24,9 +24,9 @@ export interface AdminControls {
   readonly editSpec: (specId: string) => void;
   readonly addScreen: () => void;
   readonly resetPin: (specId: string) => void;
-  readonly revertSpec: (specId: string, isAdded: boolean) => void;
+  /** Deletes a screen added on the site. Built-in screens are edited, never deleted. */
+  readonly deleteSpec: (specId: string) => void;
   readonly isAdded: (specId: string) => boolean;
-  readonly isEdited: (specId: string) => boolean;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -83,7 +83,6 @@ function ScreenDetail({
   const requirements = spec.blocks.flatMap((block) => block.lines.filter((line) => line.kind === 'item'));
   const explanation = pin ? positionExplanation(pin) : null;
   const isAdded = admin?.isAdded(spec.id) ?? false;
-  const isEdited = admin?.isEdited(spec.id) ?? false;
 
   return (
     <div className="flex flex-col gap-5">
@@ -97,7 +96,7 @@ function ScreenDetail({
         </button>
         <span className="text-label-md uppercase text-fg-subtle">
           Screen {index + 1} of {total}
-          {isAdded ? ' · added by an admin' : isEdited ? ' · edited' : ''}
+          {isAdded ? ' · added by an admin' : ''}
         </span>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-display-sm text-fg">{spec.title}</h2>
@@ -173,13 +172,13 @@ function ScreenDetail({
         Open full specification
       </LinkButton>
 
-      {admin && (isAdded || isEdited) ? (
+      {admin && isAdded ? (
         <button
           type="button"
-          onClick={() => admin.revertSpec(spec.id, isAdded)}
+          onClick={() => admin.deleteSpec(spec.id)}
           className="w-fit text-body-sm text-danger-fg underline-offset-2 hover:underline"
         >
-          {isAdded ? 'Delete this screen' : 'Undo all edits to this screen'}
+          Delete this screen
         </button>
       ) : null}
     </div>

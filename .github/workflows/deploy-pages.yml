@@ -30,6 +30,12 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # Bake the database's specs into the pages (the database is the source
+      # of truth; nothing about a spec is kept in code).
+      - name: Snapshot specs from the database
+        working-directory: app
+        run: npm run snapshot
+
       - name: Build static export
         working-directory: app
         env:

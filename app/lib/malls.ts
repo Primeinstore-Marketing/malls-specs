@@ -1,5 +1,6 @@
 import type { Catalogue, Specification, SubGroupId } from '@data-model';
-import { getCatalogue } from './catalogue';
+import { getCatalogue, snapshotState } from './catalogue';
+import type { LivePlacement } from './mergeLive';
 import { MALL_LOCATIONS } from './mallLocations';
 import type { MallLocation } from './mallLocations';
 import { FLOOR_PLANS, SCREEN_PINS } from './screenPins';
@@ -119,14 +120,9 @@ const MALL_SOURCES: readonly MallSource[] = [
  * and which mall each added screen belongs to. Positions here beat both
  * the hand-confirmed SCREEN_PINS and the automatic drafts.
  */
-interface LivePlacement {
-  readonly pins: Readonly<Record<string, ScreenPin>>;
-  readonly addedSpecIds: Readonly<Record<string, readonly string[]>>;
-  /** Positions on mall directory maps, set on the site. */
-  readonly planPins: Readonly<Record<string, MallMapPin>>;
-}
-
-let livePlacement: LivePlacement = { pins: {}, addedSpecIds: {}, planPins: {} };
+// Starts as the database snapshot baked in at publish time; replaced when
+// fresh data arrives from the API.
+let livePlacement: LivePlacement = snapshotState.placement;
 
 export function setLivePlacement(placement: LivePlacement) {
   livePlacement = placement;

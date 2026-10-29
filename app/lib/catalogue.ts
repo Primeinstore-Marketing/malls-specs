@@ -1,4 +1,7 @@
-import { catalogue as seededCatalogue } from '@data/catalogue.seed';
+import { catalogue as codeCatalogue } from '@data/catalogue.seed';
+import liveSnapshot from './liveSnapshot.json';
+import { mergeLiveData } from './mergeLive';
+import type { LiveDataResponse } from './api';
 import { toSummary } from '@data-model';
 import type { Catalogue } from '@data-model';
 import type { Category, SubGroup, Specification, Tag } from '@data-model';
@@ -9,16 +12,32 @@ import type { Revision } from '@data-model';
 
 /**
  * Service-layer seam. Every page reads through this module rather than the
- * shipped data file directly, so a real API or CMS can replace the adapter
- * later without touching a component.
+ * shipped data file directly.
+ *
+ * Where specs come from: the database is the source of truth. Each publish
+ * bakes a snapshot of it into `liveSnapshot.json` (scripts/snapshot-live.mjs),
+ * merged here over the structural catalogue in data-model — so the static
+ * pages show the database's specs on first paint, and the browser then
+ * applies anything changed since (lib/liveData.ts).
  */
+const snapshot = mergeLiveData(codeCatalogue, liveSnapshot as unknown as LiveDataResponse);
+const bakedCatalogue = snapshot.catalogue;
+
+/** Placement and added/edited sets from the snapshot, for the first render. */
+export const snapshotState = snapshot;
+
 export function getCatalogue(): Catalogue {
-  return liveCatalogue ?? seededCatalogue;
+  return liveCatalogue ?? bakedCatalogue;
 }
 
-/** The built-in data, before any admin edits. */
+/** What the pages were built with: the code catalogue plus the database snapshot. */
 export function getSeedCatalogue(): Catalogue {
-  return seededCatalogue;
+  return bakedCatalogue;
+}
+
+/** The structural catalogue in code, before any database records — the base live data merges onto. */
+export function getCodeCatalogue(): Catalogue {
+  return codeCatalogue;
 }
 
 // Set by `lib/liveData.ts` once admin edits have loaded from the API, so
