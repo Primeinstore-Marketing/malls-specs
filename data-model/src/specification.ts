@@ -5,6 +5,37 @@ import type { Audited, Archivable, Slug } from './common';
 import type { SpecStatus } from './status';
 import type { SpecBlock, MetadataField } from './content';
 
+/** One physical panel of a multi-panel screen, in artwork pixels from the canvas's top-left. */
+export interface ScreenPanel {
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * How a screen that isn't one plain rectangle is built: several panels in
+ * one artwork canvas (e.g. five stepped portrait panels), and/or marked
+ * content zones within a panel. Part of the spec record, so it's edited as
+ * data like everything else — not kept in code.
+ */
+export interface ScreenLayout {
+  readonly panels: readonly ScreenPanel[];
+  /** Areas within the panels that content must stay inside, drawn dashed. */
+  readonly zones?: readonly ScreenPanel[];
+  /** A short description for the size chips, e.g. "5 portrait panels". */
+  readonly summary: string;
+  /** Size of each panel, when they're all the same. */
+  readonly panelSize: { readonly width: number; readonly height: number } | null;
+  /** The vertical band every panel covers — keep titles inside it. */
+  readonly commonBand: { readonly top: number; readonly bottom: number } | null;
+  /** Safe margin inside each panel, in px. */
+  readonly safeMargin: number | null;
+  /** One line on how the panels are arranged. */
+  readonly arrangement: string;
+}
+
 /**
  * The leaf record. Everything else in the model exists to organise, describe
  * or version one of these.
@@ -47,6 +78,8 @@ export interface Specification extends Audited, Archivable {
   readonly blocks: readonly SpecBlock[];
   /** Dynamic key/value pairs — confirmed structure. */
   readonly metadata: readonly MetadataField[];
+  /** Panel layout, for screens made of several panels or zones. Absent for a plain rectangle. */
+  readonly screenLayout?: ScreenLayout | null;
 
   // ── files ───────────────────────────────────────────────────────────
   readonly mediaIds: readonly AssetId[];

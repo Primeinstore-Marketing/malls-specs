@@ -85,7 +85,7 @@ function createMarkerElement(spec: Specification, source: PinSource, onClick: ()
   screen.style.height = `${height}px`;
   if (placeholder) screen.textContent = '?';
   // Multi-panel screens draw their panels, as on the spec page.
-  const layout = !placeholder && size ? getScreenLayout(spec.id) : null;
+  const layout = !placeholder && size ? getScreenLayout(spec) : null;
   if (layout && size) {
     screen.classList.add('screen-pin__screen--panels');
     for (const panel of layout.panels) {

@@ -139,17 +139,13 @@ export function MallExplorer() {
           editSpec: (specId) => setEditor({ mode: 'edit', specId }),
           addScreen: () => setEditor({ mode: 'add' }),
           resetPin: (specId) => void runChange('Resetting position…', () => api.deletePin(specId)),
-          revertSpec: (specId, isAdded) => {
-            const question = isAdded
-              ? 'Delete this screen? This removes it for everyone.'
-              : 'Undo all edits to this screen and go back to the original spec?';
-            if (!window.confirm(question)) return;
-            void runChange(isAdded ? 'Deleting…' : 'Reverting…', () => api.deleteSpec(specId)).then((ok) => {
-              if (ok && isAdded) setFocus(null);
+          deleteSpec: (specId) => {
+            if (!window.confirm('Delete this screen? This removes it for everyone.')) return;
+            void runChange('Deleting…', () => api.deleteSpec(specId)).then((ok) => {
+              if (ok) setFocus(null);
             });
           },
           isAdded: (specId) => live.addedSpecIds.has(specId),
-          isEdited: (specId) => live.editedSpecIds.has(specId),
         }
       : null;
 

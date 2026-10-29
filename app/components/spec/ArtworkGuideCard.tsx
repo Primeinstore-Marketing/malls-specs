@@ -12,7 +12,7 @@ import { ScreenLayoutDrawing } from './ScreenLayoutDrawing';
 export function ArtworkGuideCard({ spec }: { spec: Specification }) {
   const size = getScreenSize(spec);
   const guide = getArtworkGuide(spec);
-  const layout = getScreenLayout(spec.id);
+  const layout = getScreenLayout(spec);
   // Size, ratio and orientation are shown large above; the rest is the delivery list.
   const delivery = [
     // Multi-panel screens: the panel geometry comes first — it's the size designers work to.

@@ -78,6 +78,33 @@ export function ScreenLayoutDrawing({
         </g>
       ))}
 
+      {(layout.zones ?? []).map((zone) => (
+        <g key={`zone-${zone.label}-${zone.x}-${zone.y}`}>
+          <rect
+            x={zone.x + gap / 2}
+            y={zone.y + gap / 2}
+            width={zone.width - gap}
+            height={zone.height - gap}
+            fill="rgba(255,255,255,0.06)"
+            stroke="#ff5a6e"
+            strokeWidth={stroke * 1.2}
+            strokeDasharray={`${stroke * 6} ${stroke * 4}`}
+          />
+          <text
+            x={zone.x + zone.width / 2}
+            y={zone.y + zone.height / 2}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="rgba(255,255,255,0.85)"
+            fontSize={Math.min(label * 0.8, zone.width * 0.28)}
+            fontWeight={700}
+            fontFamily="var(--font-mono)"
+          >
+            {zone.label}
+          </text>
+        </g>
+      ))}
+
       {layout.commonBand ? (
         <g>
           {[layout.commonBand.top, layout.commonBand.bottom].map((y) => (

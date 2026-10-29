@@ -16,7 +16,7 @@
  *          PUT    /plan-pins/:specId { x, y }          (position on the mall's directory map, 0–1)
  *          DELETE /plan-pins/:specId
  *          PUT    /specs/:specId { data, mallId?, isNew? }
- *          DELETE /specs/:specId                      (undo edits / remove an added screen)
+ *          DELETE /specs/:specId                      (remove a screen added on the site)
  *
  * The site is served from GitHub Pages, a different origin, so sessions use
  * a bearer token rather than a cookie (third-party cookies are blocked).
@@ -341,6 +341,12 @@ async function putSpec(request: Request, env: Env, specId: string): Promise<Resp
 
 async function deleteSpec(request: Request, env: Env, specId: string): Promise<Response> {
   const admin = await requireAdmin(request, env);
+  // Every spec lives here; only screens added on the site may be deleted.
+  // Removing a built-in screen's record would lose it — edit it instead.
+  const record = await env.DB.prepare('SELECT is_new FROM specs WHERE id = ?').bind(specId).first<{ is_new: number }>();
+  if (record && record.is_new !== 1) {
+    throw new HttpError(409, 'Built-in screens can’t be deleted — edit them instead.');
+  }
   // An added screen takes its position and files with it; a built-in screen
   // keeps its confirmed position and uploads when only its edits are undone.
   const added = await env.DB.prepare('SELECT 1 FROM specs WHERE id = ? AND is_new = 1').bind(specId).first();
