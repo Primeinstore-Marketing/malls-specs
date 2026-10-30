@@ -119,10 +119,13 @@ function ScreenDetail({
           className="group relative block overflow-hidden rounded-lg border border-border bg-bg-subtle"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- uploaded files come from the API, not the build */}
+          {/* Not lazy: some browsers never load a lazy image that appears inside
+              this scrolling panel until the page is reloaded. */}
           <img
+            key={picture.id}
             src={fileUrl(picture.storageKey)}
             alt={picture.alt || picture.caption || `${spec.title} on site`}
-            loading="lazy"
+            decoding="async"
             className="aspect-video w-full object-cover transition-transform duration-slow ease-standard group-hover:scale-[1.02]"
           />
           {pictures.length > 1 ? (
