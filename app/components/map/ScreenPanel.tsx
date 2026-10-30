@@ -10,6 +10,7 @@ import { specHref, useLiveData } from '@/lib/liveData';
 import { PinStatusDot } from './PinStatusDot';
 import { DownloadButtons } from '@/components/spec/DownloadButtons';
 import { getAssets } from '@/lib/catalogue';
+import { fileUrl } from '@/lib/api';
 
 export type SaveState =
   | { readonly kind: 'idle' }
@@ -79,6 +80,8 @@ function ScreenDetail({
 }) {
   const live = useLiveData();
   const downloads = getAssets(spec.downloadIds, live.catalogue);
+  const pictures = getAssets(spec.mediaIds, live.catalogue).filter((asset) => asset.kind === 'image');
+  const picture = pictures[0];
   const size = getScreenSize(spec);
   const requirements = spec.blocks.flatMap((block) => block.lines.filter((line) => line.kind === 'item'));
   const explanation = pin ? positionExplanation(pin) : null;
@@ -108,6 +111,27 @@ function ScreenDetail({
         </div>
         {spec.description ? <p className="text-body-sm text-fg-muted">{spec.description}</p> : null}
       </div>
+
+      {picture ? (
+        <Link
+          href={specHref(spec.id, live)}
+          title="Open the full specification"
+          className="group relative block overflow-hidden rounded-lg border border-border bg-bg-subtle"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- uploaded files come from the API, not the build */}
+          <img
+            src={fileUrl(picture.storageKey)}
+            alt={picture.alt || picture.caption || `${spec.title} on site`}
+            loading="lazy"
+            className="aspect-video w-full object-cover transition-transform duration-slow ease-standard group-hover:scale-[1.02]"
+          />
+          {pictures.length > 1 ? (
+            <span className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white">
+              +{pictures.length - 1} more {pictures.length === 2 ? 'photo' : 'photos'}
+            </span>
+          ) : null}
+        </Link>
+      ) : null}
 
       <DownloadButtons downloads={downloads} compact />
 

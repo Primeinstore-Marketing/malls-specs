@@ -48,7 +48,12 @@ function outlineData(location: MallLocation | null): GeoJSON.FeatureCollection {
  * marker is anchored at the stem's tip). Styled by `.screen-pin*` in
  * globals.css. Placeholders render as an amber "?" badge instead.
  */
-function createMarkerElement(spec: Specification, source: PinSource, onClick: () => void): HTMLButtonElement {
+function createMarkerElement(
+  spec: Specification,
+  source: PinSource,
+  onClick: () => void,
+  onDoubleClick: () => void,
+): HTMLButtonElement {
   const size = getScreenSize(spec);
   const placeholder = source === 'placeholder';
   const ratio = size ? size.width / size.height : 16 / 9;
@@ -66,9 +71,16 @@ function createMarkerElement(spec: Specification, source: PinSource, onClick: ()
   button.type = 'button';
   button.dataset.placeholder = String(placeholder);
   button.setAttribute('aria-label', `${spec.title}${size ? `, ${size.width} × ${size.height}` : ''}`);
+  button.title = 'Click for details, double-click to open the full spec';
   button.addEventListener('click', (event) => {
     event.stopPropagation();
     onClick();
+  });
+  button.addEventListener('dblclick', (event) => {
+    // Keep the map from zooming in as well.
+    event.stopPropagation();
+    event.preventDefault();
+    onDoubleClick();
   });
 
   const label = part('span', 'screen-pin__label');
@@ -110,6 +122,8 @@ export interface MallMapProps {
   readonly pins: Readonly<Record<string, ScreenPin>>;
   readonly focusedId: string | null;
   readonly onFocus: (specId: string | null) => void;
+  /** Opens the screen's full spec page (double-click on its pin). */
+  readonly onOpen: (specId: string) => void;
   readonly onStep: (direction: 1 | -1) => void;
   readonly editMode: boolean;
   readonly onPinMove: (specId: string, lng: number, lat: number) => void;
@@ -125,6 +139,7 @@ export function MallMap({
   pins,
   focusedId,
   onFocus,
+  onOpen,
   onStep,
   editMode,
   onPinMove,
@@ -142,6 +157,8 @@ export function MallMap({
   // Latest callbacks, read from inside MapLibre event handlers.
   const onFocusRef = useRef(onFocus);
   onFocusRef.current = onFocus;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
   const onPinMoveRef = useRef(onPinMove);
   onPinMoveRef.current = onPinMove;
   // In edit mode, a click on the map places the focused screen if it has no
@@ -273,7 +290,12 @@ export function MallMap({
     for (const spec of specs) {
       const pin = pins[spec.id];
       if (!pin) continue;
-      const element = createMarkerElement(spec, pin.source, () => onFocusRef.current(spec.id));
+      const element = createMarkerElement(
+        spec,
+        pin.source,
+        () => onFocusRef.current(spec.id),
+        () => onOpenRef.current(spec.id),
+      );
       const label = element.getAttribute('aria-label') ?? spec.title;
       const marker = new MarkerClass({ element, anchor: 'bottom', draggable: editMode })
         .setLngLat([pin.lng, pin.lat])

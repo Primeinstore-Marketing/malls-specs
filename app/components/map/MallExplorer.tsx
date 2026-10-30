@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Specification } from '@data-model';
 import { api, ApiError } from '@/lib/api';
-import { refreshLiveData, useLiveData } from '@/lib/liveData';
+import { refreshLiveData, specHref, useLiveData } from '@/lib/liveData';
 import { getMalls } from '@/lib/malls';
 import type { ScreenPin } from '@/lib/malls';
 import { useAdminSession } from '@/components/auth/AdminSession';
@@ -89,6 +89,15 @@ export function MallExplorer() {
       setFocus(next < 0 || next >= specs.length ? null : specs[next].id);
     },
     [specs, focusedId, setFocus],
+  );
+
+  // Double-click on a screen opens its full spec; not while placing, where
+  // clicks are for moving screens.
+  const openSpec = useCallback(
+    (specId: string) => {
+      if (!editMode) router.push(specHref(specId, live));
+    },
+    [editMode, router, live],
   );
 
   const toggleEdit = () => {
@@ -187,6 +196,7 @@ export function MallExplorer() {
             pins={mapPins}
             focusedId={focusedId}
             onFocus={setFocus}
+            onOpen={openSpec}
             onStep={step}
             editMode={editMode}
             canEdit={isAdmin}
@@ -205,6 +215,7 @@ export function MallExplorer() {
             specs={specs}
             focusedId={focusedId}
             onFocus={setFocus}
+            onOpen={openSpec}
             onStep={step}
           />
         )}
