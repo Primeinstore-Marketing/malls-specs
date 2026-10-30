@@ -46,8 +46,11 @@ export function projectOutline(
   const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
   const offsetX = (width - spanX * scale) / 2;
   const offsetY = (height - spanY * scale) / 2;
+  // Rounded: Node and the browser disagree on Math.cos in the last few
+  // digits, which would otherwise make server and client HTML differ.
+  const round = (value: number) => Math.round(value * 10) / 10;
   const project = (lng: number, lat: number) =>
-    [offsetX + (lng * scaleX - minX) * scale, offsetY + (-lat - minY) * scale] as const;
+    [round(offsetX + (lng * scaleX - minX) * scale), round(offsetY + (-lat - minY) * scale)] as const;
 
   const path = rings
     .map(
