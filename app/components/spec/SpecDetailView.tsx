@@ -1,6 +1,6 @@
 'use client';
 
-import type { Asset, BlockLine, MetadataField, SpecBlock } from '@data-model';
+import type { Asset, MetadataField } from '@data-model';
 import { getSpecification, getAssets, getRelatedSpecifications, getRevisions } from '@/lib/catalogue';
 import { fileUrl } from '@/lib/api';
 import { formatFileSize } from '@/lib/fileSize';
@@ -24,7 +24,7 @@ import { DownloadButtons } from './DownloadButtons';
  * first — matching the static HTML — then the live version.
  *
  * Laid out for reading, most important first: what the screen is, the size
- * to make artwork at, pictures, requirements, then any other details and
+ * to make artwork at, pictures, then any other details and
  * files. Sections with nothing in them aren't shown.
  */
 
@@ -41,42 +41,6 @@ function formatDate(iso: string | null): string | null {
 
 function SectionTitle({ children }: { children: string }) {
   return <h2 className="text-display-sm text-fg">{children}</h2>;
-}
-
-function CheckIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
-      <path d="m5 12 5 5L20 7" />
-    </svg>
-  );
-}
-
-function ContentSection({ block }: { block: SpecBlock }) {
-  if (block.lines.length === 0) return null;
-  return (
-    <section id={block.anchorId || block.id} className="flex flex-col gap-3">
-      <SectionTitle>{block.label}</SectionTitle>
-      <ul className={`rounded-xl border border-border bg-bg-subtle p-2 ${block.twoColumn ? 'sm:columns-2 sm:gap-2' : ''}`}>
-        {block.lines.map((line: BlockLine, index) =>
-          line.kind === 'subheading' ? (
-            <li key={index} className="break-inside-avoid px-3 pb-1 pt-3 text-label-md uppercase text-fg-subtle">
-              {line.text}
-            </li>
-          ) : (
-            <li key={index} className="flex break-inside-avoid items-start gap-3 rounded-lg px-3 py-2.5 text-body-md text-fg">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent-fg">
-                <CheckIcon />
-              </span>
-              <span>
-                {line.reference ? <span className="mr-1 font-bold text-accent-fg">{line.reference}</span> : null}
-                {line.text}
-              </span>
-            </li>
-          ),
-        )}
-      </ul>
-    </section>
-  );
 }
 
 function DetailsSection({ fields }: { fields: readonly MetadataField[] }) {
@@ -172,7 +136,6 @@ export function SpecDetailView({ specId }: { specId: string }) {
   const details = spec.metadata
     .filter((field) => !HERO_KEYS.has(field.key) && field.value)
     .sort((a, b) => a.order - b.order);
-  const blocks = [...spec.blocks].sort((a, b) => a.order - b.order);
   const updated = formatDate(spec.updatedAt);
 
   return (
@@ -223,10 +186,6 @@ export function SpecDetailView({ specId }: { specId: string }) {
           </div>
         </section>
       ) : null}
-
-      {blocks.map((block) => (
-        <ContentSection key={block.id} block={block} />
-      ))}
 
       <DetailsSection fields={details} />
       <FilesSection attachments={attachments} />

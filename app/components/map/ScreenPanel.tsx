@@ -83,7 +83,6 @@ function ScreenDetail({
   const pictures = getAssets(spec.mediaIds, live.catalogue).filter((asset) => asset.kind === 'image');
   const picture = pictures[0];
   const size = getScreenSize(spec);
-  const requirements = spec.blocks.flatMap((block) => block.lines.filter((line) => line.kind === 'item'));
   const explanation = pin ? positionExplanation(pin) : null;
   const isAdded = admin?.isAdded(spec.id) ?? false;
 
@@ -181,17 +180,6 @@ function ScreenDetail({
               Reset to automatic position
             </button>
           ) : null}
-        </div>
-      ) : null}
-
-      {requirements.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <SectionLabel>Requirements</SectionLabel>
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-body-sm text-fg-muted">
-            {requirements.map((line, lineIndex) => (
-              <li key={lineIndex}>{line.text}</li>
-            ))}
-          </ul>
         </div>
       ) : null}
 
