@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Specification } from '@data-model';
 import { getMallForSpec } from '@/lib/malls';
-import { useLiveData } from '@/lib/liveData';
+import { api } from '@/lib/api';
+import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { SpecEditor } from './SpecEditor';
 import { BookmarkButton } from './BookmarkButton';
@@ -45,13 +47,23 @@ function PencilIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+    </svg>
+  );
+}
+
 const ACTION =
   'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-body-sm font-medium text-fg-muted transition-colors duration-fast ease-standard hover:bg-bg-subtle hover:text-fg';
 
-/** The spec's actions, as one tidy group: share and save for everyone, edit for admins. */
+/** The spec's actions, as one tidy group: share and save for everyone, edit and delete for admins. */
 export function SpecActionBar({ spec }: { spec: Specification }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
   const { isAdmin } = useAdminSession();
   const live = useLiveData();
   const mall = getMallForSpec(spec.id, live.catalogue);
@@ -65,6 +77,19 @@ export function SpecActionBar({ spec }: { spec: Specification }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  };
+
+  const deleteSpec = async () => {
+    if (!window.confirm(`Delete “${spec.title}”? It disappears from the site for everyone.`)) return;
+    setDeleting(true);
+    try {
+      await api.deleteSpec(spec.id);
+      await refreshLiveData();
+      router.push(mall ? `/?mall=${mall.id}` : '/');
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Couldn’t delete this screen.');
+      setDeleting(false);
     }
   };
 
@@ -95,6 +120,17 @@ export function SpecActionBar({ spec }: { spec: Specification }) {
         >
           <PencilIcon />
           Edit spec
+        </button>
+      ) : null}
+      {isAdmin ? (
+        <button
+          type="button"
+          onClick={() => void deleteSpec()}
+          disabled={deleting}
+          className={`${ACTION} text-danger-fg hover:bg-danger-bg hover:text-danger-fg disabled:opacity-60`}
+        >
+          <TrashIcon />
+          {deleting ? 'Deleting…' : 'Delete'}
         </button>
       ) : null}
 

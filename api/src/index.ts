@@ -16,7 +16,7 @@
  *          PUT    /plan-pins/:specId { x, y }          (position on the mall's directory map, 0–1)
  *          DELETE /plan-pins/:specId
  *          PUT    /specs/:specId { data, mallId?, isNew? }
- *          DELETE /specs/:specId                      (remove a screen added on the site)
+ *          DELETE /specs/:specId                      (delete a screen; built-ins are archived)
  *
  * The site is served from GitHub Pages, a different origin, so sessions use
  * a bearer token rather than a cookie (third-party cookies are blocked).
@@ -341,27 +341,34 @@ async function putSpec(request: Request, env: Env, specId: string): Promise<Resp
 
 async function deleteSpec(request: Request, env: Env, specId: string): Promise<Response> {
   const admin = await requireAdmin(request, env);
-  // Every spec lives here; only screens added on the site may be deleted.
-  // Removing a built-in screen's record would lose it — edit it instead.
   const record = await env.DB.prepare('SELECT is_new FROM specs WHERE id = ?').bind(specId).first<{ is_new: number }>();
-  if (record && record.is_new !== 1) {
-    throw new HttpError(409, 'Built-in screens can’t be deleted — edit them instead.');
+  if (!record) throw new HttpError(404, 'That screen doesn’t exist.');
+
+  if (record.is_new !== 1) {
+    // A built-in screen also lives in the site's code as a fallback, so
+    // removing its record would bring it straight back. It's archived
+    // instead: hidden everywhere, with its files and position kept.
+    await env.DB.prepare(
+      `UPDATE specs SET data = json_set(data, '$.archivedAt', ?, '$.archivedBy', ?), updated_at = ?, updated_by = ?
+       WHERE id = ?`,
+    )
+      .bind(now(), admin.email, now(), admin.email, specId)
+      .run();
+    await audit(env, admin, 'spec.delete', specId, { archived: true });
+    return json({ ok: true });
   }
-  // An added screen takes its position and files with it; a built-in screen
-  // keeps its confirmed position and uploads when only its edits are undone.
-  const added = await env.DB.prepare('SELECT 1 FROM specs WHERE id = ? AND is_new = 1').bind(specId).first();
-  if (added) {
-    const files = await env.DB.prepare('SELECT storage_key FROM assets WHERE spec_id = ?').bind(specId).all<{ storage_key: string }>();
-    const store = kvFileStore(env.FILES);
-    await Promise.all(files.results.map((file) => store.remove(file.storage_key)));
-    await env.DB.prepare('DELETE FROM assets WHERE spec_id = ?').bind(specId).run();
-  }
+
+  // A screen added on the site takes its position and files with it.
+  const files = await env.DB.prepare('SELECT storage_key FROM assets WHERE spec_id = ?').bind(specId).all<{ storage_key: string }>();
+  const store = kvFileStore(env.FILES);
+  await Promise.all(files.results.map((file) => store.remove(file.storage_key)));
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM pins WHERE spec_id IN (SELECT id FROM specs WHERE id = ? AND is_new = 1)').bind(specId),
-    env.DB.prepare('DELETE FROM plan_pins WHERE spec_id IN (SELECT id FROM specs WHERE id = ? AND is_new = 1)').bind(specId),
+    env.DB.prepare('DELETE FROM assets WHERE spec_id = ?').bind(specId),
+    env.DB.prepare('DELETE FROM pins WHERE spec_id = ?').bind(specId),
+    env.DB.prepare('DELETE FROM plan_pins WHERE spec_id = ?').bind(specId),
     env.DB.prepare('DELETE FROM specs WHERE id = ?').bind(specId),
   ]);
-  await audit(env, admin, 'spec.revert', specId);
+  await audit(env, admin, 'spec.delete', specId);
   return json({ ok: true });
 }
 

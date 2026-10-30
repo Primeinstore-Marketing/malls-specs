@@ -25,7 +25,7 @@ export interface AdminControls {
   readonly editSpec: (specId: string) => void;
   readonly addScreen: () => void;
   readonly resetPin: (specId: string) => void;
-  /** Deletes a screen added on the site. Built-in screens are edited, never deleted. */
+  /** Deletes a screen for everyone. */
   readonly deleteSpec: (specId: string) => void;
   readonly isAdded: (specId: string) => boolean;
 }
@@ -187,7 +187,7 @@ function ScreenDetail({
         Open full specification
       </LinkButton>
 
-      {admin && isAdded ? (
+      {admin ? (
         <button
           type="button"
           onClick={() => admin.deleteSpec(spec.id)}
