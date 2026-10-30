@@ -49,11 +49,13 @@ function Frame({
   index,
   focused,
   onSelect,
+  onOpen,
 }: {
   frame: FramePlacement;
   index: number;
   focused: boolean;
   onSelect: (specId: string) => void;
+  onOpen: (specId: string) => void;
 }) {
   const { spec, screen, bounds, labelSize, sizeUnknown } = frame;
   const size = spec.metadata;
@@ -66,6 +68,8 @@ function Frame({
     <button
       type="button"
       onClick={() => onSelect(spec.id)}
+      onDoubleClick={() => onOpen(spec.id)}
+      title="Click for details, double-click to open the full spec"
       aria-label={`${spec.title}, ${resolution}`}
       aria-pressed={focused}
       className="group absolute outline-none"
@@ -117,10 +121,12 @@ export interface GridCanvasProps {
   readonly specs: readonly Specification[];
   readonly focusedId: string | null;
   readonly onFocus: (specId: string | null) => void;
+  /** Opens the screen's full spec page (double-click on its frame). */
+  readonly onOpen: (specId: string) => void;
   readonly onStep: (direction: 1 | -1) => void;
 }
 
-export function GridCanvas({ viewId, title, subtitle, specs, focusedId, onFocus, onStep }: GridCanvasProps) {
+export function GridCanvas({ viewId, title, subtitle, specs, focusedId, onFocus, onOpen, onStep }: GridCanvasProps) {
   const layout = useMemo(() => computeGridLayout(specs), [specs]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<{ w: number; h: number } | null>(null);
@@ -327,6 +333,7 @@ export function GridCanvas({ viewId, title, subtitle, specs, focusedId, onFocus,
               index={index}
               focused={frame.spec.id === focusedId}
               onSelect={(specId) => onFocus(specId === focusedId ? null : specId)}
+              onOpen={onOpen}
             />
           ))}
         </div>
