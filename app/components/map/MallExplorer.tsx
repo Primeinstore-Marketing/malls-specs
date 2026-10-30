@@ -149,7 +149,7 @@ export function MallExplorer() {
           addScreen: () => setEditor({ mode: 'add' }),
           resetPin: (specId) => void runChange('Resetting position…', () => api.deletePin(specId)),
           deleteSpec: (specId) => {
-            if (!window.confirm('Delete this screen? This removes it for everyone.')) return;
+            if (!window.confirm('Delete this screen? It disappears from the site for everyone.')) return;
             void runChange('Deleting…', () => api.deleteSpec(specId)).then((ok) => {
               if (ok) setFocus(null);
             });
