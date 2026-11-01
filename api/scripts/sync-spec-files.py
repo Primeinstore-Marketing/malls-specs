@@ -71,6 +71,7 @@ FOLDER = {
     'Gateway Digi Impact': ['spec-gateway-digi-impact'],
     'Golden Acre Impact': ['spec-golden-acre-impact'],
     'Landscape (Digital Icon - MTV)': ['spec-landscape-digital-icon-mtv'],
+    'Loch Logan': ['spec-loch-logan'],
     'Menlyn/Menlyn Aviary Court': ['spec-menlyn-aviary-court'],
     'Monte Casino/Monte Casino Exit to Piazza': ['spec-monte-casino-exit-to-piazza'],
     'Monte Casino/Monte Casino Fego': ['spec-monte-casino-fego'],
@@ -79,10 +80,13 @@ FOLDER = {
     'N1 City': ['spec-n1-city'],
     'Pavilion/Pavilion Food Court': ['spec-pavilion-food-court'],
     'Pavilion/Pavilion Fountain Court': ['spec-pavilion-fountain-court'],
+    'Southgate Mall/Southgate Food Court Digi Impact ': ['spec-southgate-food-court-digi-impact'],
+    'Southgate Mall/Southgate Foschini Digi Impact': ['spec-southgate-foschini-digi-impact'],
     'Table Bay/Table Bay Centre Court': ['spec-table-bay-centre-court'],
     'Table Bay/Table Bay Checkers and Pick and Pay': ['spec-table-bay-checkers-pick-n-pay'],
     'Tyger Valley/Tygervalley Food Court ': ['spec-tygervalley-food-court'],
     'Tyger Valley/Tygervalley Foschini ': ['spec-tygervalley-foschini'],
+    'Woodlands': ['spec-woodlands'],
 }
 
 
