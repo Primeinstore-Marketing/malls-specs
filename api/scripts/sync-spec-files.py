@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 import uuid
 from datetime import datetime, timezone
@@ -45,9 +46,6 @@ FOLDER = {
     'Bayside Digi Impact': ['spec-bayside-digi-impact'],
     'Boardwalk': ['spec-boardwalk'],
     'Brooklyn Mall': ['spec-brooklyn-mall'],
-    'CRESTA/Cresta Mall - Food Court Digital Impact': ['spec-cresta-food-court'],
-    'CRESTA/Cresta Mugg & Bean Impact': ['spec-cresta-mugg-bean-impact'],
-    'CRESTA/Cresta Woolworth': ['spec-cresta-woolworth-screen'],
     'Canal Walk/Canal Walk - Centre Court': ['spec-canal-walk-centre-court'],
     'Canal Walk/Canal Walk - Food Court': ['spec-canal-walk-food-court'],
     # One spec covers both the left and right packages.
@@ -62,6 +60,9 @@ FOLDER = {
     'Clearwater Pick n Pay/Clearwater Food Court': ['spec-clearwater-food-court'],
     'Clearwater Pick n Pay/Clearwater Mugg & Bean': ['spec-clearwater-mugg-bean'],
     'Clearwater Pick n Pay/Clearwater Pick n Pay': ['spec-clearwater-pick-n-pay'],
+    'CRESTA/Cresta Mall - Food Court Digital Impact': ['spec-cresta-food-court'],
+    'CRESTA/Cresta Mugg & Bean Impact': ['spec-cresta-mugg-bean-impact'],
+    'CRESTA/Cresta Woolworth': ['spec-cresta-woolworth-screen'],
     'Digi Engage': ['spec-portrait-digital-engage'],
     'Digi Impact': ['spec-digi-impact'],
     'Fourways/Fourways Food Court': ['spec-fourways-food-court'],
@@ -70,22 +71,39 @@ FOLDER = {
     'Gardens Digi Impact': ['spec-gardens-digi-impact'],
     'Gateway Digi Impact': ['spec-gateway-digi-impact'],
     'Golden Acre Impact': ['spec-golden-acre-impact'],
+    'Hype Park': ['spec-hype-park'],
     'Landscape (Digital Icon - MTV)': ['spec-landscape-digital-icon-mtv'],
     'Loch Logan': ['spec-loch-logan'],
     'Menlyn/Menlyn Aviary Court': ['spec-menlyn-aviary-court'],
+    'Menlyn/Menlyn Cape Union Mart': ['spec-menlyn-cape-union-mart'],
+    'Menlyn/Menlyn Cavendish Court': ['spec-menlyn-cavendish-court'],
+    'Menlyn/Menlyn Earthchild': ['spec-menlyn-earthchild'],
+    'Menlyn/Menlyn Food Court': ['spec-menlyn-food-court'],
+    'Menlyn/Menlyn Sky': ['spec-menlyn-sky'],
+    'Menlyn/Menlyn Yuppie Chef': ['spec-menlyn-yuppie-chef'],
+    'Mimosa MTVs & Digi Engages': ['spec-mimosa-mtvs-digi-engages'],
     'Monte Casino/Monte Casino Exit to Piazza': ['spec-monte-casino-exit-to-piazza'],
     'Monte Casino/Monte Casino Fego': ['spec-monte-casino-fego'],
+    'Monte Casino/Monte Casino Grand Staircase': ['spec-monte-casino-grand-staircase'],
     'Monte Casino/Monte Casino Nikos': ['spec-monte-casino-nikos'],
     'Monte Casino/Monte Casino Piazza': ['spec-monte-casino-piazza'],
     'N1 City': ['spec-n1-city'],
+    'Other Pillars': ['spec-other-pillars'],
+    'Paarl Mall Digi Impact': ['spec-paarl-mall-digi-impact'],
     'Pavilion/Pavilion Food Court': ['spec-pavilion-food-court'],
     'Pavilion/Pavilion Fountain Court': ['spec-pavilion-fountain-court'],
+    'Pavilion/Pavilion Full Pillar': ['spec-pavilion-full-pillar'],
+    'Rosebank/Rosebank FNB Pillar': ['spec-rosebank-fnb-pillar'],
+    'Rosebank/Rosebank Mall': ['spec-rosebank-mall'],
+    'Somerset Mall': ['spec-somerset-mall'],
     'Southgate Mall/Southgate Food Court Digi Impact ': ['spec-southgate-food-court-digi-impact'],
     'Southgate Mall/Southgate Foschini Digi Impact': ['spec-southgate-foschini-digi-impact'],
     'Table Bay/Table Bay Centre Court': ['spec-table-bay-centre-court'],
     'Table Bay/Table Bay Checkers and Pick and Pay': ['spec-table-bay-checkers-pick-n-pay'],
+    'The Glen': ['spec-the-glen'],
     'Tyger Valley/Tygervalley Food Court ': ['spec-tygervalley-food-court'],
     'Tyger Valley/Tygervalley Foschini ': ['spec-tygervalley-foschini'],
+    'Westgate MTVs & Digi Engages': ['spec-westgate-mtvs-digi-engages'],
     'Woodlands': ['spec-woodlands'],
 }
 
@@ -112,7 +130,14 @@ def sha256(data):
 def fetch(path, timeout=60):
     # Cloudflare turns away Python's default user agent.
     request = urllib.request.Request(f'{API_URL}{path}', headers={'User-Agent': UPLOADED_BY})
-    return urllib.request.urlopen(request, timeout=timeout).read()
+    for attempt in range(4):
+        try:
+            return urllib.request.urlopen(request, timeout=timeout).read()
+        except OSError:
+            # Flaky connections drop mid-download; nothing is written until every comparison is done.
+            if attempt == 3:
+                raise
+            time.sleep(2 * (attempt + 1))
 
 
 def live_downloads():
