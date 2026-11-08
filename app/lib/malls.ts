@@ -81,10 +81,10 @@ const MALL_SOURCES: readonly MallSource[] = [
   { id: 'gateway', name: 'Gateway', group: 'malls', specIds: ['spec-gateway-digi-impact'] },
   { id: 'golden-acre', name: 'Golden Acre', group: 'malls', specIds: ['spec-golden-acre-impact'] },
   { id: 'loch-logan', name: 'Loch Logan', group: 'malls', specIds: ['spec-loch-logan'] },
-  { id: 'mimosa', name: 'Mimosa', group: 'malls', specIds: ['spec-mimosa-mtvs-digi-engages'] },
+  { id: 'mimosa', name: 'Mimosa', group: 'malls', specIds: ['spec-mimosa-mtvs-digi-engages', 'spec-mimosa-digi-engage'] },
   { id: 'n1-city', name: 'N1 City', group: 'malls', specIds: ['spec-n1-city'] },
   { id: 'paarl-mall', name: 'Paarl Mall', group: 'malls', specIds: ['spec-paarl-mall-digi-impact'] },
-  { id: 'westgate', name: 'Westgate', group: 'malls', specIds: ['spec-westgate-mtvs-digi-engages'] },
+  { id: 'westgate', name: 'Westgate', group: 'malls', specIds: ['spec-westgate-mtvs-digi-engages', 'spec-westgate-digi-engage'] },
   { id: 'canal-walk', name: 'Canal Walk', group: 'hyprop', subGroupId: 'subgroup-canal-walk' },
   // "Capegate Food Court" is filed under the Malls network in the source
   // sheet, but it's the same physical centre as the Hyprop Cape Gate group.

@@ -4,7 +4,9 @@ Syncs the downloads on each screen's spec page with the "Updated Specs"
 folder: the spec sheet PDF and the After Effects template. Illustrator
 (.ai) files are deliberately left off the site.
 
-    python3 api/scripts/sync-spec-files.py ["~/Desktop/Updated Specs"] [--dry-run]
+    python3 api/scripts/sync-spec-files.py ["~/Desktop/Updated Specs"] [--dry-run] [--only=spec-a,spec-b]
+
+--only limits the run to those screens, which skips re-checking every other file.
 
 For every file in the FOLDER list below, the live download of the same type
 (PDF / AEP) on that screen is compared byte for byte:
@@ -81,7 +83,8 @@ FOLDER = {
     'Menlyn/Menlyn Food Court': ['spec-menlyn-food-court'],
     'Menlyn/Menlyn Sky': ['spec-menlyn-sky'],
     'Menlyn/Menlyn Yuppie Chef': ['spec-menlyn-yuppie-chef'],
-    'Mimosa MTVs & Digi Engages': ['spec-mimosa-mtvs-digi-engages'],
+    # One spec and template cover both screens: the MTV and the Digi Engage.
+    'Mimosa MTVs & Digi Engages': ['spec-mimosa-mtvs-digi-engages', 'spec-mimosa-digi-engage'],
     'Monte Casino/Monte Casino Exit to Piazza': ['spec-monte-casino-exit-to-piazza'],
     'Monte Casino/Monte Casino Fego': ['spec-monte-casino-fego'],
     'Monte Casino/Monte Casino Grand Staircase': ['spec-monte-casino-grand-staircase'],
@@ -103,7 +106,7 @@ FOLDER = {
     'The Glen': ['spec-the-glen'],
     'Tyger Valley/Tygervalley Food Court ': ['spec-tygervalley-food-court'],
     'Tyger Valley/Tygervalley Foschini ': ['spec-tygervalley-foschini'],
-    'Westgate MTVs & Digi Engages': ['spec-westgate-mtvs-digi-engages'],
+    'Westgate MTVs & Digi Engages': ['spec-westgate-mtvs-digi-engages', 'spec-westgate-digi-engage'],
     'Woodlands': ['spec-woodlands'],
 }
 
@@ -161,7 +164,8 @@ def q(value):
 
 
 def main():
-    args = [arg for arg in sys.argv[1:] if arg != '--dry-run']
+    args = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
+    only = {spec for arg in sys.argv[1:] if arg.startswith('--only=') for spec in arg[7:].split(',') if spec}
     dry_run = '--dry-run' in sys.argv
     root = pathlib.Path(args[0] if args else '~/Desktop/Updated Specs').expanduser()
     live = live_downloads()
@@ -182,6 +186,8 @@ def main():
             body = path.read_bytes()
             filename = download_name(folder, ext)
             for spec_id in spec_ids:
+                if only and spec_id not in only:
+                    continue
                 existing = live.get((spec_id, ext), [])
                 if any(asset['sizeBytes'] == len(body) and sha256(live_bytes(asset)) == sha256(body) for asset in existing):
                     counts['unchanged'] += 1
