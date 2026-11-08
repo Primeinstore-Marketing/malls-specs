@@ -111,7 +111,7 @@ const MALL_SOURCES: readonly MallSource[] = [
     id: 'network-formats',
     name: 'Generic specs',
     group: 'formats',
-    specIds: ['spec-digi-impact', 'spec-portrait-digital-engage', 'spec-landscape-digital-icon-mtv', 'spec-other-pillars'],
+    specIds: ['spec-digi-impact', 'spec-portrait-digital-engage', 'spec-landscape-digital-icon-mtv'],
   },
 ];
 

@@ -91,7 +91,6 @@ FOLDER = {
     'Monte Casino/Monte Casino Nikos': ['spec-monte-casino-nikos'],
     'Monte Casino/Monte Casino Piazza': ['spec-monte-casino-piazza'],
     'N1 City': ['spec-n1-city'],
-    'Other Pillars': ['spec-other-pillars'],
     'Paarl Mall Digi Impact': ['spec-paarl-mall-digi-impact'],
     'Pavilion/Pavilion Food Court': ['spec-pavilion-food-court'],
     'Pavilion/Pavilion Fountain Court': ['spec-pavilion-fountain-court'],
