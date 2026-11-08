@@ -175,7 +175,10 @@ export function getMalls(catalogue: Catalogue = getCatalogue()): readonly Mall[]
       pins,
       mallMap: mallMapFor(source.id, specIds),
     };
-  }).filter((mall) => mall.specIds.length > 0);
+  })
+    .filter((mall) => mall.specIds.length > 0)
+    // Alphabetical everywhere malls are listed: the menu, the mall picker and the home page.
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
 }
 
 function mallMapFor(mallId: string, specIds: readonly string[]): Mall['mallMap'] {
