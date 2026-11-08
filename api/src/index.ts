@@ -475,11 +475,15 @@ async function uploadFile(request: Request, env: Env, url: URL): Promise<Respons
   return json({ asset: assetJson(row) });
 }
 
-async function serveFile(env: Env, key: string): Promise<Response> {
+async function serveFile(env: Env, key: string, forceDownload = false): Promise<Response> {
   if (!key || key.length > 512) throw new HttpError(404, 'File not found.');
   const file = await kvFileStore(env.FILES).get(key);
   if (!file) throw new HttpError(404, 'File not found.');
-  const inline = file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/') || file.mimeType === 'application/pdf';
+  // `?download=1` (the spec page's download buttons) always saves the file
+  // instead of opening it in place of the site.
+  const inline =
+    !forceDownload &&
+    (file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/') || file.mimeType === 'application/pdf');
   return new Response(file.body, {
     headers: {
       'Content-Type': file.mimeType,
@@ -533,7 +537,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (resource === 'files') {
     if (method === 'POST' && !id) return uploadFile(request, env, url);
     // Storage keys contain a slash, so take everything after /files/.
-    if (method === 'GET') return serveFile(env, safeDecode(url.pathname.slice('/files/'.length), 404));
+    if (method === 'GET') {
+      return serveFile(env, safeDecode(url.pathname.slice('/files/'.length), 404), url.searchParams.get('download') === '1');
+    }
   }
   if (resource === 'assets' && /^asset-[0-9a-f-]{36}$/.test(id)) {
     if (method === 'PATCH') return updateAsset(request, env, id);

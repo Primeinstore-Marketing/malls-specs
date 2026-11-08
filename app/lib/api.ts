@@ -55,6 +55,11 @@ export function fileUrl(storageKey: string): string {
   return `${API_URL}/files/${storageKey.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+/** URL that saves the file rather than opening it (browsers ignore `download` on other origins). */
+export function downloadUrl(storageKey: string): string {
+  return `${fileUrl(storageKey)}?download=1`;
+}
+
 /** Reads an image's pixel size in the browser, so the server can record it. */
 export function imageDimensions(file: File): Promise<{ width: number; height: number } | null> {
   if (!file.type.startsWith('image/') || file.type === 'image/vnd.adobe.photoshop') return Promise.resolve(null);

@@ -1,5 +1,5 @@
 import type { Asset } from '@data-model';
-import { fileUrl } from '@/lib/api';
+import { downloadUrl } from '@/lib/api';
 import { formatFileSize } from '@/lib/fileSize';
 
 function DownloadIcon() {
@@ -34,7 +34,7 @@ export function DownloadButtons({ downloads, compact = false }: { downloads: rea
         return (
           <a
             key={asset.id}
-            href={fileUrl(asset.storageKey)}
+            href={downloadUrl(asset.storageKey)}
             download={asset.filename}
             className={`group inline-flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-colors duration-fast ease-standard ${
               primary

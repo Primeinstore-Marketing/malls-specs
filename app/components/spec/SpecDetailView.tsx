@@ -2,7 +2,7 @@
 
 import type { Asset, MetadataField } from '@data-model';
 import { getSpecification, getAssets, getRelatedSpecifications, getRevisions } from '@/lib/catalogue';
-import { fileUrl } from '@/lib/api';
+import { downloadUrl, fileUrl } from '@/lib/api';
 import { formatFileSize } from '@/lib/fileSize';
 import { useLiveData } from '@/lib/liveData';
 import { getMallForSpec, MALL_GROUP_LABELS } from '@/lib/malls';
@@ -83,8 +83,8 @@ function FilesSection({ attachments }: { attachments: readonly Asset[] }) {
         {files.map(({ asset, download }) => (
           <li key={asset.id}>
             <a
-              href={fileUrl(asset.storageKey)}
-              {...(download ? { download: asset.filename } : { target: '_blank', rel: 'noreferrer' })}
+              href={download ? downloadUrl(asset.storageKey) : fileUrl(asset.storageKey)}
+              {...(download ? {} : { target: '_blank', rel: 'noreferrer' })}
               className="group flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors duration-fast ease-standard hover:border-accent hover:bg-bg-subtle"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-fg">
