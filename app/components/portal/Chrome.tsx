@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { withBasePath } from '@/lib/basePath';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { compact } from '@/lib/insights';
@@ -328,7 +329,8 @@ export function PortalAccount() {
             onClick={() => {
               setOpen(false);
               portal.signOut();
-              router.push('/');
+              // A full load of the home page: a client-side push can be dropped as this menu unmounts.
+              window.location.assign(withBasePath('/'));
             }}
             className="block w-full rounded-md px-2 py-1.5 text-left text-body-sm text-fg hover:bg-bg-subtle"
           >
