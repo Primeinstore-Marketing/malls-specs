@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
@@ -166,7 +166,7 @@ const btnSmall = 'inline-flex h-9 shrink-0 items-center rounded-full border px-3
 
 /* ---------- The page ---------- */
 
-function Booking({ p }: { p: SharedProposal }) {
+function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedProposal; shareKey?: string; changesPending?: boolean; reload?: () => void }) {
   const params = useSearchParams();
   const live = useLiveData();
   const { catalogue } = live;
@@ -278,6 +278,29 @@ function Booking({ p }: { p: SharedProposal }) {
     'Thanks',
   ].join('\n');
 
+  /* Sending changes to the server (short links). */
+  const [changeNote, setChangeNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sentChanges, setSentChanges] = useState(false);
+  async function sendChanges() {
+    if (!shareKey) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      await api.sendProposalChanges(p.id, shareKey, { items: edits.items, start: edits.start, end: edits.end, note: changeNote.trim(), name: '' });
+      setSentChanges(true);
+      setChangeNote('');
+      resetEdits();
+      reload?.();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : `We couldn’t send that just now. Try again, or email ${first}.`);
+    } finally {
+      setSending(false);
+    }
+  }
+
   /* Sales opening a link the client sent back: apply it to the campaign. */
   const { user } = usePortalUser();
   const state = usePortalState();
@@ -316,6 +339,19 @@ function Booking({ p }: { p: SharedProposal }) {
                 Apply to the campaign
               </button>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {!approved && (sentChanges || changesPending) ? (
+        <div className="border-b border-border bg-accent-subtle print:hidden" role="status">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
+            <p className="text-body-md text-fg">
+              <strong>Your changes are with {first}.</strong> {sentChanges ? 'They’ve been told and will update the proposal; this page shows the latest version.' : 'They’ll update the proposal; this page shows the latest version.'}
+            </p>
+            <EmailButton href={mail(`Changes to: ${p.name}`, `Hi ${first},\n\nI've sent some changes to ${p.name} from the booking page:\n${link}\n\nThanks`)} className={btnSmall + ' border-border-strong bg-bg text-fg'} align="right">
+              Also email {first}
+            </EmailButton>
           </div>
         </div>
       ) : null}
@@ -453,11 +489,28 @@ function Booking({ p }: { p: SharedProposal }) {
                 {removed.length ? <li>Remove {removed.length} {removed.length === 1 ? 'item' : 'items'}: {describe(removed, removedScreens).map((x) => x.slice(2)).join('; ')}</li> : null}
                 {datesChanged ? <li>New dates: {formatRange(edits.start, edits.end)} (was {formatRange(p.start, p.end)})</li> : null}
               </ul>
-              <p className="text-body-sm text-fg-muted">Sending opens an email to {first} with these changes and a link to the updated proposal.</p>
-              <div className="flex flex-wrap gap-2">
-                <EmailButton href={mail(`Changes to: ${p.name}`, changesBody)} className={btnPrimary}>Send changes to {first}</EmailButton>
-                <button type="button" onClick={resetEdits} className={btnSecondary}>Undo all changes</button>
-              </div>
+              {shareKey ? (
+                <>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-label-md font-semibold uppercase text-fg-muted">A note for {first} <span className="normal-case tracking-normal text-fg-subtle">(optional)</span></span>
+                    <textarea rows={2} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} className="w-full rounded-xl border border-border-strong bg-bg px-3 py-2.5 text-body-md text-fg outline-none focus:border-border-focus" />
+                  </label>
+                  {sendError ? <p role="alert" className="text-body-sm text-danger-fg">{sendError}</p> : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={sending} onClick={() => void sendChanges()} className={btnPrimary}>{sending ? 'Sending…' : `Send changes to ${first}`}</button>
+                    <button type="button" onClick={resetEdits} className={btnSecondary}>Undo all changes</button>
+                  </div>
+                  <p className="text-body-sm text-fg-muted">{first} sees your changes straight away and updates the proposal.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-body-sm text-fg-muted">Sending opens an email to {first} with these changes and a link to the updated proposal.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <EmailButton href={mail(`Changes to: ${p.name}`, changesBody)} className={btnPrimary}>Send changes to {first}</EmailButton>
+                    <button type="button" onClick={resetEdits} className={btnSecondary}>Undo all changes</button>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -558,7 +611,11 @@ function Booking({ p }: { p: SharedProposal }) {
                 {changed ? (
                   <>
                     <button type="button" onClick={resetEdits} className={`${btnSecondary} hidden sm:inline-flex`}>Undo</button>
-                    <EmailButton up align="right" href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} justify-center`}>Send changes to {first}</EmailButton>
+                    {shareKey ? (
+                      <button type="button" onClick={() => document.getElementById('decide-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Review and send changes</button>
+                    ) : (
+                      <EmailButton up align="right" href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} justify-center`}>Send changes to {first}</EmailButton>
+                    )}
                   </>
                 ) : (
                   <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Approve proposal</button>
@@ -571,6 +628,7 @@ function Booking({ p }: { p: SharedProposal }) {
         {approving ? (
           <ApproveDialog
             p={p}
+            shareKey={shareKey}
             total={total}
             malls={[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}
             sizes={sizes.map((z) => `${z.width} × ${z.height}`)}
@@ -602,8 +660,9 @@ function Booking({ p }: { p: SharedProposal }) {
   );
 }
 
-function ApproveDialog({ p, total, malls, sizes, start, end, first, fallback, onClose, onApproved }: {
+function ApproveDialog({ p, shareKey, total, malls, sizes, start, end, first, fallback, onClose, onApproved }: {
   p: SharedProposal;
+  shareKey?: string;
   total: number;
   malls: number;
   sizes: readonly string[];
@@ -630,7 +689,7 @@ function ApproveDialog({ p, total, malls, sizes, start, end, first, fallback, on
     setBusy(true);
     setError(null);
     try {
-      const { approval } = await api.approveProposal(p.id, { name: name.trim(), note: note.trim(), screens: total });
+      const { approval } = await api.approveProposal(p.id, { name: name.trim(), note: note.trim(), screens: total, k: shareKey });
       onApproved({ name: approval.name, at: approval.at });
     } catch {
       setError(`We couldn’t record it just now. Approve by email instead and ${first} will take it from there.`);
@@ -705,18 +764,41 @@ function DatesEditor({ start, end, onChange }: { start: string | null; end: stri
   );
 }
 
-export function ShareView() {
-  const code = useSearchParams().get('p') ?? '';
-  const p = code ? decodeProposal(code) : null;
-  if (!p) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-subtle p-6 text-center">
-        <div className="flex max-w-md flex-col gap-3">
-          <h1 className="text-display-md text-fg">This booking link isn’t complete</h1>
-          <p className="text-body-md text-fg-muted">Ask your Primedia account manager to send it again.</p>
-        </div>
+function LinkProblem({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg-subtle p-6 text-center">
+      <div className="flex max-w-md flex-col gap-3">
+        <h1 className="text-display-md text-fg">{title}</h1>
+        <p className="text-body-md text-fg-muted">{text}</p>
       </div>
-    );
+    </div>
+  );
+}
+
+/** A short link (/share?c=<id>&k=<key>): the proposal comes from the server, always the latest. */
+function ServerBooking({ id, shareKey }: { id: string; shareKey: string }) {
+  const [state, setState] = useState<{ p: SharedProposal; pending: boolean } | 'loading' | string>('loading');
+  const load = useCallback(() => {
+    api
+      .proposal(id, shareKey)
+      .then(({ proposal, changesPending }) => setState({ p: proposal, pending: changesPending }))
+      .catch((e) => setState(e instanceof Error ? e.message : 'We couldn’t load this proposal.'));
+  }, [id, shareKey]);
+  useEffect(load, [load]);
+  if (state === 'loading') {
+    return <div className="flex min-h-screen items-center justify-center bg-bg-subtle"><div className="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-accent" aria-label="Loading the proposal" /></div>;
   }
+  if (typeof state === 'string') return <LinkProblem title="We couldn’t open this proposal" text={state} />;
+  return <Booking key={state.p.at + state.p.status} p={state.p} shareKey={shareKey} changesPending={state.pending} reload={load} />;
+}
+
+export function ShareView() {
+  const params = useSearchParams();
+  const id = params.get('c') ?? '';
+  const shareKey = params.get('k') ?? '';
+  if (id && shareKey) return <ServerBooking id={id} shareKey={shareKey} />;
+  const code = params.get('p') ?? '';
+  const p = code ? decodeProposal(code) : null;
+  if (!p) return <LinkProblem title="This booking link isn’t complete" text="Ask your Primedia account manager to send it again." />;
   return <Booking p={p} />;
 }

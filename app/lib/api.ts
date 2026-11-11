@@ -5,7 +5,8 @@
  * and `.env.production` for the GitHub Pages build. When it's unset the
  * site still works, read-only, on its built-in data.
  */
-import type { Campaign } from '@/lib/portal/types';
+import type { Campaign, NewCampaignItem } from '@/lib/portal/types';
+import type { SharedProposal } from '@/lib/portal/share';
 import type { Asset, AssetRole, Specification } from '@data-model';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
@@ -176,8 +177,14 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
 export const api = {
   data: () => request<LiveDataResponse>('/data', {}, true),
   /** A client approves a proposal on its booking page (no account). */
-  approveProposal: (campaignId: string, fields: { name: string; note: string; screens: number }) =>
+  approveProposal: (campaignId: string, fields: { name: string; note: string; screens: number; k?: string }) =>
     request<{ ok: true; approval: ProposalApproval }>('/approvals', { method: 'POST', body: JSON.stringify({ campaignId, ...fields }) }),
+  /** The client's booking page, by campaign id and share key. */
+  proposal: (id: string, key: string) =>
+    request<{ proposal: SharedProposal; changesPending: boolean }>(`/proposals/${encodeURIComponent(id)}?k=${encodeURIComponent(key)}`),
+  /** A client sends the changes they made on their booking page. */
+  sendProposalChanges: (id: string, key: string, changes: { items: readonly NewCampaignItem[]; start: string | null; end: string | null; note: string; name: string }) =>
+    request<{ ok: true }>(`/proposals/${encodeURIComponent(id)}/changes?k=${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify(changes) }),
   approvals: (campaignIds: readonly string[]) =>
     request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`, {}, true),
   login: (email: string, password: string) =>

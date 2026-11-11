@@ -56,6 +56,19 @@ export interface Campaign {
   readonly updatedAt: string;
   readonly items: readonly CampaignItem[];
   readonly events: readonly CampaignEvent[];
+  /** Secret in the client's booking link (/share?c=<id>&k=<key>). */
+  readonly shareKey?: string;
+  /** Changes the client asked for on their booking page, waiting for sales to apply or dismiss. */
+  readonly clientChanges?: ClientChanges | null;
+}
+
+export interface ClientChanges {
+  readonly items: readonly NewCampaignItem[];
+  readonly start: string | null;
+  readonly end: string | null;
+  readonly note: string;
+  readonly name: string;
+  readonly at: string;
 }
 
 export interface Prospect {

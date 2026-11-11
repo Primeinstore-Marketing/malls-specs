@@ -25,7 +25,7 @@ import {
 } from '@/lib/portal/logic';
 import { CLIENTS } from '@/lib/portal/seed';
 import { campaignOwner, portal, usePortalState } from '@/lib/portal/store';
-import type { Campaign, CampaignItem, PortalUser } from '@/lib/portal/types';
+import type { Campaign, CampaignItem, NewCampaignItem, PortalUser } from '@/lib/portal/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/portal/screens';
@@ -101,6 +101,38 @@ function useClientEmail(c: Campaign, user: PortalUser) {
   return (kind: EmailKind, note = '') => clientEmail(c, user, catalogue, kind, note);
 }
 
+/** The changes a client sent from their booking page: what they'd add, remove and move, to apply or set aside. */
+function ClientChangesBox({ c }: { c: Campaign }) {
+  const ch = c.clientChanges;
+  if (!ch) return null;
+  const key = (i: NewCampaignItem | CampaignItem) => (i.kind === 'package' ? `p:${i.code}` : `s:${i.specId}`);
+  const now = new Set(c.items.map(key));
+  const asked = new Set(ch.items.map(key));
+  const added = ch.items.filter((i) => !now.has(key(i)));
+  const removed = c.items.filter((i) => !asked.has(key(i)));
+  const dates = ch.start !== c.start || ch.end !== c.end;
+  const label = (i: NewCampaignItem | CampaignItem) => itemLabel(i as CampaignItem);
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-accent bg-bg p-4">
+      <strong className="text-body-md text-fg">{ch.name || 'The client'} asked for these changes · {timeAgo(ch.at)}</strong>
+      <ul className="flex flex-col gap-1 text-body-sm text-fg">
+        {added.length ? <li><span className="font-semibold text-success-fg">Add {added.length}:</span> {added.map(label).join('; ')}</li> : null}
+        {removed.length ? <li><span className="font-semibold text-danger-fg">Remove {removed.length}:</span> {removed.map(label).join('; ')}</li> : null}
+        {dates ? <li><span className="font-semibold">New dates:</span> {formatRange(ch.start, ch.end)} (now {formatRange(c.start, c.end)})</li> : null}
+        {!added.length && !removed.length && !dates ? <li className="text-fg-muted">Same screens and dates as now.</li> : null}
+      </ul>
+      {ch.note ? <p className="rounded-xl bg-bg-subtle px-3 py-2 text-body-sm text-fg">“{ch.note}”</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={btn.primary} onClick={() => portal.applyClientChanges(c.id, { items: ch.items, start: ch.start, end: ch.end }, 'Applied the changes the client asked for')}>
+          Apply these changes
+        </button>
+        <button type="button" className={btn.quiet} onClick={() => portal.dismissClientChanges(c.id)}>Set aside</button>
+      </div>
+      <p className="text-body-sm text-fg-muted">After applying, check the plan and send the updated proposal. The client’s link always shows the latest version.</p>
+    </div>
+  );
+}
+
 /** What the signed-in user can do next, given where the campaign is. */
 function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const [note, setNote] = useState('');
@@ -122,6 +154,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     title = c.status === 'proposed' ? `${campaignClientName(c)} sent a brief` : c.status === 'changes' ? 'Changes requested' : 'Build the proposal';
     body = (
       <>
+        <ClientChangesBox c={c} />
         <p className="text-body-md text-fg-muted">
           {c.status === 'proposed' ? 'Shape the plan, then send it back as a proposal.' : c.status === 'changes' ? 'See what they asked for in the updates below.' : 'Send it to the client when it’s ready.'}
         </p>
@@ -130,7 +163,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
         <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for the client (optional)" className={`${input} h-auto py-2.5`} />
         <div className="flex flex-wrap gap-2">
           {ready ? (
-            <EmailButton href={email('proposal', note)} className={btn.primary} onSent={() => { portal.move(c.id, 'sent', note); setNote(''); }}>
+            <EmailButton pdf={shareUrl(c, user.id, true)} href={email('proposal', note)} className={btn.primary} onSent={() => { portal.move(c.id, 'sent', note); setNote(''); }}>
               {contact?.name ? `Email proposal to ${contact.name.split(' ')[0]}` : 'Email proposal'}
             </EmailButton>
           ) : (
@@ -161,7 +194,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
             Client approved — confirm booking
           </button>
-          <EmailButton className={btn.secondary} href={email('reminder')}>Email a reminder</EmailButton>
+          <EmailButton pdf={shareUrl(c, user.id, true)} className={btn.secondary} href={email('reminder')}>Email a reminder</EmailButton>
           <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Taken back to make changes.')}>Take back to edit</button>
         </div>
       </>
@@ -173,7 +206,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
       <>
         <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes. If you change the booking, send it again: it always has the latest version.</p>
         <div className="self-start">
-          <EmailButton className={btn.secondary} href={email('booked')} onSent={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
+          <EmailButton pdf={shareUrl(c, user.id, true)} className={btn.secondary} href={email('booked')} onSent={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
             Email booking confirmation
           </EmailButton>
         </div>

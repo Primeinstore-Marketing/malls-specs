@@ -8,7 +8,9 @@ import { useEffect, useRef, useState } from 'react';
  * in Outlook or Gmail on the web, the mail app, or copied to paste anywhere.
  *
  * `href` is a mailto: link (to, subject and body). `onSent` runs once the
- * person has picked a way to send it.
+ * person has picked a way to send it. `pdf` (the proposal's print view) adds a
+ * first step: save the PDF to attach. A compose link can't carry a file,
+ * so attaching is done by hand.
  */
 export function EmailButton({
   href,
@@ -17,6 +19,7 @@ export function EmailButton({
   onSent,
   align = 'left',
   up = false,
+  pdf,
 }: {
   href: string | undefined;
   className: string;
@@ -25,6 +28,8 @@ export function EmailButton({
   align?: 'left' | 'right';
   /** Open the menu above the button (e.g. in a bar at the bottom of the screen). */
   up?: boolean;
+  /** Link to the printable proposal, to save as a PDF and attach. */
+  pdf?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -78,10 +83,21 @@ export function EmailButton({
         {copied ? 'Copied — paste it into your email' : children}
       </button>
       {open ? (
-        <div role="menu" className={`absolute z-popover ${up ? 'bottom-full mb-2' : 'top-full mt-2'} flex w-72 flex-col gap-0.5 rounded-2xl border border-border bg-bg p-1.5 shadow-3 ${align === 'right' ? 'right-0' : 'left-0'}`}>
-          <p className="px-3 pb-1 pt-2 text-body-sm text-fg-muted">
-            The email is written for you{to ? <> to <strong className="text-fg">{to}</strong></> : ''}. Open it in:
-          </p>
+        <div role="menu" className={`absolute z-popover ${up ? 'bottom-full mb-2' : 'top-full mt-2'} flex w-80 flex-col gap-0.5 rounded-2xl border border-border bg-bg p-1.5 shadow-3 ${align === 'right' ? 'right-0' : 'left-0'}`}>
+          {pdf ? (
+            <>
+              <p className="px-3 pb-1 pt-2 text-label-md font-semibold uppercase text-fg-subtle">1 · The PDF to attach</p>
+              <a role="menuitem" href={pdf} target="_blank" rel="noopener" className={item}>
+                <span className="text-body-sm font-semibold text-fg">Download the proposal PDF</span>
+                <span className="text-[12px] text-fg-subtle">Opens it ready to print: choose “Save as PDF”, then attach it to the email</span>
+              </a>
+              <p className="px-3 pb-1 pt-2 text-label-md font-semibold uppercase text-fg-subtle">2 · The email{to ? <span className="normal-case tracking-normal"> to {to}</span> : ''}</p>
+            </>
+          ) : (
+            <p className="px-3 pb-1 pt-2 text-body-sm text-fg-muted">
+              The email is written for you{to ? <> to <strong className="text-fg">{to}</strong></> : ''}. Open it in:
+            </p>
+          )}
           <a role="menuitem" href={outlook} target="_blank" rel="noopener" className={item} onClick={done}>
             <span className="text-body-sm font-semibold text-fg">Outlook</span>
             <span className="text-[12px] text-fg-subtle">Work email (Microsoft 365) in the browser</span>
@@ -97,7 +113,7 @@ export function EmailButton({
             <span className="text-body-sm font-semibold text-fg">Copy the email</span>
             <span className="text-[12px] text-fg-subtle">Paste it into any email</span>
           </button>
-          <p className="px-3 pb-2 pt-1 text-[12px] text-fg-subtle">Check it, then press Send.</p>
+          <p className="px-3 pb-2 pt-1 text-[12px] text-fg-subtle">{pdf ? 'Attach the PDF, check the email, then press Send.' : 'Check it, then press Send.'}</p>
         </div>
       ) : null}
     </div>

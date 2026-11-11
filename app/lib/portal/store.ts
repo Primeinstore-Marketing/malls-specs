@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { SESSION_READY, SESSION_USER, onSessionUser, registerPeople } from './seed';
 import { ui } from './ui-state';
+import { newShareKey } from './share';
 import type { Campaign, CampaignEvent, CampaignItem, CampaignStatus, NewCampaignItem, PortalState, PortalUser } from './types';
 
 /**
@@ -173,11 +174,19 @@ async function refresh() {
     if (SESSION_USER?.id !== who) return;
     registerPeople(people ?? []);
     adopt(campaigns);
+    ensureShareKeys();
     sync = 'ready';
   } catch {
     if (sync !== 'ready') sync = 'error';
   }
   notify();
+}
+
+/** Campaigns from before booking links had a secret key get one, so their links are short. */
+function ensureShareKeys() {
+  const missing = state.campaigns.filter((c) => !c.shareKey).map((c) => c.id);
+  if (!missing.length) return;
+  save({ ...state, campaigns: state.campaigns.map((c) => (c.shareKey ? c : { ...c, shareKey: newShareKey() })) }, missing);
 }
 
 /** Loads the signed-in person's campaigns; clears them on sign-out. */
@@ -321,6 +330,8 @@ export const portal = {
       items: [],
       events: [{ id: uid('e'), at: now(), by: user.id, text: 'Created the campaign', kind: 'status' }],
       ...fields,
+      shareKey: newShareKey(),
+      clientChanges: null,
       id,
     };
     save({ ...s, campaigns: [c, ...s.campaigns], active: { ...s.active, [user.id]: id } }, [id]);
@@ -362,8 +373,15 @@ export const portal = {
 
   /** Applies changes a client sent from their booking page: new screens and dates. */
   applyClientChanges(id: string, changes: { items: readonly NewCampaignItem[]; start: string | null; end: string | null }, note: string) {
-    updateCampaign(id, () => ({ items: changes.items.map((i) => ({ ...i, id: uid('i') }) as CampaignItem), start: changes.start, end: changes.end }));
-    portal.move(id, 'changes', note);
+    updateCampaign(id, () => ({ items: changes.items.map((i) => ({ ...i, id: uid('i') }) as CampaignItem), start: changes.start, end: changes.end, clientChanges: null }), {
+      kind: 'status',
+      text: note,
+    });
+  },
+
+  /** Sets aside the changes a client asked for, without applying them. */
+  dismissClientChanges(id: string) {
+    updateCampaign(id, () => ({ clientChanges: null }), { kind: 'status', text: 'Set aside the changes the client asked for' });
   },
 
   remove(id: string, itemId: string) {

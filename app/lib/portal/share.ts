@@ -5,9 +5,10 @@ import type { Campaign, CampaignItem, CampaignStatus } from './types';
 
 /**
  * The booking page a client opens from an email — no account needed. The
- * campaign is packed into the link itself (`/share?p=…`), so it works on any
- * device even while campaigns are only saved in the sender's browser. It's a
- * snapshot: after changes, send a new link.
+ * link is short: the campaign id and its secret share key
+ * (`/share?c=<id>&k=<key>`); the page loads the campaign from the server, so
+ * it always shows the latest version. (Older links packed the whole
+ * campaign into the address, `/share?p=…`; those still open.)
  */
 
 export interface SharedProposal {
@@ -69,9 +70,19 @@ export function proposalUrl(p: SharedProposal, print = false): string {
   return typeof window === 'undefined' ? path : `${window.location.origin}${path}`;
 }
 
-/** Full link to the client's booking page. */
+/** Full link to the client's booking page (short, when the campaign has a share key). */
 export function shareUrl(c: Campaign, senderId: string, print = false): string {
-  return proposalUrl(snapshot(c, senderId), print);
+  if (!c.shareKey) return proposalUrl(snapshot(c, senderId), print);
+  const path = withBasePath(`/share?c=${encodeURIComponent(c.id)}&k=${c.shareKey}${print ? '&print=1' : ''}`);
+  return typeof window === 'undefined' ? path : `${window.location.origin}${path}`;
+}
+
+/** A new secret for a campaign's booking link. */
+export function newShareKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export function clientContact(clientId: string | null) {

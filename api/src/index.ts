@@ -3,7 +3,9 @@
  *
  * Public:  GET  /data           — admin edits layered on the built-in catalogue
  *                                   (client contacts only with an admin token)
- *          POST /approvals    { campaignId, name?, note?, screens? }  (a client approves on the booking page)
+ *          GET  /proposals/:id?k=key     — the client's booking page (the campaign's share key)
+ *          POST /proposals/:id/changes?k=key { items, start, end, note?, name? }  (client asks for changes)
+ *          POST /approvals    { campaignId, k?, name?, note?, screens? }  (a client approves on the booking page)
  *          GET  /approvals?ids=a,b  — approvals for those campaigns
  *                                   (names and notes only with an admin token)
  * Auth:    POST  /auth/login     { email, password } -> { token, expiresAt, account }
@@ -384,6 +386,100 @@ async function updateAccount(request: Request, env: Env, rawId: string): Promise
   return json({ ok: true });
 }
 
+// ── proposals (the client's booking page; public, with the share key) ──
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_CHANGES_PER_IP_HOUR = 30;
+
+type StoredCampaign = {
+  id: string; name: string; status: string; start: string | null; end: string | null; objective?: string;
+  clientId?: string | null; prospect?: { company?: string; name?: string } | null; items: unknown[];
+  events: { at: string; by: string; text: string; kind: string; id: string }[]; shareKey?: string; updatedAt?: string;
+  clientChanges?: unknown;
+};
+
+/** The campaign behind a booking link, if the key matches. Same answer for a wrong key and no campaign. */
+async function sharedCampaign(env: Env, id: string, key: string) {
+  if (!CAMPAIGN_ID_PATTERN.test(id) || key.length < 16) throw new HttpError(404, 'This booking link isn’t valid. Ask your account manager to send it again.');
+  const row = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow & { owner_title?: string }>();
+  const c = row ? (JSON.parse(row.data) as StoredCampaign) : null;
+  if (!row || !c || !c.shareKey || c.shareKey !== key) throw new HttpError(404, 'This booking link isn’t valid. Ask your account manager to send it again.');
+  return { row, c };
+}
+
+async function getProposal(url: URL, env: Env, id: string): Promise<Response> {
+  const { row, c } = await sharedCampaign(env, id, url.searchParams.get('k') ?? '');
+  const owner = await env.DB.prepare('SELECT name, title, email FROM admins WHERE id = ?').bind(row.owner_id).first<{ name: string; title: string; email: string }>();
+  let client = c.prospect?.company?.trim() || c.prospect?.name?.trim() || '';
+  if (c.clientId) {
+    const rec = await env.DB.prepare('SELECT data FROM content WHERE key = ?').bind(`client:${c.clientId}`).first<{ data: string }>();
+    if (rec) client = (JSON.parse(rec.data) as { name?: string }).name ?? client;
+  }
+  const sent = [...c.events].reverse().find((e) => e.kind === 'status' && /^Sent the proposal/.test(e.text))?.at;
+  return json({
+    proposal: {
+      v: 2,
+      id: c.id,
+      name: c.name,
+      client,
+      status: c.status,
+      start: c.start,
+      end: c.end,
+      objective: c.objective ?? '',
+      items: c.items,
+      from: owner ? { name: owner.name || owner.email, title: owner.title, email: owner.email } : null,
+      at: sent ?? c.updatedAt ?? row.updated_at,
+    },
+    changesPending: Boolean(c.clientChanges),
+  });
+}
+
+function cleanItems(raw: unknown): unknown[] {
+  if (!Array.isArray(raw) || raw.length > 300) throw new HttpError(400, 'Send the screens as a list (at most 300).');
+  const str = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
+  return raw.map((i) => {
+    const x = i as Record<string, unknown>;
+    if (x?.kind === 'package' && str(x.code, 40)) return { kind: 'package', code: x.code };
+    if (x?.kind === 'screen' && str(x.specId, 100) && typeof x.appMallId === 'string' && x.appMallId.length <= 64 && str(x.title, 200)) {
+      return { kind: 'screen', specId: x.specId, appMallId: x.appMallId, title: x.title };
+    }
+    throw new HttpError(400, 'One of the screens isn’t recognised.');
+  });
+}
+
+async function postProposalChanges(request: Request, url: URL, env: Env, id: string): Promise<Response> {
+  const { row, c } = await sharedCampaign(env, id, url.searchParams.get('k') ?? '');
+  if (['approved', 'booked', 'declined'].includes(c.status)) throw new HttpError(409, 'This proposal can’t be changed any more. Contact your account manager.');
+  const body = await readJson<{ items?: unknown; start?: unknown; end?: unknown; note?: unknown; name?: unknown }>(request);
+  const items = cleanItems(body.items);
+  const date = (v: unknown) => (v === null || v === undefined || v === '' ? null : typeof v === 'string' && DATE_PATTERN.test(v) ? v : (() => { throw new HttpError(400, 'Dates must be YYYY-MM-DD.'); })());
+  const start = date(body.start);
+  const end = date(body.end);
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) : '';
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`changes:${ip}`, minutesAgo(60)).first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_CHANGES_PER_IP_HOUR) throw new HttpError(429, 'Too many changes sent from this connection. Try again later.');
+
+  const at = now();
+  const stamp = Date.now().toString(36);
+  const events = [
+    ...c.events,
+    { id: `e-chg-${stamp}-1`, at, by: 'client', kind: 'status', text: `Asked for changes on the booking page${name ? ` (${name})` : ''}` },
+    ...(note ? [{ id: `e-chg-${stamp}-2`, at, by: 'client', kind: 'message', text: note }] : []),
+  ];
+  const next = { ...c, status: 'changes', updatedAt: at, events, clientChanges: { items, start, end, note, name, at } };
+  const result = await env.DB.batch([
+    env.DB.prepare('UPDATE campaigns SET data = ?, rev = rev + 1, updated_at = ?, updated_by = ? WHERE id = ? AND rev = ?').bind(
+      JSON.stringify(next), at, 'client (booking page)', id, row.rev,
+    ),
+    env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`changes:${ip}`, at),
+  ]);
+  if (!result[0].meta.changes) throw new HttpError(409, 'The proposal was just updated. Reload the page and try again.');
+  return json({ ok: true });
+}
+
 // ── campaigns ─────────────────────────────────────────────────────────
 
 type CampaignRow = { id: string; owner_id: number; data: string; rev: number; updated_at: string; owner_name: string; owner_email: string };
@@ -475,8 +571,9 @@ async function getData(request: Request, env: Env): Promise<Response> {
 // ── approvals (public: clients have no account) ─────────────────────────
 
 async function postApproval(request: Request, env: Env): Promise<Response> {
-  const body = await readJson<{ campaignId?: unknown; name?: unknown; note?: unknown; screens?: unknown }>(request);
+  const body = await readJson<{ campaignId?: unknown; k?: unknown; name?: unknown; note?: unknown; screens?: unknown }>(request);
   const campaignId = typeof body.campaignId === 'string' ? body.campaignId : '';
+  const key = typeof body.k === 'string' ? body.k : '';
   if (!CAMPAIGN_ID_PATTERN.test(campaignId)) throw new HttpError(400, 'This proposal link isn’t complete.');
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) : '';
@@ -499,8 +596,9 @@ async function postApproval(request: Request, env: Env): Promise<Response> {
   // device even if they're offline. Only a proposal that's waiting (sent).
   const row = await env.DB.prepare('SELECT data, rev FROM campaigns WHERE id = ?').bind(campaignId).first<{ data: string; rev: number }>();
   if (row) {
-    const c = JSON.parse(row.data) as { status?: string; events?: unknown[]; updatedAt?: string };
-    if (c.status === 'sent') {
+    const c = JSON.parse(row.data) as { status?: string; events?: unknown[]; updatedAt?: string; shareKey?: string };
+    // Links from before share keys carry none; a key that's given must match.
+    if (c.status === 'sent' && (!key || key === c.shareKey)) {
       const event = (text: string, kind: string, n: number) => ({ id: `e-appr-${Date.now().toString(36)}-${n}`, at, by: 'client', text, kind });
       const events = [
         ...(Array.isArray(c.events) ? c.events : []),
@@ -889,6 +987,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     if (id === 'me' && method === 'PATCH') return updateMe(request, env);
     if (id === 'password' && method === 'POST') return changePassword(request, env);
+  }
+
+  if (resource === 'proposals' && id) {
+    const sub = url.pathname.split('/')[3] ?? '';
+    if (!sub && method === 'GET') return getProposal(url, env, id);
+    if (sub === 'changes' && method === 'POST') return postProposalChanges(request, url, env, id);
   }
 
   if (resource === 'campaigns') {
