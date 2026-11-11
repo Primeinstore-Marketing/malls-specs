@@ -328,11 +328,11 @@ export function PortalAccount() {
             onClick={() => {
               setOpen(false);
               portal.signOut();
-              router.push('/sign-in');
+              router.push('/');
             }}
             className="block w-full rounded-md px-2 py-1.5 text-left text-body-sm text-fg hover:bg-bg-subtle"
           >
-            Switch account / sign out
+            Sign out
           </button>
         </div>
       ) : null}

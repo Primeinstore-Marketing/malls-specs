@@ -100,6 +100,11 @@ function updateCampaign(id: string, change: (c: Campaign, user: PortalUser) => P
 }
 
 export const portal = {
+  /** A campaign as saved right now (e.g. straight after creating it). */
+  get(id: string): Campaign | undefined {
+    return load().campaigns.find((c) => c.id === id);
+  },
+
   signIn(userId: string) {
     if (!USERS.some((u) => u.id === userId)) return;
     save({ ...load(), userId });
@@ -114,9 +119,9 @@ export const portal = {
 
   create(fields: Partial<Campaign> = {}): string {
     const { s, user } = current();
-    const id = uid('c');
+    // A caller may choose the id (so an email link can point at the campaign before it exists).
+    const id = fields.id ?? uid('c');
     const c: Campaign = {
-      id,
       name: 'Untitled campaign',
       clientId: user.role === 'client' ? user.clientId ?? null : null,
       objective: '',
@@ -130,6 +135,7 @@ export const portal = {
       items: [],
       events: [{ id: uid('e'), at: now(), by: user.id, text: 'Created the campaign', kind: 'status' }],
       ...fields,
+      id,
     };
     save({ ...s, campaigns: [c, ...s.campaigns], active: { ...s.active, [user.id]: id } });
     return id;
@@ -152,7 +158,7 @@ export const portal = {
     const { s, user } = current();
     let id = s.active[user.id];
     const c = s.campaigns.find((x) => x.id === id);
-    const editable = c && (user.role === 'sales' ? ['draft', 'proposed', 'changes'].includes(c.status) : c.status === 'draft');
+    const editable = c && (user.role === 'sales' ? true : c.status === 'draft');
     if (!editable) id = portal.create();
     const full = { ...item, id: uid('i') } as CampaignItem;
     updateCampaign(id, (x) => ({ items: [...x.items, full] }));
@@ -209,6 +215,7 @@ export const portal = {
     return portal.create({
       name: `${c.name} (again)`,
       clientId: c.clientId,
+      prospect: c.prospect ?? null,
       objective: c.objective,
       audience: c.audience,
       items: c.items.map((i) => ({ ...i, id: uid('i') })),

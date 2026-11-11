@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
 import { useLiveData } from '@/lib/liveData';
@@ -30,6 +30,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/portal/screens';
 import { SizeDownloads } from './SizeDownloads';
+import { clientEmail } from '@/lib/portal/email';
+import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
 import { Shape } from './ShareView';
@@ -91,53 +93,10 @@ const who = (c: Campaign) => (c.clientId || c.prospect?.company || c.prospect?.n
 
 /* ---------- Email to the client ---------- */
 
-type EmailKind = 'proposal' | 'reminder' | 'booked';
-
-/** A ready-to-send email to the client: what's booked, the artwork sizes, and the link. */
+/** A ready-to-send email to the client, built from the latest version of the campaign. */
 function useClientEmail(c: Campaign, user: PortalUser) {
   const { catalogue } = useLiveData();
-  const to = campaignContact(c);
-  return (kind: EmailKind, note = '') => {
-    const screens = campaignScreens(c.items, catalogue);
-    const { sizes, unknown } = artworkSizes(screens);
-    const total = screens.reduce((n, x) => n + x.qty, 0);
-    const first = to?.name.split(' ')[0] ?? 'there';
-    const subject = { proposal: `Your Primedia Malls proposal: ${c.name}`, reminder: `Reminder: ${c.name} is waiting for your approval`, booked: `Booking confirmed: ${c.name}` }[kind];
-    const opener = {
-      proposal: `Here's the proposal for ${c.name}: ${total} screens in ${new Set(screens.map((x) => x.mallName)).size} malls, ${formatRange(c.start, c.end)}.`,
-      reminder: `A quick reminder that the proposal for ${c.name} (${formatRange(c.start, c.end)}) is waiting for your approval.`,
-      booked: `${c.name} is booked: ${total} screens, ${formatRange(c.start, c.end)}.`,
-    }[kind];
-    const artLines = (withTemplates: boolean) =>
-      sizes
-        .map((z) => {
-          const head = `- ${z.width} × ${z.height} px (${z.orientation?.toLowerCase()}) for ${z.screens} ${z.screens === 1 ? 'screen' : 'screens'}`;
-          const files = withTemplates ? z.files.flatMap((f) => (f.template ? [`    After Effects template${z.files.length > 1 ? ` (${f.label})` : ''}: ${sheetHref(f.template)}`] : [])) : [];
-          return [head, ...files].join('\n');
-        })
-        .join('\n');
-    const hasTemplates = sizes.some((z) => z.files.some((f) => f.template));
-    const build = (withTemplates: boolean) => [
-      `Hi ${first},`,
-      '',
-      opener,
-      note ? `\n${note}` : '',
-      '',
-      `Artwork sizes${c.start ? ` (needed before ${formatDate(c.start)})` : ''}:`,
-      artLines(withTemplates) + (unknown ? `\n- ${unknown} screens: size to follow` : ''),
-      '',
-      `Every screen, with spec sheets${hasTemplates ? ', After Effects templates' : ''}${kind === 'booked' ? '' : ' and a button to approve'}:`,
-      shareUrl(c, user.id),
-      '',
-      'Regards,',
-      user.name,
-      user.title,
-    ].join('\n');
-    // Very long mailto links can be cut off; past that, leave the template links to the linked page (it lists them all).
-    const mailto = (body: string) => `mailto:${to?.email ?? ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    const full = mailto(build(true));
-    return full.length <= 6000 || !hasTemplates ? full : mailto(build(false));
-  };
+  return (kind: EmailKind, note = '') => clientEmail(c, user, catalogue, kind, note);
 }
 
 /** What the signed-in user can do next, given where the campaign is. */
@@ -165,7 +124,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           {c.status === 'proposed' ? 'Shape the plan, then send it back as a proposal.' : c.status === 'changes' ? 'See what they asked for in the updates below.' : 'Send it to the client when it’s ready.'}
         </p>
         <Checklist items={checks} />
-        {!contact?.email ? <p className="text-body-sm text-fg-muted">No client email yet — add one under <a href="#f-client" className="font-semibold text-accent hover:underline">Details</a>, or type it into the email.</p> : null}
+        {!contact?.email ? <p className="text-body-sm text-fg-muted">No client email yet — add one in <a href="#f-client" className="font-semibold text-accent hover:underline">Campaign details</a> above, or type it into the email.</p> : null}
         <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for the client (optional)" className={`${input} h-auto py-2.5`} />
         <div className="flex flex-wrap gap-2">
           {ready ? (
@@ -195,7 +154,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     tone = 'quiet';
     body = (
       <>
-        <p className="text-body-md text-fg-muted">They can approve from the link in the email. When they reply, record it here.</p>
+        <p className="text-body-md text-fg-muted">They can approve from the link in the email. Changed something since? “Email a reminder” sends the latest version.</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
             Client approved — confirm booking
@@ -210,7 +169,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     tone = 'quiet';
     body = (
       <>
-        <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes.</p>
+        <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes. If you change the booking, send it again: it always has the latest version.</p>
         <a className={`${btn.secondary} self-start`} href={email('booked')} onClick={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
           Email booking confirmation
         </a>
@@ -432,7 +391,6 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
             onChange={(next) => portal.edit(c.id, next)}
             input={input}
             label={label}
-            disabled={!['draft', 'proposed', 'changes'].includes(c.status)}
           />
         ) : null}
         <label className="flex flex-col gap-1.5">
@@ -535,6 +493,7 @@ function PdfButton({ c, user }: { c: Campaign; user: PortalUser }) {
 }
 
 function View({ id, user }: { id: string; user: PortalUser }) {
+  const router = useRouter();
   const { campaigns, active } = usePortalState();
   const c = campaigns.find((x) => x.id === id);
   if (!c || !visibleTo(c, user)) {
@@ -559,9 +518,19 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             <Link href="/portal" className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-md text-fg-muted">
-              <span>{campaignClientName(c)}</span>
-              <span aria-hidden="true">·</span>
-              <span>{formatRange(c.start, c.end)}</span>
+              {editable ? (
+                <a href="#details" className="flex flex-wrap items-center gap-x-3 hover:text-fg hover:underline print:no-underline" title="Edit the campaign details">
+                  <span>{campaignClientName(c)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatRange(c.start, c.end)}</span>
+                </a>
+              ) : (
+                <>
+                  <span>{campaignClientName(c)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatRange(c.start, c.end)}</span>
+                </>
+              )}
               {countdown(c) ? <><span aria-hidden="true">·</span><span className="font-semibold text-fg">{countdown(c)}</span></> : null}
               {ph || c.status === 'declined' ? <StatusPill status={c.status} phase={ph} /> : null}
             </p>
@@ -576,10 +545,20 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             ) : null}
             <PdfButton c={c} user={user} />
             <ShareButton c={c} user={user} />
+            {user.role === 'sales' ? (
+              <button type="button" className={btn.quiet} onClick={() => router.push(`/portal/campaign?id=${portal.duplicate(c.id)}`)} title="A new draft with the same client, screens and audience; set new dates">
+                Duplicate
+              </button>
+            ) : null}
           </div>
         </div>
         {!ph && c.status !== 'declined' ? <Steps c={c} role={user.role} /> : null}
       </header>
+
+      <section id="details" className="flex scroll-mt-28 flex-col gap-4" aria-labelledby="details-title">
+        <h2 id="details-title" className="text-display-sm text-fg">Campaign details</h2>
+        <Details c={c} user={user} />
+      </section>
 
       <NextStep c={c} user={user} />
 
@@ -597,10 +576,6 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             <h2 id="media-title" className="text-display-sm text-fg">Media</h2>
             <Items c={c} user={user} />
             {editable ? <Suggestions c={c} /> : null}
-          </section>
-          <section className="flex flex-col gap-4" aria-labelledby="details-title">
-            <h2 id="details-title" className="text-display-sm text-fg">Details</h2>
-            <Details c={c} user={user} />
           </section>
         </div>
         <section id="updates" className="flex scroll-mt-28 flex-col gap-4 lg:sticky lg:top-[calc(var(--topbar-height)+24px)] lg:h-fit print:hidden" aria-labelledby="updates-title">

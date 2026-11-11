@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ApiError, apiConfigured, getStoredToken, storeToken } from '@/lib/api';
 import type { AdminProfile } from '@/lib/api';
 import { refreshLiveData } from '@/lib/liveData';
@@ -60,6 +61,8 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     setStatus('signed-in');
   }, []);
 
+  const router = useRouter();
+  // Signing out always lands on the home page (an expired session doesn't move you).
   const signOut = useCallback(async () => {
     try {
       await api.logout();
@@ -69,7 +72,8 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     storeToken(null);
     setAdmin(null);
     setStatus('signed-out');
-  }, []);
+    router.push('/');
+  }, [router]);
 
   const sessionExpired = useCallback(() => {
     storeToken(null);

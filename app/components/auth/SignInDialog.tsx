@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import type { FormEvent } from 'react';
 import { useAuthDialog } from './AuthDialogContext';
 import { useAdminSession } from './AdminSession';
@@ -14,6 +15,8 @@ export function SignInDialog() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +44,8 @@ export function SignInDialog() {
       await signIn(email.trim(), password);
       setEmail('');
       close();
+      // From the home or sign-in page, go to Site admin; elsewhere (e.g. a spec to edit) stay put.
+      if (pathname === '/' || pathname.startsWith('/sign-in')) router.push('/admin/malls');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed. Try again.');
     } finally {

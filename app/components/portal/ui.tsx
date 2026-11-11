@@ -107,15 +107,15 @@ export function AccountPicker({ next }: { next?: string }) {
     { title: 'Primedia sales', note: 'Build proposals, send them to clients and confirm bookings.', users: USERS.filter((u) => u.role === 'sales') },
   ];
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="order-last flex flex-col gap-2 rounded-2xl bg-bg-subtle p-5 md:order-none md:col-start-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="order-last flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5 md:order-none md:col-start-2">
         <h3 className="text-body-lg font-semibold text-fg">Clients</h3>
         <p className="text-body-sm text-fg-muted">
           You don’t need to sign in. Open the link your account manager emailed you: it shows every screen booked, the artwork to supply, and lets you change or approve the proposal.
         </p>
       </div>
       {groups.map((g) => (
-        <div key={g.title} className="flex flex-col gap-3 rounded-2xl border border-border bg-bg p-5 md:col-start-1 md:row-start-1">
+        <div key={g.title} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg p-5 md:col-start-1 md:row-start-1">
           <div>
             <h3 className="text-body-lg font-semibold text-fg">{g.title}</h3>
             <p className="text-body-sm text-fg-muted">{g.note}</p>

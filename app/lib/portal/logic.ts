@@ -202,8 +202,9 @@ export function reach(c: Pick<Campaign, 'items' | 'start' | 'end'>): Reach {
 
 /* ---------- Who may do what ---------- */
 
+/** Sales can change a campaign at any stage; the email buttons always send its latest version. */
 export function canEdit(c: Campaign, user: PortalUser): boolean {
-  if (user.role === 'sales') return ['draft', 'proposed', 'changes'].includes(c.status);
+  if (user.role === 'sales') return true;
   return c.status === 'draft' && c.clientId === user.clientId;
 }
 

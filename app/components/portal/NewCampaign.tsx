@@ -7,11 +7,13 @@ import { compact } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, reach, todayIso } from '@/lib/portal/logic';
 import { portal } from '@/lib/portal/store';
+import { clientEmail } from '@/lib/portal/email';
+import { clientContact } from '@/lib/portal/share';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
 import { mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } from '@/lib/portal/mallScreens';
 import type { MallEntry as Entry } from '@/lib/portal/mallScreens';
 import { useLiveData } from '@/lib/liveData';
-import type { NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
+import type { Campaign, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
 import { AudiencePicker, readAudience } from '@/components/insights/AudiencePicker';
 import { ClientField } from './ClientField';
 import { Page, RequireSignIn, Section } from './ui';
@@ -59,20 +61,42 @@ function Form({ user }: { user: PortalUser }) {
   const mallCount = new Set(screens.map((x) => x.mallName)).size;
   const flight = days(start, end);
 
-  function save(send: boolean) {
-    const id = portal.create({
-      name: name.trim() || 'Untitled campaign',
-      clientId: client.clientId,
-      prospect: client.prospect,
-      objective,
-      start: start || null,
-      end: end || null,
-      audience,
-      items: items.map((i) => ({ ...i, id: `i-${Math.random().toString(36).slice(2, 9)}` })),
-    });
-    if (send) portal.move(id, sales ? 'sent' : 'proposed');
-    router.push(`/portal/campaign?id=${id}`);
+  // Who the proposal email goes to, if known yet.
+  const recipient = clientContact(client.clientId) ?? (client.prospect?.email.trim() ? { name: client.prospect.name.trim() || client.prospect.company.trim(), email: client.prospect.email.trim() } : null);
+
+  // The id the new campaign will get, so the email link can point at it before it's saved.
+  const [newId] = useState(() => `c-${Math.random().toString(36).slice(2, 9)}`);
+  const fields = () => ({
+    id: newId,
+    name: name.trim() || 'Untitled campaign',
+    clientId: client.clientId,
+    prospect: client.prospect,
+    objective,
+    start: start || null,
+    end: end || null,
+    audience,
+    items: items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` })),
+  });
+  // The ready-written email, built from what's on screen (same as the campaign page's).
+  const emailHref = recipient?.email
+    ? clientEmail({ ...fields(), status: 'sent', createdBy: user.id, createdAt: '', updatedAt: '', events: [] } as Campaign, user, catalogue, 'proposal')
+    : undefined;
+
+  /** Sales, in one step: the link opens the email; this saves the proposal as sent, then shows it. */
+  function createAndEmail() {
+    save(false, false);
+    portal.move(newId, 'sent');
+    // Let the mail app open before leaving the page.
+    setTimeout(() => router.push(`/portal/campaign?id=${newId}`), 400);
   }
+
+  function save(send: boolean, go = true): string {
+    const id = portal.create({ ...fields() });
+    if (send) portal.move(id, sales ? 'sent' : 'proposed');
+    if (go) router.push(`/portal/campaign?id=${id}`);
+    return id;
+  }
+
 
   const toggle = (key: string, item: NewCampaignItem) =>
     setPicked((cur) => {
@@ -256,13 +280,28 @@ function Form({ user }: { user: PortalUser }) {
               </div>
             ) : null}
             <div className="flex flex-col gap-2">
+              {sales && recipient?.email && picked.size ? (
+                start && end ? (
+                  <a
+                    href={emailHref}
+                    onClick={createAndEmail}
+                    className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover"
+                  >
+                    Create and email to {recipient.name.split(' ')[0] || 'the client'}
+                  </a>
+                ) : null
+              ) : null}
               <button
                 type="button"
                 disabled={!start || !end}
                 onClick={() => save(!sales)}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
+                className={
+                  sales && recipient?.email && picked.size
+                    ? 'inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-50'
+                    : 'inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50'
+                }
               >
-                {sales ? 'Create proposal' : 'Send brief to Primedia'}
+                {sales ? (recipient?.email && picked.size ? 'Create without sending' : 'Create proposal') : 'Send brief to Primedia'}
               </button>
               {!sales ? (
                 <button type="button" onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
