@@ -18,9 +18,59 @@ export function applyClients(edited: readonly (Client & { hidden?: boolean })[])
   );
 }
 
-export const USERS: readonly PortalUser[] = [
-  { id: 'u-lerato', name: 'Lerato Mokoena', email: 'lerato.mokoena@primedia.demo', role: 'sales', title: 'Account Manager, Primedia Malls' },
+/**
+ * People who have signed in on this browser, so campaign activity can still
+ * show who did what after they sign out. Sign-in itself is a real account
+ * (email and password, through the API); see setSessionUser.
+ */
+const PEOPLE_KEY = 'malls-specs:people';
+let people: PortalUser[] = [
+  // The old demo account, so activity it left in this browser keeps a name.
+  { id: 'u-lerato', name: 'Lerato Mokoena', email: '', role: 'sales', title: 'Account Manager, Primedia Malls' },
+  // Approvals a client gives on their booking page are recorded by the server as "client".
+  { id: 'client', name: 'Client', email: '', role: 'client', title: '' },
 ];
+try {
+  if (typeof window !== 'undefined') {
+    const saved = JSON.parse(window.localStorage.getItem(PEOPLE_KEY) ?? '[]') as PortalUser[];
+    people = [...people.filter((p) => !saved.some((x) => x.id === p.id)), ...saved];
+  }
+} catch {
+  /* ignore */
+}
+export let USERS: readonly PortalUser[] = people;
+
+/** Who's signed in (an admin or sales account), as the workspace sees them. */
+export let SESSION_USER: PortalUser | null = null;
+/** False until the sign-in check with the API has finished. */
+export let SESSION_READY = false;
+const sessionListeners = new Set<() => void>();
+export const onSessionUser = (l: () => void) => {
+  sessionListeners.add(l);
+  return () => sessionListeners.delete(l);
+};
+
+/** Staff names from the server, so colleagues' activity on a campaign shows who did it. */
+export function registerPeople(list: readonly { id: string; name: string; email: string; title: string }[]) {
+  const known = new Set(list.map((p) => p.id));
+  people = [...people.filter((p) => !known.has(p.id)), ...list.map((p) => ({ ...p, role: 'sales' as const }))];
+  USERS = people;
+}
+
+export function setSessionUser(user: PortalUser | null, ready = true) {
+  SESSION_USER = user;
+  SESSION_READY = ready;
+  if (user) {
+    people = [...people.filter((p) => p.id !== user.id), user];
+    USERS = people;
+    try {
+      window.localStorage.setItem(PEOPLE_KEY, JSON.stringify(people.filter((p) => p.id.startsWith('a-'))));
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const l of sessionListeners) l();
+}
 
 /** An empty workspace. */
 export function seedState(): PortalState {

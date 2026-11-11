@@ -75,7 +75,9 @@ export function shareUrl(c: Campaign, senderId: string, print = false): string {
 }
 
 export function clientContact(clientId: string | null) {
-  return CLIENTS.find((x) => x.id === clientId)?.contact ?? null;
+  // Contacts are only sent to signed-in admins; for everyone else they're blank.
+  const contact = CLIENTS.find((x) => x.id === clientId)?.contact;
+  return contact?.email ? contact : null;
 }
 
 /** Who the proposal emails go to: the client's contact, else the new contact on the campaign. */

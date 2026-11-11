@@ -5,6 +5,7 @@
  * and `.env.production` for the GitHub Pages build. When it's unset the
  * site still works, read-only, on its built-in data.
  */
+import type { Campaign } from '@/lib/portal/types';
 import type { Asset, AssetRole, Specification } from '@data-model';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
@@ -12,9 +13,24 @@ export const apiConfigured = API_URL !== '';
 
 const TOKEN_KEY = 'malls-specs:admin-token';
 
+export type AccountRole = 'admin' | 'sales';
+
+/** A signed-in account: an admin (Site admin and everything else) or sales. */
 export interface AdminProfile {
+  readonly id: number;
   readonly email: string;
   readonly name: string;
+  readonly title: string;
+  readonly role: AccountRole;
+  /** Signed in with a temporary password: must choose their own first. */
+  readonly mustChangePassword: boolean;
+}
+export type AccountProfile = AdminProfile;
+
+/** An account as admins see it in Site admin → Accounts. */
+export interface ManagedAccount extends AdminProfile {
+  readonly disabled: boolean;
+  readonly createdAt: string;
 }
 
 export interface LiveSpecRecord {
@@ -114,6 +130,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The response body, e.g. the latest version on a 409. */
+    readonly body?: unknown,
   ) {
     super(message);
   }
@@ -151,24 +169,40 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
     throw new ApiError(0, 'Couldn’t reach the server. Check your connection and try again.');
   }
   const body = (await response.json().catch(() => ({}))) as { error?: string } & T;
-  if (!response.ok) throw new ApiError(response.status, body.error ?? `Request failed (${response.status}).`);
+  if (!response.ok) throw new ApiError(response.status, body.error ?? `Request failed (${response.status}).`, body);
   return body;
 }
 
 export const api = {
-  data: () => request<LiveDataResponse>('/data'),
+  data: () => request<LiveDataResponse>('/data', {}, true),
   /** A client approves a proposal on its booking page (no account). */
   approveProposal: (campaignId: string, fields: { name: string; note: string; screens: number }) =>
     request<{ ok: true; approval: ProposalApproval }>('/approvals', { method: 'POST', body: JSON.stringify({ campaignId, ...fields }) }),
   approvals: (campaignIds: readonly string[]) =>
-    request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`),
+    request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`, {}, true),
   login: (email: string, password: string) =>
-    request<{ token: string; expiresAt: string; admin: AdminProfile }>('/auth/login', {
+    request<{ token: string; expiresAt: string; account: AdminProfile }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }, true),
-  me: () => request<{ admin: AdminProfile }>('/auth/me', {}, true),
+  me: () => request<{ account: AdminProfile }>('/auth/me', {}, true),
+  updateMe: (fields: { name: string; title: string }) =>
+    request<{ account: AdminProfile }>('/auth/me', { method: 'PATCH', body: JSON.stringify(fields) }, true),
+  accounts: () => request<{ accounts: ManagedAccount[] }>('/accounts', {}, true),
+  /** Your campaigns (admins: everyone's), with their revision. */
+  campaigns: () => request<{ campaigns: { campaign: Campaign; rev: number; ownerId: number; ownerName: string; updatedAt: string }[]; people: { id: string; name: string; email: string; title: string }[] }>('/campaigns', {}, true),
+  /** Saves a campaign; `rev` is the revision it was based on (0 for new). 409 carries `latest`. */
+  putCampaign: (campaign: Campaign, rev: number) =>
+    request<{ rev: number; ownerId: number; ownerName: string; updatedAt: string }>(
+      `/campaigns/${encodeURIComponent(campaign.id)}`,
+      { method: 'PUT', body: JSON.stringify({ campaign, rev }) },
+      true,
+    ),
+  createAccount: (fields: { email: string; name: string; title: string; role: AccountRole; password: string }) =>
+    request<{ ok: true }>('/accounts', { method: 'POST', body: JSON.stringify(fields) }, true),
+  updateAccount: (id: number, fields: Partial<{ name: string; title: string; role: AccountRole; disabled: boolean; password: string }>) =>
+    request<{ ok: true }>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }, true),
   changePassword: (current: string, next: string) =>
     request<{ ok: true }>('/auth/password', { method: 'POST', body: JSON.stringify({ current, next }) }, true),
   putPin: (specId: string, lng: number, lat: number, level?: string | null) =>

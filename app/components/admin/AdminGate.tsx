@@ -4,16 +4,26 @@ import type { ReactNode } from 'react';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { useAuthDialog } from '@/components/auth/AuthDialogContext';
 import { api } from '@/lib/api';
+import { withBasePath } from '@/lib/basePath';
 import { useLiveData } from '@/lib/liveData';
 import type { UploadedPhoto } from '@/lib/insights';
 
 /** Admin pages: shown to signed-in admins; everyone else gets the sign-in. */
 export function AdminGate({ children }: { children: ReactNode }) {
-  const { status, isAdmin, available } = useAdminSession();
+  const { status, isAdmin, isSignedIn, available } = useAdminSession();
   const { setOpen } = useAuthDialog();
   useLiveData(); // re-render when saved content comes back from the API
   if (status === 'checking') return <div className="h-48 animate-pulse rounded-2xl bg-bg-subtle" />;
   if (isAdmin) return <>{children}</>;
+  if (isSignedIn) {
+    return (
+      <div className="flex flex-col items-start gap-3 rounded-3xl bg-bg-subtle p-6">
+        <h2 className="text-display-sm text-fg">For admins only</h2>
+        <p className="max-w-prose text-body-md text-fg-muted">Your account is a sales account. Ask an admin if you need to change malls, screens or photos. You can keep client contacts up to date in your workspace.</p>
+        <a href={withBasePath('/portal/clients')} className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">Client contacts</a>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-start gap-3 rounded-3xl bg-bg-subtle p-6">
       <h2 className="text-display-sm text-fg">Sign in as an admin</h2>

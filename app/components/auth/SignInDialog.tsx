@@ -6,6 +6,7 @@ import type { FormEvent } from 'react';
 import { useAuthDialog } from './AuthDialogContext';
 import { useAdminSession } from './AdminSession';
 import { Button } from '@/components/ui/Button';
+import { rememberTemporaryPassword } from './SetPasswordGate';
 
 export function SignInDialog() {
   const { open, setOpen } = useAuthDialog();
@@ -41,11 +42,12 @@ export function SignInDialog() {
     setError(null);
     setSubmitting(true);
     try {
-      await signIn(email.trim(), password);
+      const account = await signIn(email.trim(), password);
+      if (account.mustChangePassword) rememberTemporaryPassword(password);
       setEmail('');
       close();
-      // From the home or sign-in page, go to Site admin; elsewhere (e.g. a spec to edit) stay put.
-      if (pathname === '/' || pathname.startsWith('/sign-in')) router.push('/admin/malls');
+      // From the home or sign-in page, go to Site admin (admins) or the workspace (sales); elsewhere stay put.
+      if (pathname === '/' || pathname.startsWith('/sign-in')) router.push(account.role === 'admin' ? '/admin/malls' : '/portal');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed. Try again.');
     } finally {
@@ -68,10 +70,10 @@ export function SignInDialog() {
         <div className="flex items-start justify-between gap-4 bg-brand-surface px-6 py-5">
           <div className="flex flex-col gap-1">
             <span id="sign-in-title" className="text-display-sm text-brand-on-surface">
-              Admin sign in
+              Sign in
             </span>
             <span className="text-body-sm text-brand-on-surface-muted">
-              For editing specs and screen positions. Browsing doesn&rsquo;t need an account.
+              For Primedia sales and admins. Browsing doesn&rsquo;t need an account.
             </span>
           </div>
           <button
@@ -87,7 +89,7 @@ export function SignInDialog() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-6" noValidate>
           {!available ? (
             <p className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-body-sm text-warning-fg">
-              This copy of the site isn&rsquo;t connected to the admin server, so signing in isn&rsquo;t possible here.
+              This copy of the site isn&rsquo;t connected to the server, so signing in isn&rsquo;t possible here.
             </p>
           ) : null}
 
@@ -133,7 +135,7 @@ export function SignInDialog() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </Button>
           <p className="text-center text-body-sm text-fg-subtle">
-            Need an account or forgot your password? Ask an existing admin.
+            Need an account or forgot your password? Ask a Primedia admin.
           </p>
         </form>
       </div>

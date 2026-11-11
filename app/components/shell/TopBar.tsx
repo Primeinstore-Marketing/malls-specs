@@ -6,7 +6,6 @@ import { useAdminSession } from '@/components/auth/AdminSession';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { useSearchPalette } from '@/components/search/SearchPaletteContext';
-import { AccountMenu } from '@/components/auth/AccountMenu';
 import { Notifications, PortalAccount } from '@/components/portal/Chrome';
 import { usePortalUser } from '@/lib/portal/store';
 import { withBasePath } from '@/lib/basePath';
@@ -111,7 +110,6 @@ export function TopBar({ onMenuToggle, compactBrand = false }: { onMenuToggle: (
         <div className="flex shrink-0 items-center gap-2">
           <Notifications />
           <PortalAccount />
-          {isAdmin ? <AccountMenu /> : null}
         </div>
       </div>
     </header>

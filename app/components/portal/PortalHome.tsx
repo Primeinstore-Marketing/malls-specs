@@ -182,17 +182,6 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
         </Block>
       </div>
 
-      {campaigns.length ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (window.confirm('Clear every campaign saved in this browser? This can’t be undone.')) portal.resetDemo();
-          }}
-          className="self-start text-body-sm text-fg-subtle hover:text-fg hover:underline"
-        >
-          Clear all campaigns in this browser
-        </button>
-      ) : null}
     </Page>
   );
 }

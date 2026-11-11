@@ -24,7 +24,7 @@ import {
   visibleTo,
 } from '@/lib/portal/logic';
 import { CLIENTS } from '@/lib/portal/seed';
-import { portal, usePortalState } from '@/lib/portal/store';
+import { campaignOwner, portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, PortalUser } from '@/lib/portal/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
@@ -32,6 +32,7 @@ import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/port
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { clientEmail } from '@/lib/portal/email';
+import { EmailButton } from '@/components/ui/EmailButton';
 import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
@@ -129,9 +130,9 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
         <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for the client (optional)" className={`${input} h-auto py-2.5`} />
         <div className="flex flex-wrap gap-2">
           {ready ? (
-            <a href={email('proposal', note)} className={btn.primary} onClick={() => { portal.move(c.id, 'sent', note); setNote(''); }}>
+            <EmailButton href={email('proposal', note)} className={btn.primary} onSent={() => { portal.move(c.id, 'sent', note); setNote(''); }}>
               {contact?.name ? `Email proposal to ${contact.name.split(' ')[0]}` : 'Email proposal'}
-            </a>
+            </EmailButton>
           ) : (
             <button type="button" disabled className={btn.primary}>Email proposal to client</button>
           )}
@@ -160,7 +161,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
             Client approved — confirm booking
           </button>
-          <a className={btn.secondary} href={email('reminder')}>Email a reminder</a>
+          <EmailButton className={btn.secondary} href={email('reminder')}>Email a reminder</EmailButton>
           <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Taken back to make changes.')}>Take back to edit</button>
         </div>
       </>
@@ -171,9 +172,11 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     body = (
       <>
         <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes. If you change the booking, send it again: it always has the latest version.</p>
-        <a className={`${btn.secondary} self-start`} href={email('booked')} onClick={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
-          Email booking confirmation
-        </a>
+        <div className="self-start">
+          <EmailButton className={btn.secondary} href={email('booked')} onSent={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
+            Email booking confirmation
+          </EmailButton>
+        </div>
       </>
     );
   } else if (!sales && c.status === 'draft') {
@@ -518,6 +521,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
           <div className="flex min-w-0 flex-col gap-2">
             <Link href="/portal" className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
+            {campaignOwner(c.id) && c.createdBy !== user.id ? <p className="text-body-sm text-fg-subtle print:hidden">Sales: {campaignOwner(c.id)}</p> : null}
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-md text-fg-muted">
               {editable ? (
                 <a href="#details" className="flex flex-wrap items-center gap-x-3 hover:text-fg hover:underline print:no-underline" title="Edit the campaign details">

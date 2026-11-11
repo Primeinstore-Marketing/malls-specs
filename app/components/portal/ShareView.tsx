@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
+import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { days, formatDate, formatRange, phase } from '@/lib/portal/logic';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
@@ -454,7 +455,7 @@ function Booking({ p }: { p: SharedProposal }) {
               </ul>
               <p className="text-body-sm text-fg-muted">Sending opens an email to {first} with these changes and a link to the updated proposal.</p>
               <div className="flex flex-wrap gap-2">
-                <a href={mail(`Changes to: ${p.name}`, changesBody)} className={btnPrimary}>Send changes to {first}</a>
+                <EmailButton href={mail(`Changes to: ${p.name}`, changesBody)} className={btnPrimary}>Send changes to {first}</EmailButton>
                 <button type="button" onClick={resetEdits} className={btnSecondary}>Undo all changes</button>
               </div>
             </>
@@ -470,9 +471,9 @@ function Booking({ p }: { p: SharedProposal }) {
                     Approve proposal
                   </button>
                 ) : null}
-                <a href={mail(`${editable ? 'Question about' : 'Question about'}: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className={btnSecondary}>
+                <EmailButton href={mail(`Question about: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className={btnSecondary}>
                   Ask a question
-                </a>
+                </EmailButton>
               </div>
             </>
           )}
@@ -557,7 +558,7 @@ function Booking({ p }: { p: SharedProposal }) {
                 {changed ? (
                   <>
                     <button type="button" onClick={resetEdits} className={`${btnSecondary} hidden sm:inline-flex`}>Undo</button>
-                    <a href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Send changes to {first}</a>
+                    <EmailButton up align="right" href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} justify-center`}>Send changes to {first}</EmailButton>
                   </>
                 ) : (
                   <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Approve proposal</button>
@@ -665,7 +666,7 @@ function ApproveDialog({ p, total, malls, sizes, start, end, first, fallback, on
         {error ? (
           <div className="flex flex-col gap-2 rounded-xl bg-warning-bg p-3 text-body-sm text-warning-fg">
             <span>{error}</span>
-            {fallback ? <a href={fallback} className="self-start font-semibold underline">Approve by email</a> : null}
+            {fallback ? <div className="self-start"><EmailButton href={fallback} className="font-semibold underline">Approve by email</EmailButton></div> : null}
           </div>
         ) : null}
         <div className="flex flex-wrap gap-2">

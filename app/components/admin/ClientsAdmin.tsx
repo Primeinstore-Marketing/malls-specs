@@ -44,11 +44,12 @@ function Row({ start, isNew, onDone }: { start: Client; isNew?: boolean; onDone?
   );
 }
 
-function List() {
+/** Every client and their contact, editable. Used in Site admin and by sales (Client contacts). */
+export function ClientContactsList() {
   const [adding, setAdding] = useState(false);
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-body-md text-fg-muted">Booking emails from sales go to each client’s contact.</p>
+      <p className="text-body-md text-fg-muted">Proposal and booking emails go to each client’s contact. Contacts are private: only signed-in Primedia staff see them.</p>
       <ul className="flex flex-col gap-3">
         {CLIENTS.map((c) => <Row key={`${c.id}-${c.name}-${c.contact.email}`} start={c} />)}
         {adding ? <Row isNew start={{ id: '', name: '', industry: '', contact: { name: '', email: '' } }} onDone={() => setAdding(false)} /> : null}
@@ -59,5 +60,5 @@ function List() {
 }
 
 export function ClientsAdmin() {
-  return <AdminGate><List /></AdminGate>;
+  return <AdminGate><ClientContactsList /></AdminGate>;
 }

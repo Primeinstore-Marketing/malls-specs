@@ -2,12 +2,20 @@
  * Primedia Malls specs API.
  *
  * Public:  GET  /data           — admin edits layered on the built-in catalogue
+ *                                   (client contacts only with an admin token)
  *          POST /approvals    { campaignId, name?, note?, screens? }  (a client approves on the booking page)
  *          GET  /approvals?ids=a,b  — approvals for those campaigns
- * Auth:    POST /auth/login      { email, password } -> { token, expiresAt, admin }
- *          POST /auth/logout
- *          GET  /auth/me
- *          POST /auth/password   { current, next }
+ *                                   (names and notes only with an admin token)
+ * Auth:    POST  /auth/login     { email, password } -> { token, expiresAt, account }
+ *          POST  /auth/logout
+ *          GET   /auth/me
+ *          PATCH /auth/me        { name?, title? }        (your own profile)
+ *          POST  /auth/password  { current, next }
+ *          Accounts are admins or sales. Sales may also edit client:* content.
+ * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
+ *          (rev = the revision you edited; 409 with the latest if someone saved since)
+ * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
+ *          PATCH /accounts/:id { name?, title?, role?, disabled?, password? }
  * Files:   GET  /files/:key       — an uploaded picture or file (public)
  * Admin:   POST   /files?specId=&role=   raw body; X-Filename, Content-Type,
  *                                        X-Image-Width / X-Image-Height for images
@@ -44,10 +52,24 @@ export interface Env {
   ALLOWED_ORIGINS: string;
 }
 
+type Role = 'admin' | 'sales';
+
+/** A signed-in account: an admin or a salesperson. */
 interface Admin {
   id: number;
   email: string;
   name: string;
+  title: string;
+  role: Role;
+  must_change_password: number;
+}
+
+const ROLES: readonly Role[] = ['admin', 'sales'];
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** What the site gets about an account. */
+function profile(a: Admin) {
+  return { id: a.id, email: a.email, name: a.name, title: a.title, role: a.role, mustChangePassword: a.must_change_password === 1 };
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -61,6 +83,8 @@ const MALL_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 /** Campaign ids from the portal, e.g. "c-festive" or "c-k3x9a2b". */
 const CAMPAIGN_ID_PATTERN = /^c-[a-z0-9-]{2,60}$/;
 const MAX_APPROVALS_PER_IP_HOUR = 30;
+/** A campaign with a long conversation can outgrow the usual body limit. */
+const MAX_CAMPAIGN_BYTES = 512 * 1024;
 const CONTENT_KEY_PATTERN = /^[a-z][a-z-]{1,31}(:[a-z0-9][a-z0-9-]{0,99})?$/;
 
 class HttpError extends Error {
@@ -109,9 +133,9 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
   });
 }
 
-async function readJson<T>(request: Request): Promise<T> {
+async function readJson<T>(request: Request, limit = MAX_BODY_BYTES): Promise<T> {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new HttpError(413, 'Request too large.');
+  if (text.length > limit) throw new HttpError(413, 'Request too large.');
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -119,18 +143,51 @@ async function readJson<T>(request: Request): Promise<T> {
   }
 }
 
-async function requireAdmin(request: Request, env: Env): Promise<Admin> {
+/**
+ * Any signed-in account (admin or sales). An account still on a temporary
+ * password can only change it (`allowTemporary`) until it has.
+ */
+async function requireAccount(request: Request, env: Env, allowTemporary = false): Promise<Admin> {
   const header = request.headers.get('Authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   if (!token) throw new HttpError(401, 'Sign in to make changes.');
   const admin = await env.DB.prepare(
-    `SELECT a.id, a.email, a.name FROM sessions s JOIN admins a ON a.id = s.admin_id
+    `SELECT a.id, a.email, a.name, a.title, a.role, a.must_change_password FROM sessions s JOIN admins a ON a.id = s.admin_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND a.disabled = 0`,
   )
     .bind(await hashToken(token), now())
     .first<Admin>();
   if (!admin) throw new HttpError(401, 'Your session has expired. Sign in again.');
+  if (admin.must_change_password && !allowTemporary) throw new HttpError(403, 'Choose your own password first.');
   return admin;
+}
+
+/** A signed-in admin; sales accounts get 403. */
+async function requireAdmin(request: Request, env: Env): Promise<Admin> {
+  const account = await requireAccount(request, env);
+  if (account.role !== 'admin') throw new HttpError(403, 'Only admins can do this.');
+  return account;
+}
+
+/** The signed-in account (admin or sales), or null for everyone else (no error). */
+async function accountOrNull(request: Request, env: Env): Promise<Admin | null> {
+  try {
+    return await requireAccount(request, env);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the public may see of a content record. Client records hold a
+ * contact person's name and email: only signed-in accounts get those.
+ */
+function publicContent(key: string, data: unknown): unknown {
+  if (key.startsWith('client:') && data && typeof data === 'object') {
+    const { contact: _contact, ...rest } = data as Record<string, unknown>;
+    return { ...rest, contact: { name: '', email: '' } };
+  }
+  return data;
 }
 
 async function audit(env: Env, admin: Admin, action: string, target: string, detail?: unknown) {
@@ -163,7 +220,7 @@ async function login(request: Request, env: Env): Promise<Response> {
   }
 
   const record = await env.DB.prepare(
-    'SELECT id, email, name, password_hash, password_salt, iterations, disabled FROM admins WHERE email = ?',
+    'SELECT id, email, name, title, role, must_change_password, password_hash, password_salt, iterations, disabled FROM admins WHERE email = ?',
   )
     .bind(email)
     .first<Admin & { password_hash: string; password_salt: string; iterations: number; disabled: number }>();
@@ -178,7 +235,7 @@ async function login(request: Request, env: Env): Promise<Response> {
       env.DB.prepare('INSERT INTO login_attempts (key) VALUES (?)').bind(`ip:${ip}`),
     ]);
     // Same message whether the email exists or not.
-    throw new HttpError(401, 'That email and password don’t match an admin account.');
+    throw new HttpError(401, 'That email and password don’t match an account.');
   }
 
   const token = newSessionToken();
@@ -192,7 +249,7 @@ async function login(request: Request, env: Env): Promise<Response> {
     env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now()),
     env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(`email:${email}`),
   ]);
-  return json({ token, expiresAt, admin: { email: record.email, name: record.name } });
+  return json({ token, expiresAt, account: profile(record), admin: profile(record) });
 }
 
 async function logout(request: Request, env: Env): Promise<Response> {
@@ -203,7 +260,7 @@ async function logout(request: Request, env: Env): Promise<Response> {
 }
 
 async function changePassword(request: Request, env: Env): Promise<Response> {
-  const admin = await requireAdmin(request, env);
+  const admin = await requireAccount(request, env, true);
   const body = await readJson<{ current?: unknown; next?: unknown }>(request);
   const current = typeof body.current === 'string' ? body.current : '';
   const next = typeof body.next === 'string' ? body.next : '';
@@ -222,7 +279,7 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
   const header = request.headers.get('Authorization') ?? '';
   const keep = await hashToken(header.slice(7).trim());
   await env.DB.batch([
-    env.DB.prepare('UPDATE admins SET password_hash = ?, password_salt = ?, iterations = ? WHERE id = ?').bind(
+    env.DB.prepare('UPDATE admins SET password_hash = ?, password_salt = ?, iterations = ?, must_change_password = 0 WHERE id = ?').bind(
       toBase64(hash),
       toBase64(salt),
       PBKDF2_ITERATIONS,
@@ -234,9 +291,158 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+async function updateMe(request: Request, env: Env): Promise<Response> {
+  const me = await requireAccount(request, env);
+  const body = await readJson<{ name?: unknown; title?: unknown }>(request);
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : me.name;
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : me.title;
+  if (!name) throw new HttpError(400, 'Enter your name.');
+  await env.DB.prepare('UPDATE admins SET name = ?, title = ? WHERE id = ?').bind(name, title, me.id).run();
+  await audit(env, me, 'account.profile', me.email);
+  return json({ account: profile({ ...me, name, title }) });
+}
+
+// ── accounts (admins manage everyone's) ───────────────────────────────
+
+type AccountRow = Admin & { disabled: number; created_at: string };
+
+async function listAccounts(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env);
+  const rows = await env.DB.prepare(
+    'SELECT id, email, name, title, role, must_change_password, disabled, created_at FROM admins ORDER BY role, name COLLATE NOCASE',
+  ).all<AccountRow>();
+  return json({ accounts: rows.results.map((r) => ({ ...profile(r), disabled: r.disabled === 1, createdAt: r.created_at })) });
+}
+
+function checkPassword(password: unknown): string {
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+    throw new HttpError(400, `Use at least ${MIN_PASSWORD_LENGTH} characters for the password.`);
+  }
+  return password;
+}
+
+async function createAccount(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  const body = await readJson<{ email?: unknown; name?: unknown; title?: unknown; role?: unknown; password?: unknown }>(request);
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
+  const role = ROLES.includes(body.role as Role) ? (body.role as Role) : 'sales';
+  if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  if (!name) throw new HttpError(400, 'Enter their name.');
+  const password = checkPassword(body.password);
+  const exists = await env.DB.prepare('SELECT id FROM admins WHERE email = ?').bind(email).first();
+  if (exists) throw new HttpError(409, 'There’s already an account with that email.');
+  const salt = newSalt();
+  const hash = await hashPassword(password, salt, PBKDF2_ITERATIONS);
+  // The person must choose their own password when they first sign in.
+  await env.DB.prepare(
+    'INSERT INTO admins (email, name, title, role, password_hash, password_salt, iterations, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
+  )
+    .bind(email, name, title, role, toBase64(hash), toBase64(salt), PBKDF2_ITERATIONS)
+    .run();
+  await audit(env, admin, 'account.create', email, { role });
+  return json({ ok: true }, 201);
+}
+
+async function updateAccount(request: Request, env: Env, rawId: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(404, 'Not found.');
+  const target = await env.DB.prepare('SELECT id, email, name, title, role, must_change_password, disabled, created_at FROM admins WHERE id = ?')
+    .bind(id)
+    .first<AccountRow>();
+  if (!target) throw new HttpError(404, 'No such account.');
+  const body = await readJson<{ name?: unknown; title?: unknown; role?: unknown; disabled?: unknown; password?: unknown }>(request);
+  const self = id === admin.id;
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 100) : target.name;
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : target.title;
+  const role = ROLES.includes(body.role as Role) ? (body.role as Role) : target.role;
+  const disabled = typeof body.disabled === 'boolean' ? body.disabled : target.disabled === 1;
+  if (self && (role !== 'admin' || disabled)) throw new HttpError(400, 'You can’t remove your own admin access. Ask another admin.');
+  const statements = [
+    env.DB.prepare('UPDATE admins SET name = ?, title = ?, role = ?, disabled = ? WHERE id = ?').bind(name, title, role, disabled ? 1 : 0, id),
+  ];
+  if (body.password !== undefined) {
+    const salt = newSalt();
+    const hash = await hashPassword(checkPassword(body.password), salt, PBKDF2_ITERATIONS);
+    statements.push(
+      env.DB.prepare('UPDATE admins SET password_hash = ?, password_salt = ?, iterations = ?, must_change_password = 1 WHERE id = ?').bind(
+        toBase64(hash),
+        toBase64(salt),
+        PBKDF2_ITERATIONS,
+        id,
+      ),
+    );
+  }
+  // A reset password, a switched-off account or a lost role signs them out everywhere.
+  if (body.password !== undefined || disabled || role !== target.role) {
+    statements.push(env.DB.prepare('DELETE FROM sessions WHERE admin_id = ?').bind(id));
+  }
+  await env.DB.batch(statements);
+  await audit(env, admin, 'account.update', target.email, { role, disabled, passwordReset: body.password !== undefined });
+  return json({ ok: true });
+}
+
+// ── campaigns ─────────────────────────────────────────────────────────
+
+type CampaignRow = { id: string; owner_id: number; data: string; rev: number; updated_at: string; owner_name: string; owner_email: string };
+
+function campaignJson(r: CampaignRow) {
+  return { campaign: JSON.parse(r.data), rev: r.rev, ownerId: r.owner_id, ownerName: r.owner_name || r.owner_email, updatedAt: r.updated_at };
+}
+
+const CAMPAIGN_SELECT = `SELECT c.id, c.owner_id, c.data, c.rev, c.updated_at, a.name AS owner_name, a.email AS owner_email
+  FROM campaigns c JOIN admins a ON a.id = c.owner_id`;
+
+async function listCampaigns(request: Request, env: Env): Promise<Response> {
+  const me = await requireAccount(request, env);
+  const rows =
+    me.role === 'admin'
+      ? await env.DB.prepare(`${CAMPAIGN_SELECT} ORDER BY c.updated_at DESC`).all<CampaignRow>()
+      : await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.owner_id = ? ORDER BY c.updated_at DESC`).bind(me.id).all<CampaignRow>();
+  // Staff names, so activity by colleagues shows who did it. Accounts are "a-<id>" in campaigns.
+  const people = await env.DB.prepare('SELECT id, name, email, title FROM admins').all<{ id: number; name: string; email: string; title: string }>();
+  return json({
+    campaigns: rows.results.map(campaignJson),
+    people: people.results.map((p) => ({ id: `a-${p.id}`, name: p.name || p.email, email: p.email, title: p.title })),
+  });
+}
+
+async function putCampaign(request: Request, env: Env, id: string): Promise<Response> {
+  const me = await requireAccount(request, env);
+  if (!CAMPAIGN_ID_PATTERN.test(id)) throw new HttpError(400, 'Invalid campaign id.');
+  const body = await readJson<{ campaign?: unknown; rev?: unknown }>(request, MAX_CAMPAIGN_BYTES);
+  const c = body.campaign as { id?: unknown; name?: unknown; status?: unknown; items?: unknown; events?: unknown } | undefined;
+  if (!c || typeof c !== 'object' || c.id !== id || typeof c.name !== 'string' || typeof c.status !== 'string' || !Array.isArray(c.items) || !Array.isArray(c.events)) {
+    throw new HttpError(400, 'Send the campaign as { campaign: {...}, rev }.');
+  }
+  const rev = Number.isInteger(body.rev) ? (body.rev as number) : 0;
+  const data = JSON.stringify(c);
+  const at = now();
+  const existing = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow>();
+  if (!existing) {
+    await env.DB.prepare('INSERT INTO campaigns (id, owner_id, data, rev, created_at, updated_at, updated_by) VALUES (?, ?, ?, 1, ?, ?, ?)')
+      .bind(id, me.id, data, at, at, me.email)
+      .run();
+    return json({ rev: 1, ownerId: me.id, ownerName: me.name || me.email, updatedAt: at }, 201);
+  }
+  if (existing.owner_id !== me.id && me.role !== 'admin') throw new HttpError(403, 'This campaign belongs to someone else.');
+  if (existing.rev !== rev) return json({ error: 'This campaign was changed somewhere else.', latest: campaignJson(existing) }, 409);
+  const result = await env.DB.prepare('UPDATE campaigns SET data = ?, rev = rev + 1, updated_at = ?, updated_by = ? WHERE id = ? AND rev = ?')
+    .bind(data, at, me.email, id, rev)
+    .run();
+  if (!result.meta.changes) {
+    const latest = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow>();
+    return json({ error: 'This campaign was changed somewhere else.', latest: latest ? campaignJson(latest) : null }, 409);
+  }
+  return json({ rev: rev + 1, ownerId: existing.owner_id, ownerName: existing.owner_name || existing.owner_email, updatedAt: at });
+}
+
 // ── data ──────────────────────────────────────────────────────────────
 
-async function getData(env: Env): Promise<Response> {
+async function getData(request: Request, env: Env): Promise<Response> {
+  const admin = await accountOrNull(request, env);
   const [specs, pins, assets, planPins, content] = await env.DB.batch([
     env.DB.prepare('SELECT id, mall_id, is_new, data, updated_at FROM specs'),
     env.DB.prepare('SELECT spec_id, lng, lat, level, updated_at FROM pins'),
@@ -260,7 +466,7 @@ async function getData(env: Env): Promise<Response> {
     })),
     content: (content.results as { key: string; data: string; updated_at: string }[]).map((row) => ({
       key: row.key,
-      data: JSON.parse(row.data),
+      data: admin ? JSON.parse(row.data) : publicContent(row.key, JSON.parse(row.data)),
       updatedAt: row.updated_at,
     })),
   });
@@ -285,14 +491,38 @@ async function postApproval(request: Request, env: Env): Promise<Response> {
   if ((recent?.n ?? 0) >= MAX_APPROVALS_PER_IP_HOUR) throw new HttpError(429, 'Too many approvals from this connection. Try again later.');
 
   const at = now();
-  await env.DB.batch([
+  const statements = [
     env.DB.prepare('INSERT INTO approvals (campaign_id, name, note, screens, at) VALUES (?, ?, ?, ?, ?)').bind(campaignId, name, note, screens, at),
     env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`approve:${ip}`, at),
-  ]);
+  ];
+  // Mark the saved campaign approved straight away, so sales see it on any
+  // device even if they're offline. Only a proposal that's waiting (sent).
+  const row = await env.DB.prepare('SELECT data, rev FROM campaigns WHERE id = ?').bind(campaignId).first<{ data: string; rev: number }>();
+  if (row) {
+    const c = JSON.parse(row.data) as { status?: string; events?: unknown[]; updatedAt?: string };
+    if (c.status === 'sent') {
+      const event = (text: string, kind: string, n: number) => ({ id: `e-appr-${Date.now().toString(36)}-${n}`, at, by: 'client', text, kind });
+      const events = [
+        ...(Array.isArray(c.events) ? c.events : []),
+        event(`Approved the proposal on the booking page${name ? ` (${name})` : ''}`, 'status', 1),
+        ...(note ? [event(note, 'message', 2)] : []),
+      ];
+      statements.push(
+        env.DB.prepare('UPDATE campaigns SET data = ?, rev = rev + 1, updated_at = ?, updated_by = ? WHERE id = ? AND rev = ?').bind(
+          JSON.stringify({ ...c, status: 'approved', updatedAt: at, events }),
+          at,
+          'client (booking page)',
+          campaignId,
+          row.rev,
+        ),
+      );
+    }
+  }
+  await env.DB.batch(statements);
   return json({ ok: true, approval: { campaignId, name, note, screens, at } });
 }
 
-async function getApprovals(url: URL, env: Env): Promise<Response> {
+async function getApprovals(request: Request, url: URL, env: Env): Promise<Response> {
   const ids = (url.searchParams.get('ids') ?? '').split(',').filter((x) => CAMPAIGN_ID_PATTERN.test(x)).slice(0, 100);
   if (!ids.length) return json({ approvals: [] });
   const rows = await env.DB.prepare(
@@ -300,11 +530,20 @@ async function getApprovals(url: URL, env: Env): Promise<Response> {
   )
     .bind(...ids)
     .all<{ campaign_id: string; name: string; note: string; screens: number; at: string }>();
-  return json({ approvals: rows.results.map((r) => ({ campaignId: r.campaign_id, name: r.name, note: r.note, screens: r.screens, at: r.at })) });
+  // Who approved and their note are for Primedia (signed-in accounts) only;
+  // anyone else learns just that, and when, the proposal was approved.
+  const admin = await accountOrNull(request, env);
+  return json({
+    approvals: rows.results.map((r) => ({ campaignId: r.campaign_id, name: admin ? r.name : '', note: admin ? r.note : '', screens: r.screens, at: r.at })),
+  });
 }
 
+/** Client records (contacts) may be kept up to date by sales as well as admins. */
+const contentEditor = (request: Request, env: Env, key: string) =>
+  key.startsWith('client:') ? requireAccount(request, env) : requireAdmin(request, env);
+
 async function putContent(request: Request, env: Env, key: string): Promise<Response> {
-  const admin = await requireAdmin(request, env);
+  const admin = await contentEditor(request, env, key);
   const body = await readJson<{ data?: unknown }>(request);
   if (body.data == null || typeof body.data !== 'object') throw new HttpError(400, 'Send the content as { data: {...} }.');
   const data = JSON.stringify(body.data);
@@ -318,7 +557,7 @@ async function putContent(request: Request, env: Env, key: string): Promise<Resp
 }
 
 async function deleteContent(request: Request, env: Env, key: string): Promise<Response> {
-  const admin = await requireAdmin(request, env);
+  const admin = await contentEditor(request, env, key);
   await env.DB.prepare('DELETE FROM content WHERE key = ?').bind(key).run();
   await audit(env, admin, 'content.delete', key);
   return json({ ok: true });
@@ -630,10 +869,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'PATCH') return updateAsset(request, env, id);
     if (method === 'DELETE') return deleteAsset(request, env, id);
   }
-  if (resource === 'data' && method === 'GET') return getData(env);
+  if (resource === 'data' && method === 'GET') return getData(request, env);
   if (resource === 'approvals' && !id) {
     if (method === 'POST') return postApproval(request, env);
-    if (method === 'GET') return getApprovals(url, env);
+    if (method === 'GET') return getApprovals(request, url, env);
   }
   if (resource === 'content' && id) {
     if (!CONTENT_KEY_PATTERN.test(id)) throw new HttpError(400, 'Invalid content key.');
@@ -644,8 +883,23 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (resource === 'auth') {
     if (id === 'login' && method === 'POST') return login(request, env);
     if (id === 'logout' && method === 'POST') return logout(request, env);
-    if (id === 'me' && method === 'GET') return json({ admin: await requireAdmin(request, env) });
+    if (id === 'me' && method === 'GET') {
+      const me = profile(await requireAccount(request, env, true));
+      return json({ account: me, admin: me });
+    }
+    if (id === 'me' && method === 'PATCH') return updateMe(request, env);
     if (id === 'password' && method === 'POST') return changePassword(request, env);
+  }
+
+  if (resource === 'campaigns') {
+    if (!id && method === 'GET') return listCampaigns(request, env);
+    if (id && method === 'PUT') return putCampaign(request, env, id);
+  }
+
+  if (resource === 'accounts') {
+    if (!id && method === 'GET') return listAccounts(request, env);
+    if (!id && method === 'POST') return createAccount(request, env);
+    if (id && method === 'PATCH') return updateAccount(request, env, id);
   }
 
   if ((resource === 'pins' || resource === 'specs' || resource === 'plan-pins') && id) {

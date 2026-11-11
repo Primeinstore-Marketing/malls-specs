@@ -6,22 +6,39 @@ import { withBasePath } from '@/lib/basePath';
 import { api, ApiError, apiConfigured, getStoredToken, storeToken } from '@/lib/api';
 import type { AdminProfile } from '@/lib/api';
 import { refreshLiveData } from '@/lib/liveData';
+import { setSessionUser } from '@/lib/portal/seed';
+import type { PortalUser } from '@/lib/portal/types';
 
 /**
- * Who's signed in. Only admins have accounts — there's no public sign-up —
- * so "signed in" means "may edit". The server checks the session on every
- * change regardless; this context just decides what the UI offers.
+ * Who's signed in. Primedia accounts only (no public sign-up): admins, who
+ * also get Site admin, and sales. Both use email and password and both get
+ * the workspace. The server checks the session and role on every change;
+ * this context just decides what the UI offers.
  */
+
+/** The workspace's view of an account. */
+function asPortalUser(a: AdminProfile): PortalUser {
+  return { id: `a-${a.id}`, name: a.name || a.email, email: a.email, role: 'sales', title: a.title || (a.role === 'admin' ? 'Primedia Malls' : 'Sales, Primedia Malls') };
+}
 
 type SessionStatus = 'checking' | 'signed-out' | 'signed-in';
 
 interface AdminSessionValue {
   readonly status: SessionStatus;
+  /** The signed-in account (admin or sales). */
   readonly admin: AdminProfile | null;
+  readonly account: AdminProfile | null;
+  /** Signed in with the admin role (and a password of their own). */
   readonly isAdmin: boolean;
+  /** Signed in at all, admin or sales. */
+  readonly isSignedIn: boolean;
+  /** On a temporary password: must choose their own before anything else. */
+  readonly mustChangePassword: boolean;
+  /** After a profile or password change. */
+  readonly setAccount: (account: AdminProfile) => void;
   /** False when the site was built without an API, so sign-in can't work. */
   readonly available: boolean;
-  readonly signIn: (email: string, password: string) => Promise<void>;
+  readonly signIn: (email: string, password: string) => Promise<AdminProfile>;
   readonly signOut: () => Promise<void>;
   /** Call when the API rejects a session (expired / revoked). */
   readonly sessionExpired: () => void;
@@ -33,6 +50,12 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('checking');
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
 
+  // The workspace follows the account (only once the password is their own).
+  useEffect(() => {
+    if (status === 'checking') return;
+    setSessionUser(admin && !admin.mustChangePassword ? asPortalUser(admin) : null);
+  }, [status, admin]);
+
   useEffect(() => {
     // Everyone gets the latest edits, signed in or not.
     void refreshLiveData();
@@ -43,7 +66,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     }
     api
       .me()
-      .then(({ admin: profile }) => {
+      .then(({ account: profile }) => {
         setAdmin(profile);
         setStatus('signed-in');
       })
@@ -57,8 +80,16 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const result = await api.login(email, password);
     storeToken(result.token);
-    setAdmin(result.admin);
+    setAdmin(result.account);
     setStatus('signed-in');
+    // Signed-in accounts also get what the public doesn't (client contacts).
+    void refreshLiveData();
+    return result.account;
+  }, []);
+
+  const setAccount = useCallback((account: AdminProfile) => {
+    setAdmin(account);
+    void refreshLiveData();
   }, []);
 
   // Signing out always lands on the home page (an expired session doesn't move you).
@@ -85,13 +116,17 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       admin,
-      isAdmin: status === 'signed-in',
+      account: admin,
+      isAdmin: status === 'signed-in' && admin?.role === 'admin' && !admin.mustChangePassword,
+      isSignedIn: status === 'signed-in' && Boolean(admin),
+      mustChangePassword: status === 'signed-in' && Boolean(admin?.mustChangePassword),
+      setAccount,
       available: apiConfigured,
       signIn,
       signOut,
       sessionExpired,
     }),
-    [status, admin, signIn, signOut, sessionExpired],
+    [status, admin, signIn, signOut, sessionExpired, setAccount],
   );
 
   return <AdminSessionContext.Provider value={value}>{children}</AdminSessionContext.Provider>;

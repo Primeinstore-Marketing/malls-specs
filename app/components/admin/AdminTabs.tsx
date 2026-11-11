@@ -8,6 +8,7 @@ const TABS = [
   { label: 'Screens', href: '/admin/specs' },
   { label: 'Clients', href: '/admin/clients' },
   { label: 'Photo rights', href: '/admin/photos' },
+  { label: 'Accounts', href: '/admin/users' },
 ] as const;
 
 export function AdminTabs() {

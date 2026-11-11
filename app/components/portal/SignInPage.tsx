@@ -1,22 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { networkStats, compact } from '@/lib/insights';
 import { useLiveData } from '@/lib/liveData';
-import { userById } from '@/lib/portal/logic';
 import { usePortalUser } from '@/lib/portal/store';
-import { AccountPicker, Page } from './ui';
-import { useAuthDialog } from '@/components/auth/AuthDialogContext';
+import { Page } from './ui';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { SignInForm } from '@/components/auth/SignInForm';
 
 export function SignInPage() {
   const next = useSearchParams().get('next') ?? '/portal';
   const { user } = usePortalUser();
   useLiveData(); // the deck's data arrives from the API after the page loads
   const s = networkStats();
-  const { setOpen: openAdminSignIn } = useAuthDialog();
-  const { isAdmin, admin } = useAdminSession();
+  const { isAdmin } = useAdminSession();
+  const router = useRouter();
   return (
     <Page>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
@@ -36,28 +35,26 @@ export function SignInPage() {
           <h2 className="text-display-md text-fg">Sign in</h2>
           {user ? (
             <p className="text-body-md text-fg-muted">
-              You’re signed in as {userById(user.id)?.name}. <Link href="/portal" className="font-semibold text-accent hover:underline">Go to your campaigns</Link>, or pick another account.
+              You’re signed in as {user.name}. <Link href="/portal" className="font-semibold text-accent hover:underline">Go to your workspace</Link>
+              {isAdmin ? <> or <Link href="/admin/malls" className="font-semibold text-accent hover:underline">Site admin</Link></> : null}.
             </p>
-          ) : null}
-          <AccountPicker next={next} />
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-bg p-5">
-            <div className="flex min-w-0 flex-col">
-              <h3 className="text-body-lg font-semibold text-fg">Admin</h3>
-              <p className="text-body-sm text-fg-muted">
-                {isAdmin ? `You’re signed in as ${admin?.name ?? 'an admin'}.` : 'Keep malls, screens, pictures, clients and photo rights up to date. Email and password.'}
-              </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg p-5">
+                <div>
+                  <h3 className="text-body-lg font-semibold text-fg">Primedia staff</h3>
+                  <p className="text-body-sm text-fg-muted">Sales and admins: your work email and password.</p>
+                </div>
+                <SignInForm autoFocus onSignedIn={() => router.push(next)} />
+              </div>
+              <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5">
+                <h3 className="text-body-lg font-semibold text-fg">Clients</h3>
+                <p className="text-body-sm text-fg-muted">
+                  You don’t need to sign in. Open the link your account manager emailed you: it shows every screen booked, the artwork to supply, and lets you change or approve the proposal.
+                </p>
+              </div>
             </div>
-            {isAdmin ? (
-              <Link href="/admin/malls" className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">Go to Site admin</Link>
-            ) : (
-              <button type="button" onClick={() => openAdminSignIn(true)} className="inline-flex h-10 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">
-                Admin sign in
-              </button>
-            )}
-          </div>
-          <p className="text-body-sm text-fg-subtle">
-            Demo account — campaigns are saved in this browser only. To see the client’s side, open a proposal’s client link (“Copy client link” on any campaign).
-          </p>
+          )}
         </div>
       </div>
     </Page>

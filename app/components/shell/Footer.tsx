@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuthDialog } from '@/components/auth/AuthDialogContext';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { usePortalUser } from '@/lib/portal/store';
 
@@ -10,7 +9,6 @@ import { usePortalUser } from '@/lib/portal/store';
  * Explorer, Insights and the workspace show once someone is signed in.
  */
 export function Footer() {
-  const { setOpen: setAuthOpen } = useAuthDialog();
   const { isAdmin, signOut } = useAdminSession();
   const { user } = usePortalUser();
 
@@ -27,25 +25,28 @@ export function Footer() {
     },
     user
       ? {
-          title: user.role === 'sales' ? 'Sales' : 'Your campaigns',
+          title: 'Sales',
           links: [
-            { label: user.role === 'sales' ? 'Workspace' : 'My campaigns', href: '/portal' },
-            { label: user.role === 'sales' ? 'New proposal' : 'Propose a campaign', href: '/portal/new' },
+            { label: 'Workspace', href: '/portal' },
+            { label: 'New proposal', href: '/portal/new' },
+            { label: 'Client contacts', href: '/portal/clients' },
             { label: 'Media Explorer', href: '/explorer' },
             { label: 'Insights', href: '/insights' },
-            ...(user.role === 'sales' ? [{ label: 'Photo rights', href: '/portal/photos' }] : []),
           ],
         }
-      : { title: 'Sales', links: [{ label: 'Sales sign in', href: '/sign-in' }] },
-    {
-      title: 'Admin',
-      links: isAdmin
-        ? [
-            { label: 'Site admin', href: '/admin/malls' },
-            { label: 'Sign out of admin', onClick: () => void signOut() },
-          ]
-        : [{ label: 'Admin sign in', onClick: () => setAuthOpen(true) }],
-    },
+      : { title: 'Sales', links: [{ label: 'Sign in', href: '/sign-in' }] },
+    ...(user
+      ? [
+          {
+            title: 'Account',
+            links: [
+              ...(isAdmin ? [{ label: 'Site admin', href: '/admin/malls' }] : []),
+              { label: 'Your account', href: '/account' },
+              { label: 'Sign out', onClick: () => void signOut() },
+            ],
+          },
+        ]
+      : []),
   ];
 
   const linkClass = 'text-left text-body-sm text-fg-muted transition-colors duration-fast ease-standard hover:text-fg';

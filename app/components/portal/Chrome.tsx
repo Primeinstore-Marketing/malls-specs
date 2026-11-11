@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { compact } from '@/lib/insights';
 import { canEdit, campaignClientName, clientName, itemLabel, reach, timeAgo, userById, visibleTo } from '@/lib/portal/logic';
 import { ui, useUi } from '@/lib/portal/ui-state';
-import { portal, usePortalState } from '@/lib/portal/store';
+import { portal, useCampaignSync, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { Avatar, addWithToast } from './ui';
 import { useAdminSession } from '@/components/auth/AdminSession';
 
@@ -285,55 +285,66 @@ export function Notifications() {
   );
 }
 
-/** Signed-in sales/client: name, role, switch account, sign out. */
+/** Signed-in account (sales or admin): pages, your account, sign out. */
 export function PortalAccount() {
-  const { userId, ready } = usePortalState();
-  const { isAdmin } = useAdminSession();
+  const { user, ready } = usePortalUser();
+  const { isAdmin, account, signOut, status } = useAdminSession();
+  const sync = useCampaignSync();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   useOutside(ref, () => setOpen(false), open);
-  if (!ready) return null;
-  const user = userId ? userById(userId) : undefined;
+  if (!ready || status === 'checking') return null;
   if (!user) {
-    // Admins have their own menu; don't offer the sales sign-in next to it.
-    if (isAdmin) return null;
     return (
       <Link href="/sign-in" className="inline-flex h-8 items-center rounded-full bg-accent px-3.5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
         Sign in
       </Link>
     );
   }
+  const links: [string, string][] = [
+    ['/portal', 'Sales workspace'],
+    ['/portal/new', 'New proposal'],
+    ['/portal/clients', 'Client contacts'],
+    ['/insights', 'Audience insights'],
+    ['/portal/photos', 'Photo rights'],
+  ];
   return (
-    <div className="relative" ref={ref}>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-2 rounded-full p-0.5 pr-2 hover:bg-bg-subtle">
+    <div className="relative flex items-center gap-2" ref={ref}>
+      <span role="status" className="text-[12px] text-fg-subtle">
+        {sync.saving ? 'Saving…' : sync.error ? <span className="font-semibold text-danger-fg" title={sync.error}>Not saved — retrying</span> : null}
+      </span>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" className="flex items-center gap-2 rounded-full p-0.5 pr-2 hover:bg-bg-subtle">
         <Avatar user={user} size="sm" />
         <span className="hidden text-body-sm font-medium text-fg md:inline">{user.name.split(' ')[0]}</span>
+        {isAdmin ? <span className="hidden rounded-full bg-accent px-1.5 text-[10px] font-bold uppercase tracking-wide text-fg-on-accent sm:inline">Admin</span> : null}
       </button>
       {open ? (
-        <div className="absolute right-0 top-10 z-popover w-64 overflow-hidden rounded-xl border border-border bg-bg p-2 shadow-3">
+        <div role="menu" className="absolute right-0 top-10 z-popover w-64 overflow-hidden rounded-xl border border-border bg-bg p-2 shadow-3">
           <div className="px-2 py-2">
-            <div className="text-body-sm font-semibold text-fg">{user.name}</div>
-            <div className="text-body-sm text-fg-muted">{user.role === 'sales' ? 'Primedia sales' : clientName(user.clientId ?? null)}</div>
+            <div className="truncate text-body-sm font-semibold text-fg">{user.name}</div>
+            <div className="truncate text-body-sm text-fg-muted">{account?.email}</div>
+            <div className="text-[12px] text-fg-subtle">{isAdmin ? 'Admin' : 'Primedia sales'}</div>
           </div>
-          {[
-            ['/portal', user.role === 'sales' ? 'Sales workspace' : 'My campaigns'],
-            ['/portal/new', user.role === 'sales' ? 'New proposal' : 'Propose a campaign'],
-            ['/insights', 'Audience insights'],
-            ...(user.role === 'sales' ? [['/portal/photos', 'Photo rights']] : []),
-          ].map(([href, label]) => (
-            <Link key={href} href={href} onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm text-fg hover:bg-bg-subtle">
+          {links.map(([href, label]) => (
+            <Link key={href} href={href} role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm text-fg hover:bg-bg-subtle">
               {label}
             </Link>
           ))}
+          {isAdmin ? (
+            <Link href="/admin/malls" role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm font-semibold text-fg hover:bg-bg-subtle">
+              Site admin
+            </Link>
+          ) : null}
           <hr className="my-1 border-border" />
+          <Link href="/account" role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm text-fg hover:bg-bg-subtle">
+            Your account and password
+          </Link>
           <button
             type="button"
+            role="menuitem"
             onClick={() => {
               setOpen(false);
-              portal.signOut();
-              // A full load of the home page: a client-side push can be dropped as this menu unmounts.
-              window.location.assign(withBasePath('/'));
+              void signOut();
             }}
             className="block w-full rounded-md px-2 py-1.5 text-left text-body-sm text-fg hover:bg-bg-subtle"
           >
@@ -355,8 +366,10 @@ export function PortalDrawer() {
         ['/portal', user.role === 'sales' ? 'Workspace' : 'My campaigns'],
         ['/explorer', 'Media Explorer'],
         ['/insights', 'Insights'],
-        ['/portal/new', user.role === 'sales' ? 'New proposal' : 'Propose a campaign'],
-        ...(user.role === 'sales' ? [['/portal/photos', 'Photo rights']] : []),
+        ['/portal/new', 'New proposal'],
+        ['/portal/clients', 'Client contacts'],
+        ['/portal/photos', 'Photo rights'],
+        ['/account', 'Your account'],
         ['/', 'Screen specs'],
       ]
     : [

@@ -6,8 +6,9 @@ import type { ReactNode } from 'react';
 import { CLIENTS, USERS } from '@/lib/portal/seed';
 import { CLIENT_STATUS_TONE, STATUS_TONE, canEdit, formatRange, itemLabel, statusLabel } from '@/lib/portal/logic';
 import { ui } from '@/lib/portal/ui-state';
-import { portal, usePortalState, usePortalUser } from '@/lib/portal/store';
+import { portal, refreshCampaigns, useCampaignSync, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { useLiveData } from '@/lib/liveData';
+import { SignInForm } from '@/components/auth/SignInForm';
 import type { CampaignStatus, NewCampaignItem, PortalUser } from '@/lib/portal/types';
 
 /* ---------- Small pieces ---------- */
@@ -100,57 +101,24 @@ export function Avatar({ user, size = 'md' }: { user: PortalUser | undefined; si
   );
 }
 
-/** Sales accounts, plus a pointer for clients, who don't sign in: they use the emailed link. */
-export function AccountPicker({ next }: { next?: string }) {
-  const router = useRouter();
-  const groups: { title: string; note: string; users: PortalUser[] }[] = [
-    { title: 'Primedia sales', note: 'Build proposals, send them to clients and confirm bookings.', users: USERS.filter((u) => u.role === 'sales') },
-  ];
-  return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div className="order-last flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5 md:order-none md:col-start-2">
-        <h3 className="text-body-lg font-semibold text-fg">Clients</h3>
-        <p className="text-body-sm text-fg-muted">
-          You don’t need to sign in. Open the link your account manager emailed you: it shows every screen booked, the artwork to supply, and lets you change or approve the proposal.
-        </p>
-      </div>
-      {groups.map((g) => (
-        <div key={g.title} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg p-5 md:col-start-1 md:row-start-1">
-          <div>
-            <h3 className="text-body-lg font-semibold text-fg">{g.title}</h3>
-            <p className="text-body-sm text-fg-muted">{g.note}</p>
-          </div>
-          {g.users.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => {
-                portal.signIn(u.id);
-                router.push(next || '/portal');
-              }}
-              className="flex items-center gap-3 rounded-xl border border-border-strong px-3 py-2.5 text-left transition-colors duration-fast ease-standard hover:border-accent hover:bg-accent-subtle"
-            >
-              <Avatar user={u} />
-              <span className="flex min-w-0 flex-col">
-                <strong className="text-body-md font-semibold text-fg">{u.name}</strong>
-                <span className="truncate text-body-sm text-fg-muted">{u.title}</span>
-              </span>
-              <span className="ml-auto shrink-0 whitespace-nowrap text-body-sm font-semibold text-accent">Sign in →</span>
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Shows the page to signed-in sales and clients; everyone else gets the sign-in. */
 export function RequireSignIn({ children, what = 'this page' }: { children: (user: PortalUser) => ReactNode; what?: string }) {
   const { user, ready } = usePortalUser();
-  const pathname = usePathname();
+  const sync = useCampaignSync();
   // Re-render when admin-edited content arrives from the API.
   useLiveData();
   if (!ready) return <Page><div className="h-64 animate-pulse rounded-2xl bg-bg-subtle" /></Page>;
+  if (user && sync.failedToLoad) {
+    return (
+      <Page>
+        <div className="flex flex-col items-start gap-3 rounded-3xl bg-warning-bg p-6 text-warning-fg">
+          <h1 className="text-display-sm">We couldn’t load your campaigns</h1>
+          <p className="text-body-md">Check your connection and try again. Nothing has been lost: campaigns are saved on the server.</p>
+          <button type="button" onClick={() => void refreshCampaigns()} className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">Try again</button>
+        </div>
+      </Page>
+    );
+  }
   if (user) return <>{children(user)}</>;
   return (
     <Page>
@@ -161,10 +129,16 @@ export function RequireSignIn({ children, what = 'this page' }: { children: (use
           The Media Explorer, audience insights and the campaign workspace are for Primedia sales.
         </p>
       </div>
-      <AccountPicker next={pathname + (typeof window !== 'undefined' ? window.location.search : '')} />
-      <p className="text-body-sm text-fg-subtle">
-        Demo account — campaigns are saved in this browser only.
-      </p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg p-5">
+          <h2 className="text-body-lg font-semibold text-fg">Primedia staff</h2>
+          <SignInForm />
+        </div>
+        <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5">
+          <h2 className="text-body-lg font-semibold text-fg">Clients</h2>
+          <p className="text-body-sm text-fg-muted">You don’t need to sign in. Open the link your account manager emailed you.</p>
+        </div>
+      </div>
     </Page>
   );
 }

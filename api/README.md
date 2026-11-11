@@ -80,12 +80,29 @@ copying across once.
    npm run create-admin -- mosesm@primeinstore.co.za "Moses Mkhumbuza"
    ```
 
+## Accounts
+
+Everyone signs in with email and password. The `admins` table holds every
+account; `role` is `admin` (Site admin, accounts, everything) or `sales`
+(the workspace, and client contacts: `client:*` content). Client contacts
+and approvers' names are only sent to signed-in accounts. An account on a
+temporary password can do nothing but change it.
+
+## Campaigns
+
+The sales workspace saves campaigns in the `campaigns` table (the whole
+campaign as JSON, plus `owner_id` and `rev`). Sales see and change their
+own; admins see and change everyone's. Each save sends the revision it was
+based on and gets 409 with the latest if it changed meanwhile. When a client
+approves on their booking page, the API marks the campaign approved itself.
+Campaigns saved in a browser before this are uploaded once at sign-in.
+
 ## Day to day
 
 | Task | Command (in `api/`) |
 |---|---|
-| Add an admin, or reset a password | `npm run create-admin -- name@example.com "Full Name"` |
-| Disable an admin | `npx wrangler d1 execute malls-specs --remote --command "UPDATE admins SET disabled = 1 WHERE email = 'name@example.com'"` |
+| Add a person (sales or admin), reset a password, switch an account off | On the site: **Site admin → Accounts**. New accounts and resets get a temporary password the person changes at first sign-in. |
+| Add the first admin, or reset an admin's password from the command line | `npm run create-admin -- name@example.com "Full Name"` |
 | See recent changes | `npx wrangler d1 execute malls-specs --remote --command "SELECT at, admin, action, target FROM audit_log ORDER BY id DESC LIMIT 50"` |
 | Back up everything | `npx wrangler d1 export malls-specs --remote --output backup.sql` |
 | Deploy code changes | `npm run deploy` |
