@@ -11,7 +11,7 @@ export function SizeDownloads({ files, compact = false }: { files: readonly Size
   if (!files.length) return null;
   const one = files.length === 1;
   return (
-    <ul className="flex flex-col gap-2 print:hidden">
+    <ul className="flex flex-col gap-2">
       {files.map((f) => (
         <li key={f.specId} className="flex flex-col gap-1">
           {one ? null : <span className="text-[12px] text-fg-muted">{f.label}</span>}

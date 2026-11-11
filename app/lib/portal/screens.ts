@@ -72,6 +72,73 @@ function fromSpec(spec: Specification | undefined, catalogue: Catalogue) {
   };
 }
 
+/* ---------- Which of the mall's own screens a deck package is ---------- */
+
+const norm = (t: string) =>
+  ` ${t
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/food\s*court/g, 'foodcourt')
+    .replace(/promotions?/g, 'promo')
+    .replace(/woolworths?/g, 'woolworth')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()} `;
+
+/** Words in a spec title that say nothing about where the screen is. */
+const GENERIC_WORDS = new Set(['digi', 'digital', 'impact', 'screen', 'screens', 'packages', 'package', 'mall', 'and', 'the', 'centre', 'video', 'wall', 'walls']);
+
+/** How much of a spec title's place words appear in the package's site list: 0 when any are missing. */
+function placeScore(spec: Specification, mallWords: ReadonlySet<string>, sites: string): number {
+  const words = norm(spec.title).trim().split(' ').filter((w) => w && !GENERIC_WORDS.has(w) && !mallWords.has(w));
+  if (!words.length) return 0;
+  return words.every((w) => sites.includes(` ${w} `)) ? words.length : 0;
+}
+
+/**
+ * The mall's own spec for a package, best evidence first:
+ *  1. a screen whose name matches the package's site list ("Food Court", "Cavendish Court", "Sky"),
+ *  2. a screen named for the format ("… Digi Engage", "… MTV"),
+ *  3. for Digital Impact, the mall's only screen.
+ * Returns undefined when the network-wide spec should be used.
+ */
+function ownSpecFor(pkg: { format: string; sites: string; name: string }, appMall: { name: string; specIds: readonly string[] }, catalogue: Catalogue, rule: { keyword: RegExp } | undefined): Specification | undefined {
+  const specs = appMall.specIds.map((id) => catalogue.specifications[id]).filter((x): x is Specification => Boolean(x && !x.archivedAt && getScreenSize(x)));
+  if (!specs.length) return undefined;
+  const isImpact = pkg.format === 'Digital Impact';
+  if (isImpact) {
+    const mallWords = new Set(norm(appMall.name).trim().split(' '));
+    const sites = norm(`${pkg.sites} ${pkg.name}`);
+    const scored = specs.map((x) => ({ x, score: placeScore(x, mallWords, sites) })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+    if (scored.length && (scored.length === 1 || scored[0].score > scored[1].score)) return scored[0].x;
+  }
+  const byFormat = rule ? specs.filter((x) => rule.keyword.test(x.title)) : [];
+  if (byFormat.length === 1) return byFormat[0];
+  if (isImpact && specs.length === 1) return specs[0];
+  return undefined;
+}
+
+/** How a package's screen was decided, for the admin preview. */
+export type SpecSource = 'chosen' | 'matched' | 'network' | 'none';
+
+/** The spec a deck package uses: the admin's choice, else the mall's matching screen, else the network-wide one. */
+export function resolvePackageSpec(
+  pkg: { format: string; sites: string; name: string; specId?: string | null },
+  appMallId: string | null | undefined,
+  catalogue: Catalogue,
+): { spec: Specification | undefined; source: SpecSource } {
+  const chosen = pkg.specId ? catalogue.specifications[pkg.specId] : undefined;
+  if (chosen) return { spec: chosen, source: 'chosen' };
+  const rule = FORMAT_SPEC[pkg.format];
+  const appMall = appMallId ? getMalls(catalogue).find((m) => m.id === appMallId) : undefined;
+  const own = rule && appMall ? ownSpecFor(pkg, appMall, catalogue, rule) : undefined;
+  if (own) return { spec: own, source: 'matched' };
+  const network = rule ? catalogue.specifications[rule.specId] : undefined;
+  return { spec: network, source: network ? 'network' : 'none' };
+}
+
+/** Network-wide specs, for the admin's "screen" choice. */
+export const NETWORK_SPEC_IDS = Object.values(FORMAT_SPEC).map((r) => r.specId);
+
 export function screensFor(item: CampaignItem, catalogue: Catalogue): BookedScreen[] {
   if (item.kind === 'screen') {
     const spec = catalogue.specifications[item.specId];
@@ -82,12 +149,8 @@ export function screensFor(item: CampaignItem, catalogue: Catalogue): BookedScre
   if (!found) return [];
   const { mall, pkg } = found;
   const rule = FORMAT_SPEC[pkg.format];
-  // This mall's own spec for the format, if the site has one.
-  const appMall = mall.appMallId ? getMalls(catalogue).find((m) => m.id === mall.appMallId) : undefined;
-  const own = rule && appMall
-    ? appMall.specIds.map((id) => catalogue.specifications[id]).find((s) => s && rule.keyword.test(s.title) && getScreenSize(s))
-    : undefined;
-  const spec = own ?? (rule ? catalogue.specifications[rule.specId] : undefined);
+  const { spec, source } = resolvePackageSpec(pkg, mall.appMallId, catalogue);
+  const own = source === 'chosen' || source === 'matched' ? spec : undefined;
   return [
     {
       itemId: item.id,

@@ -41,6 +41,8 @@ export interface MediaPackage {
   readonly sites: string;
   /** Slide number in the deck, for checking against the source. */
   readonly slide: number;
+  /** The screen spec an admin chose for this package (sets its size and template). Unset: matched automatically. */
+  readonly specId?: string | null;
 }
 
 export interface DeckMall {

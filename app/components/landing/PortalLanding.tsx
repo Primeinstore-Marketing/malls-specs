@@ -51,7 +51,7 @@ export function PortalLanding() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/sign-in" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-body-md font-semibold text-fg-on-accent hover:bg-accent-hover">
-                Sales sign in
+                Sign in
               </Link>
               <a href="#specs" className="inline-flex h-12 items-center rounded-full border border-white/25 px-6 text-body-md font-semibold text-brand-on-surface hover:bg-white/10">
                 Browse screen specs

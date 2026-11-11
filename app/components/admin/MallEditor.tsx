@@ -8,7 +8,10 @@ import { baseMall, deckMall, deckPhoto, mallName, packagePhotos } from '@/lib/in
 import type { MallContent, MediaPackage, UploadedPhoto } from '@/lib/insights';
 import type { ShopperProfile } from '@/lib/insights/types';
 import { contentUpdatedAt } from '@/lib/content';
-import { refreshLiveData } from '@/lib/liveData';
+import { refreshLiveData, useLiveData } from '@/lib/liveData';
+import { NETWORK_SPEC_IDS, resolvePackageSpec, sheetHref } from '@/lib/portal/screens';
+import { getAssets } from '@/lib/catalogue';
+import { getScreenSize } from '@/lib/malls';
 import { getMalls } from '@/lib/malls';
 import { getCatalogue } from '@/lib/catalogue';
 import { AdminGate, field, fieldLabel, primaryBtn, quietBtn, uploadPhoto } from './AdminGate';
@@ -85,6 +88,47 @@ function PhotoPicker({ label, photos, onUpload, onRemove, onMove, busy }: { labe
       <button type="button" disabled={busy} onClick={() => input.current?.click()} className="flex h-20 w-28 items-center justify-center rounded-xl border border-dashed border-border-strong text-body-sm font-semibold text-accent hover:border-accent disabled:opacity-50">
         {busy ? 'Uploading…' : `+ ${label}`}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Which screen spec a package uses — this sets the artwork size and the
+ * After Effects template clients get. Automatic matches the package's site
+ * list to the mall's screens; an admin can choose the exact one instead.
+ */
+function PackageScreen({ pkg, appMallId, onChange }: { pkg: MediaPackage; appMallId: string | null; onChange: (specId: string | null) => void }) {
+  const { catalogue } = useLiveData();
+  const auto = resolvePackageSpec({ ...pkg, specId: null }, appMallId, catalogue);
+  const now = resolvePackageSpec(pkg, appMallId, catalogue);
+  const appMall = appMallId ? getMalls(catalogue).find((x) => x.id === appMallId) : undefined;
+  const own = (appMall?.specIds ?? []).map((id) => catalogue.specifications[id]).filter((x) => x && !x.archivedAt);
+  const network = NETWORK_SPEC_IDS.map((id) => catalogue.specifications[id]).filter(Boolean);
+  const label = (x: { title: string } & Parameters<typeof getScreenSize>[0]) => {
+    const size = getScreenSize(x);
+    return `${x.title}${size ? ` · ${size.width}×${size.height}` : ''}`;
+  };
+  const template = now.spec ? getAssets([...now.spec.downloadIds, ...now.spec.attachmentIds], catalogue).find((a) => /\.aep$/i.test(a.filename)) : undefined;
+  const why = { chosen: 'Chosen by an admin', matched: 'Matched to this mall’s screen from the sites', network: 'Network-wide size — check this is right', none: 'No spec — size to be confirmed' }[now.source];
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1.5">
+        <span className={fieldLabel}>Screen (sets the artwork size and template)</span>
+        <select className={field} value={pkg.specId ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+          <option value="">Automatic — {auto.spec ? label(auto.spec) : 'none found'}{auto.source === 'network' ? ' (network)' : ''}</option>
+          {own.length ? (
+            <optgroup label="This mall’s screens">
+              {own.map((x) => <option key={x!.id} value={x!.id}>{label(x!)}</option>)}
+            </optgroup>
+          ) : null}
+          <optgroup label="Network-wide">
+            {network.map((x) => <option key={x!.id} value={x!.id}>{label(x!)}</option>)}
+          </optgroup>
+        </select>
+      </label>
+      <p className={`text-body-sm ${now.source === 'network' || now.source === 'none' ? 'text-warning-fg' : 'text-fg-muted'}`}>
+        {why}.{template ? <> Template: <a href={sheetHref(template)} download={template.filename} className="font-semibold text-accent hover:underline">{template.filename}</a></> : ' No After Effects template on this spec.'}
+      </p>
     </div>
   );
 }
@@ -250,6 +294,7 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
                   <Text label="Screens" value={pkg.units} onChange={(v) => setPkg(i, { units: num(v) })} />
                 </div>
                 <Text label="Sites" value={pkg.sites} onChange={(v) => setPkg(i, { sites: v })} wide />
+                <PackageScreen pkg={pkg} appMallId={m.appMallId} onChange={(specId) => setPkg(i, { specId })} />
                 <PhotoPicker
                   label="Add photo"
                   photos={[...own.map((x) => ({ src: fileUrl(x.storageKey), uploaded: true, key: x.storageKey })), ...deckPhotos.map((x) => ({ src: x.src, uploaded: false }))]}

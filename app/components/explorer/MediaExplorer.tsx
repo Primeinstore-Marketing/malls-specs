@@ -15,7 +15,7 @@ import { MALL_PLACES, PROVINCE_ORDER, placeLine } from '@/lib/mallPlaces';
 import { getScreenLayout } from '@/lib/screenLayouts';
 import { MallOutlinePreview } from '@/components/map/MallOutlinePreview';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { AddToCampaign, AvailabilityNote, RequireSignIn } from '@/components/portal/ui';
+import { AddToCampaign, RequireSignIn } from '@/components/portal/ui';
 import { annualVisits, compact, deckMallForApp, packagePhotos, topBand } from '@/lib/insights';
 
 /**
@@ -234,7 +234,7 @@ function ScreenCard({ s, live }: { s: Screen; live: LiveState }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border pt-3">
-        {bookable ? <AvailabilityNote itemKey={`scr:${s.spec.id}`} /> : <span />}
+        <span />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-body-sm">
           {s.sheet ? (
             <a href={downloadUrl(s.sheet.storageKey)} download={s.sheet.filename} className="font-semibold text-fg-muted hover:text-fg" title={`PDF · ${formatFileSize(s.sheet.sizeBytes)}`}>
@@ -330,7 +330,6 @@ function Audience({ mallId }: { mallId: string }) {
             {packagePhotos(pkg.code)[0] ? <img src={packagePhotos(pkg.code)[0].src} alt="" loading="lazy" className="h-11 w-14 rounded object-cover" /> : null}
             <span className="flex flex-col">
               <span className="text-body-sm font-semibold text-fg">{pkg.format}{pkg.units ? ` × ${pkg.units}` : ''} package</span>
-              <AvailabilityNote itemKey={`pkg:${pkg.code}`} />
             </span>
             <AddToCampaign compact item={{ kind: 'package', code: pkg.code }} />
           </div>

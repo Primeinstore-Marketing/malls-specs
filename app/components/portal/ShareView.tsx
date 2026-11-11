@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
-import { useLiveData } from '@/lib/liveData';
+import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { days, formatDate, formatRange, phase } from '@/lib/portal/logic';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
@@ -34,7 +34,8 @@ import { SizeDownloads } from './SizeDownloads';
 export function Shape({ w, h, size = 56 }: { w: number | null; h: number | null; size?: number }) {
   if (!w || !h) return <span className="block rounded-md border border-dashed border-border-strong" style={{ width: size, height: size * 0.6 }} aria-hidden="true" />;
   const scale = size / Math.max(w, h);
-  return <span className="block rounded-[3px] bg-gradient-to-br from-accent to-brand-surface" style={{ width: w * scale, height: h * scale }} aria-hidden="true" />;
+  // Printed even when the browser leaves out background graphics (the PDF a client keeps).
+  return <span className="block rounded-[3px] bg-gradient-to-br from-accent to-brand-surface" style={{ width: w * scale, height: h * scale, printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }} aria-hidden="true" />;
 }
 
 const res = (s: { width: number | null; height: number | null }) => (s.width && s.height ? `${s.width} × ${s.height} px` : 'Size to be confirmed');
@@ -165,9 +166,15 @@ const btnSmall = 'inline-flex h-9 shrink-0 items-center rounded-full border px-3
 
 function Booking({ p }: { p: SharedProposal }) {
   const params = useSearchParams();
-  const { catalogue } = useLiveData();
-  const entries = useMemo(() => mallEntries(catalogue), [catalogue]);
-  const rowCache = useMemo(() => new Map<string, ScreenRow[]>(), [catalogue]);
+  const live = useLiveData();
+  const { catalogue } = live;
+  // This page sits outside the site's shell, so it loads admin edits itself:
+  // chosen screens and templates, uploads, mall data and photo rights.
+  useEffect(() => {
+    if (live.status === 'idle') void refreshLiveData();
+  }, [live.status]);
+  const entries = useMemo(() => mallEntries(catalogue, undefined, live.version), [catalogue, live.version]);
+  const rowCache = useMemo(() => new Map<string, ScreenRow[]>(), [catalogue, live.version]);
   const rowsOf = (e: MallEntry) => {
     if (!rowCache.has(e.key)) rowCache.set(e.key, rowsFor(e, catalogue, true));
     return rowCache.get(e.key)!;
@@ -187,7 +194,7 @@ function Booking({ p }: { p: SharedProposal }) {
   const datesChanged = edits.start !== p.start || edits.end !== p.end;
   const changed = editable && (added.length > 0 || removed.length > 0 || datesChanged);
 
-  const screens = useMemo(() => campaignScreens(items, catalogue), [items, catalogue]);
+  const screens = useMemo(() => campaignScreens(items, catalogue), [items, catalogue, live.version]);
   const removedScreens = useMemo(() => campaignScreens(removed, catalogue), [removed, catalogue]);
   const { sizes, unknown } = artworkSizes(screens);
   const total = screens.reduce((s, x) => s + x.qty, 0);
@@ -388,7 +395,7 @@ function Booking({ p }: { p: SharedProposal }) {
                           </span>
                           {s.sites ? <span className="text-[12px] text-fg-subtle">Where: {s.sites}</span> : null}
                           {s.assumed ? <span className="text-[12px] text-warning-fg">{s.assumed}</span> : null}
-                          {!gone && files.length ? <SizeDownloads files={files} compact /> : null}
+                          {!gone && files.length ? <div className="print:hidden"><SizeDownloads files={files} compact /></div> : null}
                         </div>
                         {editable ? (
                           <div className="col-span-2 flex justify-end sm:col-span-1 sm:items-center print:hidden">

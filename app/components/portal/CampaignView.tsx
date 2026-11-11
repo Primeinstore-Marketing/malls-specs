@@ -10,7 +10,6 @@ import {
   STEP_LABELS,
   canEdit,
   campaignClientName, clientName,
-  conflicts,
   days,
   formatRange,
   formatDate,
@@ -141,14 +140,13 @@ function useClientEmail(c: Campaign, user: PortalUser) {
   };
 }
 
-/** What the signed-in user can do next, given where the campaign is. Clashes are dealt with here, once. */
-function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes: number }) {
+/** What the signed-in user can do next, given where the campaign is. */
+function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const [note, setNote] = useState('');
   const [asking, setAsking] = useState(false);
   const sales = user.role === 'sales';
   const email = useClientEmail(c, user);
   const contact = campaignContact(c);
-  const clashText = `${clashes} ${clashes === 1 ? 'item is' : 'items are'} already booked on these dates`;
 
   let title = '';
   let body: React.ReactNode = null;
@@ -158,11 +156,9 @@ function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes
     const checks = [
       { done: Boolean(c.start && c.end), text: 'Dates', href: '#f-start' },
       { done: c.items.length > 0, text: 'Screens', href: '#media' },
-      { done: clashes === 0, text: clashes ? 'Clear clashes' : 'No clashes', href: '#media' },
     ];
     const ready = checks.every((x) => x.done);
     title = c.status === 'proposed' ? `${campaignClientName(c)} sent a brief` : c.status === 'changes' ? 'Changes requested' : 'Build the proposal';
-    tone = clashes ? 'danger' : 'accent';
     body = (
       <>
         <p className="text-body-md text-fg-muted">
@@ -184,13 +180,12 @@ function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes
       </>
     );
   } else if (sales && c.status === 'approved') {
-    title = clashes ? 'Approved, but there’s a clash' : `${who(c)} approved`;
-    tone = clashes ? 'danger' : 'accent';
+    title = `${who(c)} approved`;
     body = (
       <>
-        <p className="text-body-md text-fg-muted">{clashes ? `${clashText}. Reopen it to change the dates or swap the media.` : 'Confirm to lock in the dates.'}</p>
+        <p className="text-body-md text-fg-muted">Confirm to lock in the dates.</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={clashes > 0} className={btn.primary} onClick={() => portal.move(c.id, 'booked')}>Confirm booking</button>
+          <button type="button" className={btn.primary} onClick={() => portal.move(c.id, 'booked')}>Confirm booking</button>
           <button type="button" className={btn.secondary} onClick={() => portal.move(c.id, 'changes', 'Reopened to adjust the plan.')}>Reopen to edit</button>
         </div>
       </>
@@ -202,7 +197,7 @@ function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes
       <>
         <p className="text-body-md text-fg-muted">They can approve from the link in the email. When they reply, record it here.</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={clashes > 0} className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
+          <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
             Client approved — confirm booking
           </button>
           <a className={btn.secondary} href={email('reminder')}>Email a reminder</a>
@@ -234,8 +229,7 @@ function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes
       </>
     );
   } else if (!sales && c.status === 'sent') {
-    title = clashes ? 'Your proposal needs one change' : 'Your proposal is ready';
-    tone = clashes ? 'danger' : 'accent';
+    title = 'Your proposal is ready';
     body = asking ? (
       <>
         <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="What would you like changed?" className={`${input} h-auto py-2.5`} />
@@ -247,20 +241,10 @@ function NextStep({ c, user, clashes }: { c: Campaign; user: PortalUser; clashes
     ) : (
       <>
         <p className="text-body-md text-fg-muted">
-          {clashes ? `${clashText}, so it can’t be approved yet. Ask Primedia to swap it or move the dates.` : 'Check the screens and dates, then approve.'}
+          Check the screens and dates, then approve.
         </p>
         <div className="flex flex-wrap gap-2">
-          {clashes ? (
-            <button
-              type="button"
-              className={btn.primary}
-              onClick={() => portal.move(c.id, 'changes', 'Please swap the booked item or suggest new dates.')}
-            >
-              Ask for a swap
-            </button>
-          ) : (
-            <button type="button" className={btn.primary} onClick={() => portal.move(c.id, 'approved')}>Approve proposal</button>
-          )}
+          <button type="button" className={btn.primary} onClick={() => portal.move(c.id, 'approved')}>Approve proposal</button>
           <button type="button" className={btn.secondary} onClick={() => setAsking(true)}>Request changes</button>
           <button type="button" className={btn.quiet} onClick={() => { if (window.confirm('Decline this proposal? Primedia will be told.')) portal.move(c.id, 'declined'); }}>Decline</button>
         </div>
@@ -327,7 +311,7 @@ function Numbers({ c }: { c: Campaign }) {
 
 /* ---------- Screens ---------- */
 
-function Items({ c, user, clash }: { c: Campaign; user: PortalUser; clash: Map<string, Campaign> }) {
+function Items({ c, user }: { c: Campaign; user: PortalUser }) {
   const editable = canEdit(c, user);
   const { catalogue } = useLiveData();
   const groups = new Map<string, { mall: DeckMall | undefined; items: CampaignItem[] }>();
@@ -358,9 +342,8 @@ function Items({ c, user, clash }: { c: Campaign; user: PortalUser; clash: Map<s
             </div>
             <ul className="border-t border-border">
               {items.map((i) => {
-                const other = clash.get(itemKey(i));
                 return screensFor(i, catalogue).map((sc, n) => (
-                  <li key={`${i.id}-${n}`} className={`flex items-center gap-4 border-b border-border px-4 py-3 last:border-0 ${other ? 'bg-danger-bg' : ''}`}>
+                  <li key={`${i.id}-${n}`} className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-0">
                     <span className="flex h-10 w-12 shrink-0 items-center justify-center"><Shape w={sc.width} h={sc.height} size={40} /></span>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="text-body-md font-medium text-fg">{sc.title}</span>
@@ -371,12 +354,6 @@ function Items({ c, user, clash }: { c: Campaign; user: PortalUser; clash: Map<s
                         {i.kind === 'package' ? ` · ${i.code}` : ''}
                       </span>
                       {sc.assumed ? <span className="text-[12px] text-warning-fg">{sc.assumed}</span> : null}
-                      {other ? (
-                        <span className="text-body-sm font-semibold text-danger-fg">
-                          Booked {formatRange(other.start, other.end)}
-                          {user.role === 'sales' || other.clientId === user.clientId ? ` · ${other.name}` : ''}
-                        </span>
-                      ) : null}
                     </div>
                     <span className="shrink-0 text-body-md font-semibold tabular-nums text-fg">× {sc.qty}</span>
                     {sc.specId ? (
@@ -564,8 +541,6 @@ function View({ id, user }: { id: string; user: PortalUser }) {
     return <Page><EmptyState title="We can’t find that campaign." description="It may have been removed, or belong to another account." /></Page>;
   }
   const ph = phase(c);
-  const found = conflicts(c, campaigns);
-  const clash = new Map(found.map((f) => [itemKey(f.item), f.with]));
   const editable = canEdit(c, user);
   const isActive = active[user.id] === c.id;
   const messages = c.events.filter((e) => e.kind === 'message').length;
@@ -606,7 +581,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         {!ph && c.status !== 'declined' ? <Steps c={c} role={user.role} /> : null}
       </header>
 
-      <NextStep c={c} user={user} clashes={found.length} />
+      <NextStep c={c} user={user} />
 
       {messages ? (
         <a href="#updates" className="-mt-4 self-start text-body-sm font-semibold text-accent hover:underline lg:hidden print:hidden">
@@ -620,7 +595,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         <div className="flex min-w-0 flex-col gap-10">
           <section id="media" className="flex scroll-mt-28 flex-col gap-4" aria-labelledby="media-title">
             <h2 id="media-title" className="text-display-sm text-fg">Media</h2>
-            <Items c={c} user={user} clash={clash} />
+            <Items c={c} user={user} />
             {editable ? <Suggestions c={c} /> : null}
           </section>
           <section className="flex flex-col gap-4" aria-labelledby="details-title">

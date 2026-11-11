@@ -12,7 +12,8 @@ import type { Campaign, CampaignEvent, CampaignItem, CampaignStatus, NewCampaign
  * below, which is the seam to move it onto the Worker later.
  */
 
-const KEY = 'malls-specs:portal:v1';
+// v2: started clean (demo campaigns removed, 11 Nov 2026). Older saved data is ignored.
+const KEY = 'malls-specs:portal:v2';
 const listeners = new Set<() => void>();
 let state: PortalState | null = null;
 const SERVER: PortalState = { version: 1, userId: null, campaigns: [], active: {}, seen: {} };

@@ -59,7 +59,8 @@ function placeArea(appMallId: string): { area: string; province: string; name: s
   return { area: `${place.area === place.city ? place.city : `${place.area}, ${place.city}`} · ${place.province}`, province: place.province, name: place.name };
 }
 
-export function mallEntries(catalogue: Catalogue, audience: AudienceTarget = ANY_AUDIENCE): MallEntry[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- version only re-keys memos
+export function mallEntries(catalogue: Catalogue, audience: AudienceTarget = ANY_AUDIENCE, _version?: number): MallEntry[] {
   const appMalls = getMalls(catalogue).filter((m) => m.group !== 'formats');
   const screensOf = (m: Mall | undefined) =>
     (m?.specIds ?? []).map((id) => catalogue.specifications[id]).filter((s): s is Specification => Boolean(s && !s.archivedAt));

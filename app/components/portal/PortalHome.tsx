@@ -168,6 +168,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
           </ul>
         </Block>
         <Block title="Most requested" note="Packages in proposals and bookings.">
+          {!popular.length ? <p className="rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm text-fg-muted">Fills in as you make proposals.</p> : null}
           <ol className="flex flex-col gap-2">
             {popular.map((p, i) => (
               <li key={p.label} className="flex items-center gap-3 rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm">
@@ -180,9 +181,17 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
         </Block>
       </div>
 
-      <button type="button" onClick={() => portal.resetDemo()} className="self-start text-body-sm text-fg-subtle hover:text-fg hover:underline">
-        Reset demo data
-      </button>
+      {campaigns.length ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Clear every campaign saved in this browser? This can’t be undone.')) portal.resetDemo();
+          }}
+          className="self-start text-body-sm text-fg-subtle hover:text-fg hover:underline"
+        >
+          Clear all campaigns in this browser
+        </button>
+      ) : null}
     </Page>
   );
 }

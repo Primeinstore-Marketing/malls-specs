@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands } from '@/lib/insights';
 import { MALL_PLACES } from '@/lib/mallPlaces';
-import { AddToCampaign, AvailabilityNote, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
+import { AddToCampaign, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 function Mall({ id }: { id: string }) {
@@ -112,7 +112,6 @@ function Mall({ id }: { id: string }) {
                 <AddToCampaign item={{ kind: 'package', code: pkg.code }} />
               </div>
               <p className="text-body-sm text-fg-muted">{pkg.sites}</p>
-              <AvailabilityNote itemKey={`pkg:${pkg.code}`} />
             </article>
           ))}
         </div>

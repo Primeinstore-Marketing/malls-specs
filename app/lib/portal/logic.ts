@@ -200,29 +200,6 @@ export function reach(c: Pick<Campaign, 'items' | 'start' | 'end'>): Reach {
   return { malls: malls.size, visits, digitalViewers, units };
 }
 
-/* ---------- Availability ---------- */
-
-const overlaps = (a: Campaign, b: Campaign) =>
-  Boolean(a.start && a.end && b.start && b.end && a.start <= b.end && b.start <= a.end);
-
-/** Booked campaigns holding an item on overlapping dates. */
-export function conflicts(c: Campaign, all: readonly Campaign[]): { item: CampaignItem; with: Campaign }[] {
-  const out: { item: CampaignItem; with: Campaign }[] = [];
-  for (const other of all) {
-    if (other.id === c.id || other.status !== 'booked' || !overlaps(c, other)) continue;
-    const keys = new Set(other.items.map(itemKey));
-    for (const item of c.items) if (keys.has(itemKey(item))) out.push({ item, with: other });
-  }
-  return out;
-}
-
-/** Booked flights for a package or screen, soonest first, from today on. */
-export function bookingsFor(key: string, all: readonly Campaign[], today = todayIso()): Campaign[] {
-  return all
-    .filter((c) => c.status === 'booked' && c.end && c.end >= today && c.items.some((i) => itemKey(i) === key))
-    .sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''));
-}
-
 /* ---------- Who may do what ---------- */
 
 export function canEdit(c: Campaign, user: PortalUser): boolean {

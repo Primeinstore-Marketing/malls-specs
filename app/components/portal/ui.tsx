@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { CLIENTS, USERS } from '@/lib/portal/seed';
-import { CLIENT_STATUS_TONE, STATUS_TONE, bookingsFor, canEdit, formatRange, itemLabel, statusLabel } from '@/lib/portal/logic';
+import { CLIENT_STATUS_TONE, STATUS_TONE, canEdit, formatRange, itemLabel, statusLabel } from '@/lib/portal/logic';
 import { ui } from '@/lib/portal/ui-state';
 import { portal, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { useLiveData } from '@/lib/liveData';
@@ -174,22 +174,6 @@ export function clientLabel(id: string | null) {
 }
 
 /* ---------- Add to campaign ---------- */
-
-export function AvailabilityNote({ itemKey }: { itemKey: string }) {
-  const { campaigns, userId } = usePortalState();
-  const user = USERS.find((u) => u.id === userId);
-  const booked = bookingsFor(itemKey, campaigns);
-  if (!booked.length) return <span className="text-body-sm font-medium text-success-fg">● Available</span>;
-  const first = booked[0];
-  const mine = user?.role === 'client' && first.clientId === user.clientId;
-  return (
-    <span className="text-body-sm font-medium text-warning-fg">
-      ● Booked {formatRange(first.start, first.end)}
-      {user?.role === 'sales' ? ` · ${clientLabel(first.clientId)}` : mine ? ' · your campaign' : ''}
-      {booked.length > 1 ? ` +${booked.length - 1} more` : ''}
-    </span>
-  );
-}
 
 /** Puts an item in the user's current campaign, confirming with a toast and undo. */
 export function addWithToast(campaignId: string, campaignName: string, item: NewCampaignItem) {
