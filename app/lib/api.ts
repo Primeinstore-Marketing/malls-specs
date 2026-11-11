@@ -32,6 +32,10 @@ export type AccountProfile = AdminProfile;
 export interface ManagedAccount extends AdminProfile {
   readonly disabled: boolean;
   readonly createdAt: string;
+  /** Asked for an account from the sign-in page; waiting for an admin. */
+  readonly pending: boolean;
+  /** When they asked for a password reset, if they have. */
+  readonly resetRequestedAt: string | null;
 }
 
 export interface LiveSpecRecord {
@@ -179,6 +183,9 @@ export const api = {
   /** A client approves a proposal on its booking page (no account). */
   approveProposal: (campaignId: string, fields: { name: string; note: string; screens: number; k?: string }) =>
     request<{ ok: true; approval: ProposalApproval }>('/approvals', { method: 'POST', body: JSON.stringify({ campaignId, ...fields }) }),
+  /** The client's booking page by its short code; also returns the id's share key. */
+  proposalByCode: (code: string) =>
+    request<{ proposal: SharedProposal; changesPending: boolean; key: string }>(`/proposals?s=${encodeURIComponent(code)}`),
   /** The client's booking page, by campaign id and share key. */
   proposal: (id: string, key: string) =>
     request<{ proposal: SharedProposal; changesPending: boolean }>(`/proposals/${encodeURIComponent(id)}?k=${encodeURIComponent(key)}`),
@@ -208,8 +215,14 @@ export const api = {
     ),
   createAccount: (fields: { email: string; name: string; title: string; role: AccountRole; password: string }) =>
     request<{ ok: true }>('/accounts', { method: 'POST', body: JSON.stringify(fields) }, true),
-  updateAccount: (id: number, fields: Partial<{ name: string; title: string; role: AccountRole; disabled: boolean; password: string }>) =>
+  updateAccount: (id: number, fields: Partial<{ name: string; title: string; role: AccountRole; disabled: boolean; password: string; approve: boolean }>) =>
     request<{ ok: true }>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }, true),
+  declineAccount: (id: number) => request<{ ok: true }>(`/accounts/${id}`, { method: 'DELETE' }, true),
+  /** A salesperson asks for an account with their own password (an admin approves it). */
+  signup: (fields: { email: string; name: string; title: string; password: string }) =>
+    request<{ ok: true }>('/auth/signup', { method: 'POST', body: JSON.stringify(fields) }),
+  /** Asks admins for a password reset. */
+  forgotPassword: (email: string) => request<{ ok: true }>('/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
   changePassword: (current: string, next: string) =>
     request<{ ok: true }>('/auth/password', { method: 'POST', body: JSON.stringify({ current, next }) }, true),
   putPin: (specId: string, lng: number, lat: number, level?: string | null) =>

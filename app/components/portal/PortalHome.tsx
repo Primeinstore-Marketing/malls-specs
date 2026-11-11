@@ -113,7 +113,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
           <p className="text-body-lg text-fg-muted">{screensLive ? `${screensLive} screens live for ${live.length} ${live.length === 1 ? 'campaign' : 'campaigns'}` : 'Nothing live right now'} · {by('sent').length} with clients</p>
         </div>
         <div className="flex flex-wrap items-center gap-1">
-          <Link href="/portal/photos" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Photo rights</Link>
+          <Link href="/portal/clients" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
           <Link href="/portal/new" className={primary}>New proposal</Link>
         </div>
       </header>

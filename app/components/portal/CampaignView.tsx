@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
 import { useLiveData } from '@/lib/liveData';
 import type { DeckMall } from '@/lib/insights';
@@ -31,8 +31,8 @@ import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/portal/screens';
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
-import { clientEmail } from '@/lib/portal/email';
-import { EmailButton } from '@/components/ui/EmailButton';
+import { buildClientEmail } from '@/lib/portal/email';
+import { Emailer } from './Emailer';
 import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
@@ -98,7 +98,7 @@ const who = (c: Campaign) => (c.clientId || c.prospect?.company || c.prospect?.n
 /** A ready-to-send email to the client, built from the latest version of the campaign. */
 function useClientEmail(c: Campaign, user: PortalUser) {
   const { catalogue } = useLiveData();
-  return (kind: EmailKind, note = '') => clientEmail(c, user, catalogue, kind, note);
+  return (kind: EmailKind, note = '') => buildClientEmail(c, user, catalogue, kind, note);
 }
 
 /** The changes a client sent from their booking page: what they'd add, remove and move, to apply or set aside. */
@@ -140,6 +140,10 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const sales = user.role === 'sales';
   const email = useClientEmail(c, user);
   const contact = campaignContact(c);
+  // The builder's "Create and email" lands here with ?email=1: open the emailer straight away.
+  const params = useSearchParams();
+  const [emailing, setEmailing] = useState<EmailKind | null>(() => (params.get('email') === '1' && ['draft', 'changes', 'proposed'].includes(c.status) && c.items.length ? 'proposal' : null));
+  const sentNote = useRef('');
 
   let title = '';
   let body: React.ReactNode = null;
@@ -159,13 +163,13 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           {c.status === 'proposed' ? 'Shape the plan, then send it back as a proposal.' : c.status === 'changes' ? 'See what they asked for in the updates below.' : 'Send it to the client when it’s ready.'}
         </p>
         <Checklist items={checks} />
-        {!contact?.email ? <p className="text-body-sm text-fg-muted">No client email yet — add one in <a href="#f-client" className="font-semibold text-accent hover:underline">Campaign details</a> above, or type it into the email.</p> : null}
+        {!contact?.email ? <p className="text-body-sm text-fg-muted">No client email yet — add one in <a href="#f-client" className="font-semibold text-accent hover:underline">Campaign details</a> below, or type it into the email.</p> : null}
         <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for the client (optional)" className={`${input} h-auto py-2.5`} />
         <div className="flex flex-wrap gap-2">
           {ready ? (
-            <EmailButton pdf={shareUrl(c, user.id, true)} href={email('proposal', note)} className={btn.primary} onSent={() => { portal.move(c.id, 'sent', note); setNote(''); }}>
+            <button type="button" className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
               {contact?.name ? `Email proposal to ${contact.name.split(' ')[0]}` : 'Email proposal'}
-            </EmailButton>
+            </button>
           ) : (
             <button type="button" disabled className={btn.primary}>Email proposal to client</button>
           )}
@@ -194,7 +198,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
             Client approved — confirm booking
           </button>
-          <EmailButton pdf={shareUrl(c, user.id, true)} className={btn.secondary} href={email('reminder')}>Email a reminder</EmailButton>
+          <button type="button" className={btn.secondary} onClick={() => setEmailing('reminder')}>Email a reminder</button>
           <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Taken back to make changes.')}>Take back to edit</button>
         </div>
       </>
@@ -205,11 +209,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     body = (
       <>
         <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes. If you change the booking, send it again: it always has the latest version.</p>
-        <div className="self-start">
-          <EmailButton pdf={shareUrl(c, user.id, true)} className={btn.secondary} href={email('booked')} onSent={() => portal.message(c.id, 'Emailed the booking confirmation.')}>
-            Email booking confirmation
-          </EmailButton>
-        </div>
+        <button type="button" className={`${btn.secondary} self-start`} onClick={() => setEmailing('booked')}>Email booking confirmation</button>
       </>
     );
   } else if (!sales && c.status === 'draft') {
@@ -261,6 +261,20 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     <section aria-labelledby="next-title" className={`flex flex-col gap-3 rounded-3xl p-5 sm:p-6 print:hidden ${tones[tone]}`}>
       <h2 id="next-title" className="text-body-lg font-semibold text-fg">{title}</h2>
       {body}
+      {emailing ? (
+        <Emailer
+          email={email(emailing, emailing === 'proposal' ? sentNote.current || note : '')}
+          title={{ proposal: 'Email the proposal', reminder: 'Email a reminder', booked: 'Email the booking confirmation' }[emailing]}
+          doneLabel={emailing === 'proposal' ? 'I’ve sent it — mark as sent' : 'I’ve sent it'}
+          onSent={() => {
+            if (emailing === 'proposal') {
+              portal.move(c.id, 'sent', sentNote.current || note);
+              setNote('');
+            } else portal.message(c.id, emailing === 'booked' ? 'Emailed the booking confirmation.' : 'Emailed a reminder.');
+          }}
+          onClose={() => setEmailing(null)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -462,7 +476,7 @@ function Updates({ c, user }: { c: Campaign; user: PortalUser }) {
               <li key={e.id} className="flex items-center gap-2 text-body-sm text-fg-subtle">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong" aria-hidden="true" />
                 <span>
-                  <span className="font-medium text-fg-muted">{me ? 'You' : who?.name.split(' ')[0]}</span> {e.text.charAt(0).toLowerCase() + e.text.slice(1)} · {timeAgo(e.at)}
+                  <span className="font-medium text-fg-muted">{me ? 'You' : who?.name.split(' ')[0] ?? 'Someone'}</span> {e.text.charAt(0).toLowerCase() + e.text.slice(1)} · {timeAgo(e.at)}
                 </span>
               </li>
             );
@@ -472,7 +486,7 @@ function Updates({ c, user }: { c: Campaign; user: PortalUser }) {
               <Avatar user={who} size="sm" />
               <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-body-sm ${me ? 'rounded-tr-md bg-accent text-fg-on-accent' : 'rounded-tl-md bg-bg-subtle text-fg'}`}>
                 <p>{e.text}</p>
-                <p className={`mt-1 text-[11px] ${me ? 'opacity-80' : 'text-fg-subtle'}`}>{me ? 'You' : who?.name.split(' ')[0]} · {timeAgo(e.at)}</p>
+                <p className={`mt-1 text-[11px] ${me ? 'opacity-80' : 'text-fg-subtle'}`}>{me ? 'You' : who?.name.split(' ')[0] ?? 'Someone'} · {timeAgo(e.at)}</p>
               </div>
             </li>
           );
@@ -593,12 +607,13 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         {!ph && c.status !== 'declined' ? <Steps c={c} role={user.role} /> : null}
       </header>
 
+      {/* What to do next comes first; the details form below it. */}
+      <NextStep c={c} user={user} />
+
       <section id="details" className="flex scroll-mt-28 flex-col gap-4" aria-labelledby="details-title">
         <h2 id="details-title" className="text-display-sm text-fg">Campaign details</h2>
         <Details c={c} user={user} />
       </section>
-
-      <NextStep c={c} user={user} />
 
       {messages ? (
         <a href="#updates" className="-mt-4 self-start text-body-sm font-semibold text-accent hover:underline lg:hidden print:hidden">

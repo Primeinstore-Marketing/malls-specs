@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { SESSION_READY, SESSION_USER, onSessionUser, registerPeople } from './seed';
 import { ui } from './ui-state';
-import { newShareKey } from './share';
+import { newShareCode, newShareKey } from './share';
 import type { Campaign, CampaignEvent, CampaignItem, CampaignStatus, NewCampaignItem, PortalState, PortalUser } from './types';
 
 /**
@@ -184,9 +184,12 @@ async function refresh() {
 
 /** Campaigns from before booking links had a secret key get one, so their links are short. */
 function ensureShareKeys() {
-  const missing = state.campaigns.filter((c) => !c.shareKey).map((c) => c.id);
+  const missing = state.campaigns.filter((c) => !c.shareKey || !c.shareCode).map((c) => c.id);
   if (!missing.length) return;
-  save({ ...state, campaigns: state.campaigns.map((c) => (c.shareKey ? c : { ...c, shareKey: newShareKey() })) }, missing);
+  save(
+    { ...state, campaigns: state.campaigns.map((c) => (c.shareKey && c.shareCode ? c : { ...c, shareKey: c.shareKey ?? newShareKey(), shareCode: c.shareCode ?? newShareCode() })) },
+    missing,
+  );
 }
 
 /** Loads the signed-in person's campaigns; clears them on sign-out. */
@@ -331,6 +334,7 @@ export const portal = {
       events: [{ id: uid('e'), at: now(), by: user.id, text: 'Created the campaign', kind: 'status' }],
       ...fields,
       shareKey: newShareKey(),
+      shareCode: newShareCode(),
       clientChanges: null,
       id,
     };

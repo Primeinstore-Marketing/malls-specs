@@ -3,7 +3,8 @@
  *
  * Public:  GET  /data           — admin edits layered on the built-in catalogue
  *                                   (client contacts only with an admin token)
- *          GET  /proposals/:id?k=key     — the client's booking page (the campaign's share key)
+ *          GET  /proposals?s=code        — the client's booking page by its short code (also returns the key)
+ *          GET  /proposals/:id?k=key     — the same, by campaign id and share key
  *          POST /proposals/:id/changes?k=key { items, start, end, note?, name? }  (client asks for changes)
  *          POST /approvals    { campaignId, k?, name?, note?, screens? }  (a client approves on the booking page)
  *          GET  /approvals?ids=a,b  — approvals for those campaigns
@@ -13,11 +14,13 @@
  *          GET   /auth/me
  *          PATCH /auth/me        { name?, title? }        (your own profile)
  *          POST  /auth/password  { current, next }
+ *          POST  /auth/signup    { email, name, title, password }  (company email only; waits for an admin)
+ *          POST  /auth/forgot    { email }                         (asks admins for a reset)
  *          Accounts are admins or sales. Sales may also edit client:* content.
  * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
  * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
- *          PATCH /accounts/:id { name?, title?, role?, disabled?, password? }
+ *          PATCH /accounts/:id { name?, title?, role?, disabled?, password?, approve? } · DELETE /accounts/:id (a request not yet approved)
  * Files:   GET  /files/:key       — an uploaded picture or file (public)
  * Admin:   POST   /files?specId=&role=   raw body; X-Filename, Content-Type,
  *                                        X-Image-Width / X-Image-Height for images
@@ -52,6 +55,8 @@ export interface Env {
   FILES: KVNamespace;
   /** Comma-separated origins allowed to call the API. */
   ALLOWED_ORIGINS: string;
+  /** Comma-separated email domains that may ask for an account, e.g. "primedia.co.za,primeinstore.co.za". */
+  SIGNUP_DOMAINS?: string;
 }
 
 type Role = 'admin' | 'sales';
@@ -155,7 +160,7 @@ async function requireAccount(request: Request, env: Env, allowTemporary = false
   if (!token) throw new HttpError(401, 'Sign in to make changes.');
   const admin = await env.DB.prepare(
     `SELECT a.id, a.email, a.name, a.title, a.role, a.must_change_password FROM sessions s JOIN admins a ON a.id = s.admin_id
-     WHERE s.token_hash = ? AND s.expires_at > ? AND a.disabled = 0`,
+     WHERE s.token_hash = ? AND s.expires_at > ? AND a.disabled = 0 AND a.pending = 0`,
   )
     .bind(await hashToken(token), now())
     .first<Admin>();
@@ -222,15 +227,18 @@ async function login(request: Request, env: Env): Promise<Response> {
   }
 
   const record = await env.DB.prepare(
-    'SELECT id, email, name, title, role, must_change_password, password_hash, password_salt, iterations, disabled FROM admins WHERE email = ?',
+    'SELECT id, email, name, title, role, must_change_password, password_hash, password_salt, iterations, disabled, pending FROM admins WHERE email = ?',
   )
     .bind(email)
-    .first<Admin & { password_hash: string; password_salt: string; iterations: number; disabled: number }>();
+    .first<Admin & { password_hash: string; password_salt: string; iterations: number; disabled: number; pending: number }>();
 
   const valid = record
     ? await verifyPassword(password, record.password_hash, record.password_salt, record.iterations)
     : (await dummyPasswordCheck(password), false);
 
+  if (record && valid && record.pending) {
+    throw new HttpError(403, 'Your account is waiting for an admin to approve it. Ask a Primedia Malls admin to approve it in Site admin → Accounts.');
+  }
   if (!record || !valid || record.disabled) {
     await env.DB.batch([
       env.DB.prepare('INSERT INTO login_attempts (key) VALUES (?)').bind(`email:${email}`),
@@ -293,6 +301,58 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+const MAX_SIGNUPS_PER_IP_HOUR = 5;
+
+/** A salesperson creates their own account with their own password. It waits for an admin to approve it. */
+async function signup(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ email?: unknown; name?: unknown; title?: unknown; password?: unknown }>(request);
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
+  if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter your work email address.');
+  const domains = (env.SIGNUP_DOMAINS ?? '').split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+  const domain = email.split('@')[1] ?? '';
+  if (!domains.includes(domain)) {
+    throw new HttpError(400, `Use your work email (${domains.map((d) => '@' + d).join(' or ') || 'a Primedia address'}). Anyone else: ask a Primedia Malls admin to add you.`);
+  }
+  if (!name) throw new HttpError(400, 'Enter your name.');
+  const password = checkPassword(body.password);
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`signup:${ip}`, minutesAgo(60)).first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_SIGNUPS_PER_IP_HOUR) throw new HttpError(429, 'Too many requests from this connection. Try again later.');
+  await env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`signup:${ip}`, now()).run();
+
+  const exists = await env.DB.prepare('SELECT pending FROM admins WHERE email = ?').bind(email).first<{ pending: number }>();
+  if (exists) {
+    throw new HttpError(409, exists.pending ? 'You’ve already asked for an account. An admin needs to approve it.' : 'There’s already an account for this email. Sign in, or use “Forgot your password?”.');
+  }
+  const salt = newSalt();
+  const hash = await hashPassword(password, salt, PBKDF2_ITERATIONS);
+  await env.DB.prepare(
+    'INSERT INTO admins (email, name, title, role, password_hash, password_salt, iterations, must_change_password, pending) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)',
+  )
+    .bind(email, name, title, 'sales', toBase64(hash), toBase64(salt), PBKDF2_ITERATIONS)
+    .run();
+  await env.DB.prepare('INSERT INTO audit_log (admin, action, target) VALUES (?, ?, ?)').bind(email, 'account.signup', email).run();
+  return json({ ok: true }, 201);
+}
+
+/** Someone who forgot their password asks for a reset; admins see it in Accounts. Same answer whether the email exists or not. */
+async function forgotPassword(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ email?: unknown }>(request);
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter your work email address.');
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`forgot:${ip}`, minutesAgo(60)).first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_SIGNUPS_PER_IP_HOUR) throw new HttpError(429, 'Too many requests from this connection. Try again later.');
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`forgot:${ip}`, now()),
+    env.DB.prepare('UPDATE admins SET reset_requested_at = ? WHERE email = ? AND disabled = 0 AND pending = 0').bind(now(), email),
+  ]);
+  return json({ ok: true });
+}
+
 async function updateMe(request: Request, env: Env): Promise<Response> {
   const me = await requireAccount(request, env);
   const body = await readJson<{ name?: unknown; title?: unknown }>(request);
@@ -306,14 +366,16 @@ async function updateMe(request: Request, env: Env): Promise<Response> {
 
 // ── accounts (admins manage everyone's) ───────────────────────────────
 
-type AccountRow = Admin & { disabled: number; created_at: string };
+type AccountRow = Admin & { disabled: number; created_at: string; pending: number; reset_requested_at: string | null };
 
 async function listAccounts(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env);
   const rows = await env.DB.prepare(
-    'SELECT id, email, name, title, role, must_change_password, disabled, created_at FROM admins ORDER BY role, name COLLATE NOCASE',
+    'SELECT id, email, name, title, role, must_change_password, disabled, created_at, pending, reset_requested_at FROM admins ORDER BY pending DESC, role, name COLLATE NOCASE',
   ).all<AccountRow>();
-  return json({ accounts: rows.results.map((r) => ({ ...profile(r), disabled: r.disabled === 1, createdAt: r.created_at })) });
+  return json({
+    accounts: rows.results.map((r) => ({ ...profile(r), disabled: r.disabled === 1, createdAt: r.created_at, pending: r.pending === 1, resetRequestedAt: r.reset_requested_at })),
+  });
 }
 
 function checkPassword(password: unknown): string {
@@ -351,11 +413,11 @@ async function updateAccount(request: Request, env: Env, rawId: string): Promise
   const admin = await requireAdmin(request, env);
   const id = Number(rawId);
   if (!Number.isInteger(id) || id < 1) throw new HttpError(404, 'Not found.');
-  const target = await env.DB.prepare('SELECT id, email, name, title, role, must_change_password, disabled, created_at FROM admins WHERE id = ?')
+  const target = await env.DB.prepare('SELECT id, email, name, title, role, must_change_password, disabled, created_at, pending, reset_requested_at FROM admins WHERE id = ?')
     .bind(id)
     .first<AccountRow>();
   if (!target) throw new HttpError(404, 'No such account.');
-  const body = await readJson<{ name?: unknown; title?: unknown; role?: unknown; disabled?: unknown; password?: unknown }>(request);
+  const body = await readJson<{ name?: unknown; title?: unknown; role?: unknown; disabled?: unknown; password?: unknown; approve?: unknown }>(request);
   const self = id === admin.id;
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 100) : target.name;
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : target.title;
@@ -365,11 +427,12 @@ async function updateAccount(request: Request, env: Env, rawId: string): Promise
   const statements = [
     env.DB.prepare('UPDATE admins SET name = ?, title = ?, role = ?, disabled = ? WHERE id = ?').bind(name, title, role, disabled ? 1 : 0, id),
   ];
+  if (body.approve === true) statements.push(env.DB.prepare('UPDATE admins SET pending = 0 WHERE id = ?').bind(id));
   if (body.password !== undefined) {
     const salt = newSalt();
     const hash = await hashPassword(checkPassword(body.password), salt, PBKDF2_ITERATIONS);
     statements.push(
-      env.DB.prepare('UPDATE admins SET password_hash = ?, password_salt = ?, iterations = ?, must_change_password = 1 WHERE id = ?').bind(
+      env.DB.prepare('UPDATE admins SET password_hash = ?, password_salt = ?, iterations = ?, must_change_password = 1, reset_requested_at = NULL WHERE id = ?').bind(
         toBase64(hash),
         toBase64(salt),
         PBKDF2_ITERATIONS,
@@ -382,7 +445,19 @@ async function updateAccount(request: Request, env: Env, rawId: string): Promise
     statements.push(env.DB.prepare('DELETE FROM sessions WHERE admin_id = ?').bind(id));
   }
   await env.DB.batch(statements);
-  await audit(env, admin, 'account.update', target.email, { role, disabled, passwordReset: body.password !== undefined });
+  await audit(env, admin, 'account.update', target.email, { role, disabled, passwordReset: body.password !== undefined, approved: body.approve === true });
+  return json({ ok: true });
+}
+
+/** Turns down a request for an account (only one that hasn't been approved). */
+async function declineAccount(request: Request, env: Env, rawId: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  const id = Number(rawId);
+  const target = Number.isInteger(id) ? await env.DB.prepare('SELECT email, pending FROM admins WHERE id = ?').bind(id).first<{ email: string; pending: number }>() : null;
+  if (!target) throw new HttpError(404, 'No such account.');
+  if (!target.pending) throw new HttpError(400, 'Only a request that hasn’t been approved can be removed. Switch the account off instead.');
+  await env.DB.prepare('DELETE FROM admins WHERE id = ?').bind(id).run();
+  await audit(env, admin, 'account.decline', target.email);
   return json({ ok: true });
 }
 
@@ -407,8 +482,22 @@ async function sharedCampaign(env: Env, id: string, key: string) {
   return { row, c };
 }
 
-async function getProposal(url: URL, env: Env, id: string): Promise<Response> {
-  const { row, c } = await sharedCampaign(env, id, url.searchParams.get('k') ?? '');
+const SHARE_CODE_PATTERN = /^[A-Za-z0-9]{8,16}$/;
+
+/** A short booking link (/share?s=<code>): find the campaign, then answer as for its id and key. */
+async function getProposalByCode(url: URL, env: Env): Promise<Response> {
+  const code = url.searchParams.get('s') ?? '';
+  const row = SHARE_CODE_PATTERN.test(code)
+    ? await env.DB.prepare('SELECT id, data FROM campaigns WHERE share_code = ?').bind(code).first<{ id: string; data: string }>()
+    : null;
+  const key = row ? (JSON.parse(row.data) as { shareKey?: string }).shareKey ?? '' : '';
+  if (!row || !key) throw new HttpError(404, 'This booking link isn’t valid. Ask your account manager to send it again.');
+  return getProposal(url, env, row.id, key);
+}
+
+async function getProposal(url: URL, env: Env, id: string, knownKey?: string): Promise<Response> {
+  const key = knownKey ?? url.searchParams.get('k') ?? '';
+  const { row, c } = await sharedCampaign(env, id, key);
   const owner = await env.DB.prepare('SELECT name, title, email FROM admins WHERE id = ?').bind(row.owner_id).first<{ name: string; title: string; email: string }>();
   let client = c.prospect?.company?.trim() || c.prospect?.name?.trim() || '';
   if (c.clientId) {
@@ -431,6 +520,8 @@ async function getProposal(url: URL, env: Env, id: string): Promise<Response> {
       at: sent ?? c.updatedAt ?? row.updated_at,
     },
     changesPending: Boolean(c.clientChanges),
+    // The page uses id and key from here on (changes, approval).
+    key,
   });
 }
 
@@ -514,19 +605,20 @@ async function putCampaign(request: Request, env: Env, id: string): Promise<Resp
     throw new HttpError(400, 'Send the campaign as { campaign: {...}, rev }.');
   }
   const rev = Number.isInteger(body.rev) ? (body.rev as number) : 0;
+  const code = typeof (c as { shareCode?: unknown }).shareCode === 'string' && SHARE_CODE_PATTERN.test((c as { shareCode: string }).shareCode) ? (c as { shareCode: string }).shareCode : null;
   const data = JSON.stringify(c);
   const at = now();
   const existing = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow>();
   if (!existing) {
-    await env.DB.prepare('INSERT INTO campaigns (id, owner_id, data, rev, created_at, updated_at, updated_by) VALUES (?, ?, ?, 1, ?, ?, ?)')
-      .bind(id, me.id, data, at, at, me.email)
+    await env.DB.prepare('INSERT INTO campaigns (id, owner_id, data, rev, created_at, updated_at, updated_by, share_code) VALUES (?, ?, ?, 1, ?, ?, ?, ?)')
+      .bind(id, me.id, data, at, at, me.email, code)
       .run();
     return json({ rev: 1, ownerId: me.id, ownerName: me.name || me.email, updatedAt: at }, 201);
   }
   if (existing.owner_id !== me.id && me.role !== 'admin') throw new HttpError(403, 'This campaign belongs to someone else.');
   if (existing.rev !== rev) return json({ error: 'This campaign was changed somewhere else.', latest: campaignJson(existing) }, 409);
-  const result = await env.DB.prepare('UPDATE campaigns SET data = ?, rev = rev + 1, updated_at = ?, updated_by = ? WHERE id = ? AND rev = ?')
-    .bind(data, at, me.email, id, rev)
+  const result = await env.DB.prepare('UPDATE campaigns SET data = ?, rev = rev + 1, updated_at = ?, updated_by = ?, share_code = ? WHERE id = ? AND rev = ?')
+    .bind(data, at, me.email, code, id, rev)
     .run();
   if (!result.meta.changes) {
     const latest = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow>();
@@ -987,8 +1079,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     if (id === 'me' && method === 'PATCH') return updateMe(request, env);
     if (id === 'password' && method === 'POST') return changePassword(request, env);
+    if (id === 'signup' && method === 'POST') return signup(request, env);
+    if (id === 'forgot' && method === 'POST') return forgotPassword(request, env);
   }
 
+  if (resource === 'proposals' && !id && method === 'GET') return getProposalByCode(url, env);
   if (resource === 'proposals' && id) {
     const sub = url.pathname.split('/')[3] ?? '';
     if (!sub && method === 'GET') return getProposal(url, env, id);
@@ -1004,6 +1099,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!id && method === 'GET') return listAccounts(request, env);
     if (!id && method === 'POST') return createAccount(request, env);
     if (id && method === 'PATCH') return updateAccount(request, env, id);
+    if (id && method === 'DELETE') return declineAccount(request, env, id);
   }
 
   if ((resource === 'pins' || resource === 'specs' || resource === 'plan-pins') && id) {

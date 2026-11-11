@@ -58,6 +58,8 @@ export interface Campaign {
   readonly events: readonly CampaignEvent[];
   /** Secret in the client's booking link (/share?c=<id>&k=<key>). */
   readonly shareKey?: string;
+  /** Short code for the booking link (/share?s=<code>). */
+  readonly shareCode?: string;
   /** Changes the client asked for on their booking page, waiting for sales to apply or dismiss. */
   readonly clientChanges?: ClientChanges | null;
 }

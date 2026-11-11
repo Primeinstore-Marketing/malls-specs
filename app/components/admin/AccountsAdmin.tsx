@@ -73,6 +73,7 @@ function Row({ a, me, onChanged }: { a: ManagedAccount; me: boolean; onChanged: 
         <span className="text-body-sm text-fg-subtle">
           {a.disabled ? 'Switched off' : a.mustChangePassword ? 'Waiting for first sign-in' : 'Active'}
         </span>
+        {a.resetRequestedAt && !a.disabled ? <span className="text-body-sm font-semibold text-warning-fg">Asked for a password reset on {new Date(a.resetRequestedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}: press Reset password</span> : null}
       </label>
       <label className="flex flex-col gap-1.5">
         <span className={fieldLabel}>Role</span>
@@ -168,6 +169,50 @@ function NewAccount({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+/** People who created their own account on the sign-in page, waiting for an admin. */
+function Requests({ list, onChanged }: { list: readonly ManagedAccount[]; onChanged: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  if (!list.length) return null;
+  const act = async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That didn’t work.');
+    }
+  };
+  return (
+    <section aria-labelledby="requests" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-4">
+      <h2 id="requests" className="text-body-lg font-semibold text-fg">Waiting for approval ({list.length})</h2>
+      <p className="text-body-sm text-fg-muted">These people created an account with their own password. Approve the ones you know; they can then sign in as sales.</p>
+      <ul className="flex flex-col gap-2">
+        {list.map((a) => (
+          <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-bg p-3">
+            <div className="flex min-w-0 flex-col">
+              <strong className="text-body-md text-fg">{a.name}</strong>
+              <span className="truncate text-body-sm text-fg-muted">{a.email}{a.title ? ` · ${a.title}` : ''} · asked {new Date(a.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</span>
+            </div>
+            <div className="flex gap-1">
+              <button type="button" className={primaryBtn} onClick={() => void act(() => api.updateAccount(a.id, { approve: true }))}>Approve</button>
+              <button
+                type="button"
+                className={quietBtn}
+                onClick={() => {
+                  if (window.confirm(`Turn down ${a.name}'s request? Their details are removed.`)) void act(() => api.declineAccount(a.id));
+                }}
+              >
+                Turn down
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error ? <p className="text-body-sm text-danger-fg">{error}</p> : null}
+    </section>
+  );
+}
+
 function List() {
   const { account } = useAdminSession();
   const [accounts, setAccounts] = useState<ManagedAccount[] | null>(null);
@@ -182,13 +227,14 @@ function List() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. There’s no public sign-up: add people here, and reset a password when someone forgets theirs.</p>
+      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. Salespeople can create their own account on the sign-in page (work email only); approve them here. You can also add someone yourself, and reset a password when someone asks.</p>
+      {accounts ? <Requests list={accounts.filter((a) => a.pending)} onChanged={load} /> : null}
       <NewAccount onCreated={load} />
       {error ? <p className="text-body-sm text-danger-fg">{error}</p> : null}
       {accounts === null && !error ? <div className="h-32 animate-pulse rounded-2xl bg-bg-subtle" /> : null}
       {accounts ? (
         <ul className="flex flex-col gap-3">
-          {accounts.map((a) => (
+          {accounts.filter((a) => !a.pending).map((a) => (
             <Row key={a.id} a={a} me={a.id === account?.id} onChanged={load} />
           ))}
         </ul>

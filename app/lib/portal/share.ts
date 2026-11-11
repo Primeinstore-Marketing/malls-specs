@@ -73,8 +73,15 @@ export function proposalUrl(p: SharedProposal, print = false): string {
 /** Full link to the client's booking page (short, when the campaign has a share key). */
 export function shareUrl(c: Campaign, senderId: string, print = false): string {
   if (!c.shareKey) return proposalUrl(snapshot(c, senderId), print);
-  const path = withBasePath(`/share?c=${encodeURIComponent(c.id)}&k=${c.shareKey}${print ? '&print=1' : ''}`);
+  const query = c.shareCode ? `s=${c.shareCode}` : `c=${encodeURIComponent(c.id)}&k=${c.shareKey}`;
+  const path = withBasePath(`/share?${query}${print ? '&print=1' : ''}`);
   return typeof window === 'undefined' ? path : `${window.location.origin}${path}`;
+}
+
+/** A short code for the booking link: 10 letters and digits (about 59 bits, too many to guess). */
+export function newShareCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  return [...crypto.getRandomValues(new Uint8Array(10))].map((b) => chars[b % chars.length]).join('');
 }
 
 /** A new secret for a campaign's booking link. */

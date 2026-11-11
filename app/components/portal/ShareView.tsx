@@ -743,7 +743,7 @@ function DatesEditor({ start, end, onChange }: { start: string | null; end: stri
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="self-start text-body-sm font-semibold text-accent hover:underline print:hidden">
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex h-10 items-center self-start rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg print:hidden">
         Change the dates
       </button>
     );
@@ -776,29 +776,30 @@ function LinkProblem({ title, text }: { title: string; text: string }) {
 }
 
 /** A short link (/share?c=<id>&k=<key>): the proposal comes from the server, always the latest. */
-function ServerBooking({ id, shareKey }: { id: string; shareKey: string }) {
-  const [state, setState] = useState<{ p: SharedProposal; pending: boolean } | 'loading' | string>('loading');
+function ServerBooking({ id, shareKey, code }: { id?: string; shareKey?: string; code?: string }) {
+  const [state, setState] = useState<{ p: SharedProposal; pending: boolean; key: string } | 'loading' | string>('loading');
   const load = useCallback(() => {
-    api
-      .proposal(id, shareKey)
-      .then(({ proposal, changesPending }) => setState({ p: proposal, pending: changesPending }))
+    (code ? api.proposalByCode(code) : api.proposal(id ?? '', shareKey ?? '').then((r) => ({ ...r, key: shareKey ?? '' })))
+      .then(({ proposal, changesPending, key }) => setState({ p: proposal, pending: changesPending, key }))
       .catch((e) => setState(e instanceof Error ? e.message : 'We couldn’t load this proposal.'));
-  }, [id, shareKey]);
+  }, [id, shareKey, code]);
   useEffect(load, [load]);
   if (state === 'loading') {
     return <div className="flex min-h-screen items-center justify-center bg-bg-subtle"><div className="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-accent" aria-label="Loading the proposal" /></div>;
   }
   if (typeof state === 'string') return <LinkProblem title="We couldn’t open this proposal" text={state} />;
-  return <Booking key={state.p.at + state.p.status} p={state.p} shareKey={shareKey} changesPending={state.pending} reload={load} />;
+  return <Booking key={state.p.at + state.p.status} p={state.p} shareKey={state.key} changesPending={state.pending} reload={load} />;
 }
 
 export function ShareView() {
   const params = useSearchParams();
   const id = params.get('c') ?? '';
   const shareKey = params.get('k') ?? '';
+  const code = params.get('s') ?? '';
+  if (code) return <ServerBooking code={code} />;
   if (id && shareKey) return <ServerBooking id={id} shareKey={shareKey} />;
-  const code = params.get('p') ?? '';
-  const p = code ? decodeProposal(code) : null;
+  const packed = params.get('p') ?? '';
+  const p = packed ? decodeProposal(packed) : null;
   if (!p) return <LinkProblem title="This booking link isn’t complete" text="Ask your Primedia account manager to send it again." />;
   return <Booking p={p} />;
 }

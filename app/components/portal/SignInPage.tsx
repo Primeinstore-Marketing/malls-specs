@@ -19,7 +19,8 @@ export function SignInPage() {
   return (
     <Page>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
-        <div className="flex min-w-0 flex-col gap-5 rounded-3xl bg-brand-surface p-6 text-brand-on-surface sm:p-8">
+        {/* On phones the form comes first; the introduction follows. */}
+        <div className="order-last flex min-w-0 flex-col gap-5 rounded-3xl bg-brand-surface p-6 text-brand-on-surface sm:p-8 lg:order-none">
           <span className="text-label-md font-semibold uppercase text-brand-on-surface-muted">Primedia Malls</span>
           <h1 className="text-display-xl">Plan, book and track mall media in one place</h1>
           <p className="text-body-lg text-brand-on-surface-muted">

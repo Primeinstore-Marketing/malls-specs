@@ -16,3 +16,6 @@ out/
 /deck-images/
 /Ref/
 /*.pptx
+
+# Test screenshots
+/api/*.png

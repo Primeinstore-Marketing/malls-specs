@@ -8,7 +8,6 @@ import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, reach, todayIso } from '@/lib/portal/logic';
 import { portal } from '@/lib/portal/store';
 import { clientEmail } from '@/lib/portal/email';
-import { EmailButton } from '@/components/ui/EmailButton';
 import { clientContact } from '@/lib/portal/share';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
 import { mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } from '@/lib/portal/mallScreens';
@@ -79,17 +78,10 @@ function Form({ user }: { user: PortalUser }) {
     audience,
     items: items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` })),
   });
-  // The ready-written email, built from what's on screen (same as the campaign page's).
-  const emailHref = recipient?.email
-    ? clientEmail({ ...fields(), status: 'sent', createdBy: user.id, createdAt: '', updatedAt: '', events: [] } as Campaign, user, catalogue, 'proposal')
-    : undefined;
-
-  /** Sales, in one step: the link opens the email; this saves the proposal as sent, then shows it. */
+  /** Sales, in one step: save the proposal, then open the emailer on its page (it marks it sent once emailed). */
   function createAndEmail() {
     save(false, false);
-    portal.move(newId, 'sent');
-    // Let the mail app open before leaving the page.
-    setTimeout(() => router.push(`/portal/campaign?id=${newId}`), 600);
+    router.push(`/portal/campaign?id=${newId}&email=1`);
   }
 
   function save(send: boolean, go = true): string {
@@ -281,13 +273,9 @@ function Form({ user }: { user: PortalUser }) {
             <div className="flex flex-col gap-2">
               {sales && recipient?.email && picked.size ? (
                 start && end ? (
-                  <EmailButton
-                    href={emailHref}
-                    onSent={createAndEmail}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover"
-                  >
+                  <button type="button" onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
                     Create and email to {recipient.name.split(' ')[0] || 'the client'}
-                  </EmailButton>
+                  </button>
                 ) : null
               ) : null}
               <button

@@ -2,6 +2,7 @@
 
 import { useLiveData } from '@/lib/liveData';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 import { withBasePath } from '@/lib/basePath';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -291,6 +292,19 @@ export function PortalAccount() {
   const { isAdmin, account, signOut, status } = useAdminSession();
   const sync = useCampaignSync();
   const [open, setOpen] = useState(false);
+  // Admins: people waiting for approval or a password reset.
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return setWaiting(0);
+    const check = () =>
+      api
+        .accounts()
+        .then(({ accounts }) => setWaiting(accounts.filter((a) => a.pending || (a.resetRequestedAt && !a.disabled)).length))
+        .catch(() => {});
+    check();
+    const t = setInterval(check, 300_000);
+    return () => clearInterval(t);
+  }, [isAdmin]);
   const ref = useRef<HTMLDivElement>(null);
   useOutside(ref, () => setOpen(false), open);
   if (!ready || status === 'checking') return null;
@@ -314,7 +328,10 @@ export function PortalAccount() {
         {sync.saving ? 'Saving…' : sync.error ? <span className="font-semibold text-danger-fg" title={sync.error}>Not saved — retrying</span> : null}
       </span>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" className="flex items-center gap-2 rounded-full p-0.5 pr-2 hover:bg-bg-subtle">
-        <Avatar user={user} size="sm" />
+        <span className="relative">
+          <Avatar user={user} size="sm" />
+          {waiting ? <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger-fg ring-2 ring-bg" aria-label={`${waiting} waiting for you in Accounts`} /> : null}
+        </span>
         <span className="hidden text-body-sm font-medium text-fg md:inline">{user.name.split(' ')[0]}</span>
         {isAdmin ? <span className="hidden rounded-full bg-accent px-1.5 text-[10px] font-bold uppercase tracking-wide text-fg-on-accent sm:inline">Admin</span> : null}
       </button>
@@ -331,9 +348,15 @@ export function PortalAccount() {
             </Link>
           ))}
           {isAdmin ? (
-            <Link href="/admin/malls" role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm font-semibold text-fg hover:bg-bg-subtle">
-              Site admin
-            </Link>
+            <>
+              <Link href="/admin/malls" role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm font-semibold text-fg hover:bg-bg-subtle">
+                Site admin
+              </Link>
+              <Link href="/admin/users" role="menuitem" onClick={() => setOpen(false)} className="flex items-center justify-between rounded-md px-2 py-1.5 text-body-sm text-fg hover:bg-bg-subtle">
+                Accounts
+                {waiting ? <span className="rounded-full bg-danger-fg px-2 text-[11px] font-bold text-bg">{waiting} waiting</span> : null}
+              </Link>
+            </>
           ) : null}
           <hr className="my-1 border-border" />
           <Link href="/account" role="menuitem" onClick={() => setOpen(false)} className="block rounded-md px-2 py-1.5 text-body-sm text-fg hover:bg-bg-subtle">
