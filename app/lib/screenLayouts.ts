@@ -13,6 +13,17 @@ import type { ScreenLayout, ScreenPanel } from '@data-model';
  */
 export type { ScreenLayout, ScreenPanel };
 
+/**
+ * The safe area every Primedia Malls spec sheet gives: keep essential content
+ * and text this many pixels inside each edge (each panel's edges, for
+ * multi-panel screens). A layout can set its own.
+ */
+export const SHEET_SAFE_MARGIN = 40;
+
+export function getSafeMargin(spec: Specification): number {
+  return spec.screenLayout?.safeMargin ?? SHEET_SAFE_MARGIN;
+}
+
 export function getScreenLayout(spec: Specification): ScreenLayout | null {
   const layout = spec.screenLayout;
   return layout && layout.panels.length > 0 ? layout : null;

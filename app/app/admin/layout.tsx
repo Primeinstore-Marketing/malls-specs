@@ -20,7 +20,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
 
       <p className="mx-4 mt-2 max-w-prose text-body-sm text-fg-muted sm:mx-6">
-        Edit malls, packages and photos, clients and photo rights. To change a screen’s size, artwork guide or pictures, open the screen and press Edit.
+        Add, edit, publish and delete malls and their screens; keep clients, photo rights and accounts up to date. To change a screen’s size, artwork guide or pictures, open the screen and press Edit.
       </p>
 
       <div className="mt-4">

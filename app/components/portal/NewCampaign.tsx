@@ -10,7 +10,8 @@ import { portal } from '@/lib/portal/store';
 import { clientEmail } from '@/lib/portal/email';
 import { clientContact } from '@/lib/portal/share';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
-import { mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } from '@/lib/portal/mallScreens';
+import { briefInventory, mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } from '@/lib/portal/mallScreens';
+import { CLIENTS } from '@/lib/portal/seed';
 import type { MallEntry as Entry } from '@/lib/portal/mallScreens';
 import { useLiveData } from '@/lib/liveData';
 import type { Campaign, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
@@ -18,6 +19,8 @@ import { AudiencePicker, readAudience } from '@/components/insights/AudiencePick
 import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
+import { BriefDrop } from './BriefDrop';
+import type { BriefDraft } from '@/lib/api';
 
 const input = 'h-10 w-full rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus';
 const fieldLabel = 'text-label-md font-semibold uppercase text-fg-muted';
@@ -102,6 +105,53 @@ function Form({ user }: { user: PortalUser }) {
 
   const rowsFor = (e: Entry) => rowsForEntry(e, catalogue);
 
+  /* A proposal drafted by the AI from the client's brief. */
+  const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; undo: () => void } | null>(null);
+  const [reasons, setReasons] = useState<Map<string, string>>(new Map());
+  const [clientKey, setClientKey] = useState(0);
+  function applyDraft(draft: BriefDraft, file: string) {
+    const before = { name, client, objective, start, end, picked, reasons };
+    const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
+    const chosen = draft.items.filter((i) => rows.has(i.key));
+    const iso = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
+    if (draft.name.trim()) setName(draft.name.trim());
+    if (draft.objective.trim()) setObjective(draft.objective.trim());
+    if (iso(draft.start)) setStart(iso(draft.start)!);
+    if (iso(draft.end)) setEnd(iso(draft.end)!);
+    const company = draft.client.company.trim();
+    const known = company ? CLIENTS.find((c) => c.name.toLowerCase() === company.toLowerCase()) : undefined;
+    if (known) setClient({ clientId: known.id, prospect: null });
+    else if (company || draft.client.email.trim() || draft.client.contactName.trim()) {
+      setClient({ clientId: null, prospect: { company, name: draft.client.contactName.trim(), email: draft.client.email.trim() } });
+    }
+    setClientKey((k) => k + 1);
+    setPicked(new Map(chosen.map((i) => [i.key, rows.get(i.key)!.item] as const)));
+    setReasons(new Map(chosen.map((i) => [i.key, i.reason] as const)));
+    try {
+      if (draft.noteForClient.trim()) sessionStorage.setItem(`malls-specs:draft-note:${newId}`, draft.noteForClient.trim());
+    } catch {
+      /* ignore */
+    }
+    setAiDraft({
+      draft,
+      file,
+      kept: chosen.length,
+      dropped: draft.items.length - chosen.length,
+      undo: () => {
+        setName(before.name);
+        setClient(before.client);
+        setClientKey((k) => k + 1);
+        setObjective(before.objective);
+        setStart(before.start);
+        setEnd(before.end);
+        setPicked(before.picked);
+        setReasons(before.reasons);
+        setAiDraft(null);
+      },
+    });
+    document.getElementById('plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <Page>
       <header className="flex flex-col gap-3">
@@ -114,6 +164,31 @@ function Form({ user }: { user: PortalUser }) {
         </p>
       </header>
 
+      {sales ? <BriefDrop inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
+      {aiDraft ? (
+        <section role="status" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <strong className="text-body-lg text-fg">Drafted from {aiDraft.file}</strong>
+              <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
+              <p className="text-body-sm text-fg-muted">
+                {aiDraft.kept} {aiDraft.kept === 1 ? 'screen' : 'screens'} chosen{aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}. Check everything below, change what you like, then create and email it.
+              </p>
+            </div>
+            <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
+          </div>
+          {aiDraft.draft.missing.length ? (
+            <div className="flex flex-col gap-1 rounded-xl bg-bg p-3">
+              <span className="text-body-sm font-semibold text-warning-fg">Check before sending</span>
+              <ul className="list-disc pl-5 text-body-sm text-fg">
+                {aiDraft.draft.missing.map((m) => <li key={m}>{m}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          {aiDraft.draft.noteForClient ? <p className="text-body-sm text-fg-muted">A note for the client is ready in the email: “{aiDraft.draft.noteForClient}”</p> : null}
+        </section>
+      ) : null}
+
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-8">
           <Section title="1. The campaign" id="basics">
@@ -122,7 +197,7 @@ function Form({ user }: { user: PortalUser }) {
                 <span className={fieldLabel}>Name</span>
                 <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter soup range launch" />
               </label>
-              {sales ? <ClientField clientId={client.clientId} prospect={client.prospect} onChange={setClient} input={input} label={fieldLabel} /> : null}
+              {sales ? <ClientField key={clientKey} clientId={client.clientId} prospect={client.prospect} onChange={setClient} input={input} label={fieldLabel} /> : null}
               <label className="flex flex-col gap-1.5">
                 <span className={fieldLabel}>Starts</span>
                 <input type="date" className={input} value={start} min={todayIso()} onChange={(e) => setStart(e.target.value)} />
@@ -232,8 +307,9 @@ function Form({ user }: { user: PortalUser }) {
           </Section>
         </div>
 
-        <aside className="h-fit lg:sticky lg:top-[calc(var(--topbar-height)+24px)]">
-          <div className="flex flex-col gap-4 rounded-2xl bg-brand-surface p-5 text-brand-on-surface">
+        {/* The plan stays in view; its list scrolls inside it so the buttons are always on screen. */}
+        <aside id="plan" className="h-fit scroll-mt-24 lg:sticky lg:top-[calc(var(--topbar-height)+24px)] lg:flex lg:max-h-[calc(100dvh-var(--topbar-height)-48px)] lg:flex-col">
+          <div className="flex min-h-0 flex-col gap-4 rounded-2xl bg-brand-surface p-5 text-brand-on-surface">
             <span className="text-label-md font-semibold uppercase text-brand-on-surface-muted">Your plan so far</span>
             <div className="flex flex-col gap-1">
               <div className="text-display-lg">{total} {total === 1 ? 'screen' : 'screens'}</div>
@@ -241,36 +317,7 @@ function Form({ user }: { user: PortalUser }) {
                 in {mallCount} {mallCount === 1 ? 'mall' : 'malls'} over {flight || '—'} days{r.visits ? ` · ~${compact(r.visits)} visits` : ''}
               </div>
             </div>
-            {picked.size ? (
-              <ul className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
-                {[...picked.keys()].map((k) => {
-                  const sc = screens.find((x) => x.itemId === k);
-                  return (
-                    <li key={k} className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 truncate">{sc ? `${sc.mallName} · ${sc.title}${sc.qty > 1 ? ` × ${sc.qty}` : ''}` : k.slice(4)}</span>
-                      <button type="button" onClick={() => toggle(k, picked.get(k)!)} aria-label={`Remove ${sc?.title ?? k}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface">×</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">Tick screens in step 3.</p>
-            )}
-            {sizes.length || unknown ? (
-              <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
-                <span className="text-body-sm text-brand-on-surface-muted">Artwork sizes</span>
-                <ul className="flex flex-col gap-1 text-body-sm">
-                  {sizes.map((z) => (
-                    <li key={`${z.width}x${z.height}`} className="flex justify-between gap-3">
-                      <span className="font-semibold tabular-nums">{z.width} × {z.height}</span>
-                      <span className="text-brand-on-surface-muted">{z.orientation} · {z.screens}</span>
-                    </li>
-                  ))}
-                  {unknown ? <li className="text-brand-on-surface-muted">{unknown} to confirm</li> : null}
-                </ul>
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-2">
+            <div className="flex shrink-0 flex-col gap-2">
               {sales && recipient?.email && picked.size ? (
                 start && end ? (
                   <button type="button" onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
@@ -297,8 +344,61 @@ function Form({ user }: { user: PortalUser }) {
               ) : null}
               {!start || !end ? <span className="text-body-sm text-brand-on-surface-muted">Choose the dates to continue.</span> : null}
             </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+            {picked.size ? (
+              <ul className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
+                {[...picked.keys()].map((k) => {
+                  const sc = screens.find((x) => x.itemId === k);
+                  return (
+                    <li key={k} className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate">{sc ? `${sc.mallName} · ${sc.title}${sc.qty > 1 ? ` × ${sc.qty}` : ''}` : k.slice(4)}</span>
+                        {reasons.get(k) ? <span className="truncate text-[12px] text-brand-on-surface-muted" title={reasons.get(k)}>{reasons.get(k)}</span> : null}
+                      </span>
+                      <button type="button" onClick={() => toggle(k, picked.get(k)!)} aria-label={`Remove ${sc?.title ?? k}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface">×</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">Tick screens in step 3.</p>
+            )}
+            {sizes.length || unknown ? (
+              <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
+                <span className="text-body-sm text-brand-on-surface-muted">Artwork sizes</span>
+                <ul className="flex flex-col gap-1 text-body-sm">
+                  {sizes.map((z) => (
+                    <li key={`${z.width}x${z.height}`} className="flex justify-between gap-3">
+                      <span className="font-semibold tabular-nums">{z.width} × {z.height}</span>
+                      <span className="text-brand-on-surface-muted">{z.orientation} · {z.screens}</span>
+                    </li>
+                  ))}
+                  {unknown ? <li className="text-brand-on-surface-muted">{unknown} to confirm</li> : null}
+                </ul>
+              </div>
+            ) : null}
+            </div>
           </div>
         </aside>
+
+        {/* Phones: the plan's total and the create button, always at the bottom of the screen. */}
+        <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-page items-center justify-between gap-3">
+            <a href="#plan" className="min-w-0 text-body-sm text-fg">
+              <strong>{total} {total === 1 ? 'screen' : 'screens'}</strong>
+              <span className="text-fg-muted"> · {mallCount} {mallCount === 1 ? 'mall' : 'malls'} · see plan</span>
+            </a>
+            <button
+              type="button"
+              disabled={!start || !end}
+              onClick={() => (sales && recipient?.email && picked.size ? createAndEmail() : save(!sales))}
+              className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
+            >
+              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && picked.size ? 'Create and email' : 'Create proposal') : 'Send brief'}
+            </button>
+          </div>
+        </div>
+        <div aria-hidden="true" className="h-16 lg:hidden" />
       </div>
     </Page>
   );

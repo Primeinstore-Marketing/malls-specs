@@ -1,12 +1,12 @@
 import type { Catalogue, Specification } from '@data-model';
 import { fileUrl } from '@/lib/api';
 import { getAssets } from '@/lib/catalogue';
-import { annualVisits, compact, deckMallForApp, isCleared, mallArea, mallName, mallPhoto, matchMalls, packagePhotos, screenPhotos } from '@/lib/insights';
+import { annualVisits, compact, deckMallForApp, mapIdOf, isCleared, mallArea, mallName, mallPhoto, matchMalls, packagePhotos, screenPhotos } from '@/lib/insights';
 import type { AudienceTarget, DeckMall, MediaPackage, ShownPhoto } from '@/lib/insights';
 import { ANY_AUDIENCE } from '@/lib/insights';
 import { getMalls, getScreenSize } from '@/lib/malls';
 import type { Mall } from '@/lib/malls';
-import { MALL_PLACES } from '@/lib/mallPlaces';
+import { mallPlace } from '@/lib/sites';
 import { screensFor } from './screens';
 import type { CampaignItem, NewCampaignItem } from './types';
 
@@ -54,7 +54,7 @@ export const scrKey = (specId: string) => `scr:${specId}`;
 export const itemKey = (i: CampaignItem | NewCampaignItem) => (i.kind === 'package' ? pkgKey(i.code) : scrKey(i.specId));
 
 function placeArea(appMallId: string): { area: string; province: string; name: string | null } {
-  const place = MALL_PLACES[appMallId];
+  const place = mallPlace(appMallId);
   if (!place) return { area: '', province: '', name: null };
   return { area: `${place.area === place.city ? place.city : `${place.area}, ${place.city}`} · ${place.province}`, province: place.province, name: place.name };
 }
@@ -65,7 +65,7 @@ export function mallEntries(catalogue: Catalogue, audience: AudienceTarget = ANY
   const screensOf = (m: Mall | undefined) =>
     (m?.specIds ?? []).map((id) => catalogue.specifications[id]).filter((s): s is Specification => Boolean(s && !s.archivedAt));
   const deck: MallEntry[] = matchMalls({ ...audience, provinces: [] }).map((x) => {
-    const appMall = x.mall.appMallId ? appMalls.find((a) => a.id === x.mall.appMallId) : undefined;
+    const appMall = appMalls.find((a) => a.id === mapIdOf(x.mall));
     return { key: x.mall.id, name: mallName(x.mall), area: mallArea(x.mall), province: x.mall.province, score: x.score, reasons: x.reasons, deck: x.mall, packages: x.mall.packages, appMall, screens: screensOf(appMall) };
   });
   const extra: MallEntry[] = appMalls
@@ -148,4 +148,21 @@ export function mallFacts(deck: DeckMall | undefined): string[] {
 export function entryPhoto(e: MallEntry, publicOnly: boolean): string | null {
   const hero = e.deck ? mallPhoto(e.deck.id) : null;
   return hero && (!publicOnly || isCleared(hero)) ? hero.src : null;
+}
+
+/**
+ * Everything that can be booked, one line each, for the AI that drafts a
+ * campaign from a client's brief: "key | mall (place) | screen | size | shoppers".
+ */
+export function briefInventory(catalogue: Catalogue): string {
+  return mallEntries(catalogue)
+    .flatMap((e) => {
+      const facts = mallFacts(e.deck).join(', ');
+      return rowsFor(e, catalogue).map((r) =>
+        [r.key, `${e.name}${e.area ? ` (${e.area})` : ''}`, `${r.title}${r.qty > 1 ? ` × ${r.qty} screens` : ''}`, r.width && r.height ? `${r.width}×${r.height} px` : 'size tbc', facts]
+          .filter(Boolean)
+          .join(' | '),
+      );
+    })
+    .join('\n');
 }

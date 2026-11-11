@@ -12,7 +12,7 @@ import { specHref, useLiveData } from '@/lib/liveData';
 import type { LiveState } from '@/lib/liveData';
 import { formatAspectRatio, getMalls, getScreenSize } from '@/lib/malls';
 import type { Mall } from '@/lib/malls';
-import { MALL_PLACES, PROVINCE_ORDER, placeLine } from '@/lib/mallPlaces';
+import { PROVINCE_ORDER, mallPlace, placeLine } from '@/lib/sites';
 import { getScreenLayout } from '@/lib/screenLayouts';
 import { MallOutlinePreview } from '@/components/map/MallOutlinePreview';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -102,7 +102,7 @@ function buildScreens(catalogue: Catalogue): { malls: readonly Mall[]; screens: 
   const malls = getMalls(catalogue);
   const screens: Screen[] = [];
   for (const mall of malls) {
-    const place = MALL_PLACES[mall.id];
+    const place = mallPlace(mall.id);
     for (const id of mall.specIds) {
       const spec = catalogue.specifications[id];
       if (!spec) continue;
@@ -263,7 +263,7 @@ function Footprint({ mall, screens, small = false }: { mall: Mall; screens: read
 }
 
 function MallGroup({ mall, screens, live }: { mall: Mall; screens: readonly Screen[]; live: LiveState }) {
-  const place = MALL_PLACES[mall.id];
+  const place = mallPlace(mall.id);
   const network = mall.group === 'formats';
   return (
     <section id={`mall-${mall.id}`} className="flex scroll-mt-40 flex-col gap-4" aria-labelledby={`mall-${mall.id}-name`}>
@@ -341,7 +341,7 @@ function Audience({ mallId }: { mallId: string }) {
 }
 
 function MallTile({ mall, count, onPick }: { mall: Mall; count: number; onPick: (id: string) => void }) {
-  const place = MALL_PLACES[mall.id];
+  const place = mallPlace(mall.id);
   return (
     <Link
       href={`/explorer?mall=${mall.id}`}
@@ -416,7 +416,7 @@ function Explorer() {
   let summary: string;
   if (mall) {
     const here = byMall(list, mall).length || byMall(screens, mall).length;
-    title = `${plural(here, 'screen')} at ${MALL_PLACES[mall.id]?.name ?? mall.name}`;
+    title = `${plural(here, 'screen')} at ${mallPlace(mall.id)?.name ?? mall.name}`;
     summary = 'Every screen, with its spec sheet';
   } else {
     title = `${plural(list.length, 'screen')} in ${plural(countIn(list), 'mall')}`;
@@ -441,11 +441,11 @@ function Explorer() {
   let results: React.ReactNode;
   if (mall) {
     const here = byMall(list, mall).length ? byMall(list, mall) : byMall(screens, mall);
-    const province = MALL_PLACES[mall.id]?.province;
+    const province = mallPlace(mall.id)?.province;
     const near = province
       ? malls
-          .filter((m) => m.id !== mall.id && MALL_PLACES[m.id]?.province === province)
-          .sort((a, b) => (MALL_PLACES[a.id]?.name ?? a.name).localeCompare(MALL_PLACES[b.id]?.name ?? b.name))
+          .filter((m) => m.id !== mall.id && mallPlace(m.id)?.province === province)
+          .sort((a, b) => (mallPlace(a.id)?.name ?? a.name).localeCompare(mallPlace(b.id)?.name ?? b.name))
       : [];
     results = (
       <div className="flex flex-col gap-10">
@@ -474,8 +474,8 @@ function Explorer() {
     const provinces = [...PROVINCE_ORDER, ''].map((p) => ({
       province: p,
       malls: physical
-        .filter((m) => (MALL_PLACES[m.id]?.province ?? '') === p)
-        .sort((a, b) => (MALL_PLACES[a.id]?.name ?? a.name).localeCompare(MALL_PLACES[b.id]?.name ?? b.name)),
+        .filter((m) => (mallPlace(m.id)?.province ?? '') === p)
+        .sort((a, b) => (mallPlace(a.id)?.name ?? a.name).localeCompare(mallPlace(b.id)?.name ?? b.name)),
     })).filter((g) => g.malls.length);
     const ordered = provinces.flatMap((g) => g.malls);
     const network = malls.filter((m) => m.group === 'formats' && byMall(list, m).length);
@@ -528,7 +528,7 @@ function Explorer() {
 
   const physicalMalls = malls
     .filter((m) => m.group !== 'formats')
-    .sort((a, b) => (MALL_PLACES[a.id]?.name ?? a.name).localeCompare(MALL_PLACES[b.id]?.name ?? b.name));
+    .sort((a, b) => (mallPlace(a.id)?.name ?? a.name).localeCompare(mallPlace(b.id)?.name ?? b.name));
 
   return (
     <div className="mx-auto flex w-full max-w-page flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12" ref={topRef}>
@@ -579,7 +579,7 @@ function Explorer() {
               <option value="">All malls</option>
               {physicalMalls.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {MALL_PLACES[m.id]?.name ?? m.name}
+                  {mallPlace(m.id)?.name ?? m.name}
                 </option>
               ))}
             </select>

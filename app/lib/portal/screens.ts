@@ -1,8 +1,8 @@
 import type { Asset, Catalogue, Specification } from '@data-model';
 import { getAssets } from '@/lib/catalogue';
 import { downloadUrl } from '@/lib/api';
-import { mallName as publicName, packageByCode } from '@/lib/insights';
-import { MALL_PLACES } from '@/lib/mallPlaces';
+import { mallName as publicName, packageByCode, mapIdOf } from '@/lib/insights';
+import { mallPlace } from '@/lib/sites';
 import { formatAspectRatio, getMalls, getScreenSize } from '@/lib/malls';
 import type { CampaignItem } from './types';
 
@@ -143,13 +143,13 @@ export function screensFor(item: CampaignItem, catalogue: Catalogue): BookedScre
   if (item.kind === 'screen') {
     const spec = catalogue.specifications[item.specId];
     const mall = getMalls(catalogue).find((m) => m.id === item.appMallId);
-    return [{ itemId: item.id, mallName: MALL_PLACES[item.appMallId]?.name ?? mall?.name ?? '', title: item.title, qty: 1, ...fromSpec(spec, catalogue), assumed: null, sites: null }];
+    return [{ itemId: item.id, mallName: mallPlace(item.appMallId)?.name ?? mall?.name ?? '', title: item.title, qty: 1, ...fromSpec(spec, catalogue), assumed: null, sites: null }];
   }
   const found = packageByCode(item.code);
   if (!found) return [];
   const { mall, pkg } = found;
   const rule = FORMAT_SPEC[pkg.format];
-  const { spec, source } = resolvePackageSpec(pkg, mall.appMallId, catalogue);
+  const { spec, source } = resolvePackageSpec(pkg, mapIdOf(mall), catalogue);
   const own = source === 'chosen' || source === 'matched' ? spec : undefined;
   return [
     {

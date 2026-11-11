@@ -88,6 +88,28 @@ account; `role` is `admin` (Site admin, accounts, everything) or `sales`
 and approvers' names are only sent to signed-in accounts. An account on a
 temporary password can do nothing but change it.
 
+## Malls
+
+Which malls exist is data, not code: one content record per mall,
+`site:<id>` (name, network, place, map position, published, deleted).
+Admins add, edit, publish, delete and restore malls in Site admin → Malls,
+and add screens there. Deleting a mall archives its screens; restoring brings
+them back. The build snapshot (`app/lib/liveSnapshot.json`) carries the
+`site:*` records so pages show the malls on first paint.
+
+## Drafting a campaign from a brief (AI)
+
+`POST /ai/brief` reads a client's brief (PDF or image as is; Word, PowerPoint
+and Excel as text extracted in the browser) and drafts a campaign with Claude
+(`src/brief.ts`). It needs the secret:
+
+```sh
+npx wrangler secret put ANTHROPIC_API_KEY
+```
+
+Without it the endpoint answers 503 and the site says reading briefs isn't
+switched on. Limited to 30 briefs per account per hour.
+
 ## Campaigns
 
 The sales workspace saves campaigns in the `campaigns` table (the whole

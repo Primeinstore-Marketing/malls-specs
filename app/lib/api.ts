@@ -28,6 +28,19 @@ export interface AdminProfile {
 }
 export type AccountProfile = AdminProfile;
 
+/** A campaign the AI drafted from a client's brief (see api/src/brief.ts). */
+export interface BriefDraft {
+  readonly summary: string;
+  readonly name: string;
+  readonly client: { readonly company: string; readonly contactName: string; readonly email: string };
+  readonly start: string | null;
+  readonly end: string | null;
+  readonly objective: string;
+  readonly items: readonly { readonly key: string; readonly reason: string }[];
+  readonly noteForClient: string;
+  readonly missing: readonly string[];
+}
+
 /** An account as admins see it in Site admin → Accounts. */
 export interface ManagedAccount extends AdminProfile {
   readonly disabled: boolean;
@@ -204,6 +217,9 @@ export const api = {
   updateMe: (fields: { name: string; title: string }) =>
     request<{ account: AdminProfile }>('/auth/me', { method: 'PATCH', body: JSON.stringify(fields) }, true),
   accounts: () => request<{ accounts: ManagedAccount[] }>('/accounts', {}, true),
+  /** Drafts a campaign from a client's brief with Claude (signed-in accounts). */
+  briefDraft: (body: { filename: string; text?: string; pdf?: string; image?: { data: string; mediaType: string }; inventory: string; today: string }) =>
+    request<{ draft: BriefDraft; model: string }>('/ai/brief', { method: 'POST', body: JSON.stringify(body) }, true),
   /** Your campaigns (admins: everyone's), with their revision. */
   campaigns: () => request<{ campaigns: { campaign: Campaign; rev: number; ownerId: number; ownerName: string; updatedAt: string }[]; people: { id: string; name: string; email: string; title: string }[] }>('/campaigns', {}, true),
   /** Saves a campaign; `rev` is the revision it was based on (0 for new). 409 carries `latest`. */

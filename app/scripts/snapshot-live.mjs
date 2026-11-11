@@ -40,11 +40,13 @@ try {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data = await response.json();
   if (!Array.isArray(data.specs) || !Array.isArray(data.pins)) throw new Error('unexpected response shape');
-  // Specs, positions and files only: site content (incl. the deck's data) loads at runtime and stays out of the repo.
-  const { content: _content, ...baked } = data;
+  // Specs, positions, files and the malls ("site:<id>": public names and map positions). The rest of the
+  // site content (the deck's data, client contacts) loads at runtime and stays out of the repo.
+  const { content, ...rest } = data;
+  const baked = { ...rest, content: (content ?? []).filter((r) => typeof r.key === 'string' && r.key.startsWith('site:')) };
   writeFileSync(out, JSON.stringify(baked) + '\n');
   console.log(
-    `snapshot-live: ${data.specs.length} specs, ${data.pins.length} positions, ${(data.assets ?? []).length} files -> lib/liveSnapshot.json`,
+    `snapshot-live: ${data.specs.length} specs, ${data.pins.length} positions, ${(data.assets ?? []).length} files, ${baked.content.length} malls -> lib/liveSnapshot.json`,
   );
 } catch (error) {
   console.warn(`snapshot-live: couldn't reach ${base}/data (${error.message}); keeping the existing snapshot.`);

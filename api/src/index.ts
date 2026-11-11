@@ -19,6 +19,7 @@
  *          Accounts are admins or sales. Sales may also edit client:* content.
  * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
+ * AI:      POST /ai/brief { filename, text? | pdf? | image?, inventory, today } -> { draft }  (signed in; drafts a campaign from a brief)
  * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
  *          PATCH /accounts/:id { name?, title?, role?, disabled?, password?, approve? } · DELETE /accounts/:id (a request not yet approved)
  * Files:   GET  /files/:key       — an uploaded picture or file (public)
@@ -49,6 +50,7 @@ import {
   verifyPassword,
 } from './auth';
 import { ALLOWED_TYPES, MAX_FILE_BYTES, kvFileStore, safeFilename } from './files';
+import { draftFromBrief } from './brief';
 
 export interface Env {
   DB: D1Database;
@@ -57,6 +59,8 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   /** Comma-separated email domains that may ask for an account, e.g. "primedia.co.za,primeinstore.co.za". */
   SIGNUP_DOMAINS?: string;
+  /** Secret: Claude API key, for drafting a campaign from a client's brief. */
+  ANTHROPIC_API_KEY?: string;
 }
 
 type Role = 'admin' | 'sales';
@@ -569,6 +573,40 @@ async function postProposalChanges(request: Request, url: URL, env: Env, id: str
   ]);
   if (!result[0].meta.changes) throw new HttpError(409, 'The proposal was just updated. Reload the page and try again.');
   return json({ ok: true });
+}
+
+// ── AI: a campaign from a client's brief ─────────────────────────────
+
+const MAX_BRIEF_BYTES = 12 * 1024 * 1024; // base64 PDF plus the inventory
+const MAX_BRIEFS_PER_ACCOUNT_HOUR = 30;
+
+async function postBrief(request: Request, env: Env): Promise<Response> {
+  const me = await requireAccount(request, env);
+  if (!env.ANTHROPIC_API_KEY) throw new HttpError(503, 'Reading briefs isn’t switched on yet: an admin needs to add the Claude API key to the server.');
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`brief:${me.id}`, minutesAgo(60)).first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_BRIEFS_PER_ACCOUNT_HOUR) throw new HttpError(429, 'That’s a lot of briefs this hour. Try again a little later.');
+  const body = await readJson<{ filename?: unknown; text?: unknown; pdf?: unknown; image?: unknown; inventory?: unknown; today?: unknown }>(request, MAX_BRIEF_BYTES);
+  const filename = typeof body.filename === 'string' ? body.filename.slice(0, 200) : 'brief';
+  const text = typeof body.text === 'string' ? body.text.slice(0, 400_000) : undefined;
+  const pdf = typeof body.pdf === 'string' && /^[A-Za-z0-9+/=]+$/.test(body.pdf.slice(0, 200)) ? body.pdf : undefined;
+  const img = body.image as { data?: unknown; mediaType?: unknown } | undefined;
+  const image =
+    img && typeof img.data === 'string' && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(img.mediaType as string)
+      ? { data: img.data, mediaType: img.mediaType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' }
+      : undefined;
+  const inventory = typeof body.inventory === 'string' ? body.inventory.slice(0, 200_000) : '';
+  const today = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : now().slice(0, 10);
+  if (!text?.trim() && !pdf && !image) throw new HttpError(400, 'We couldn’t find any text in that file. Try a PDF, Word, PowerPoint or Excel file.');
+  if (!inventory) throw new HttpError(400, 'The list of screens is missing. Reload the page and try again.');
+  await env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`brief:${me.id}`, now()).run();
+  try {
+    const result = await draftFromBrief(env.ANTHROPIC_API_KEY, { filename, text, pdf, image, inventory, today });
+    await audit(env, me, 'ai.brief', filename, { items: result.draft.items.length, model: result.model });
+    return json(result);
+  } catch (error) {
+    console.error('brief', error);
+    throw new HttpError(502, error instanceof Error && error.message.startsWith('The AI') ? error.message : 'The AI couldn’t read the brief just now. Try again in a minute, or fill the proposal in by hand.');
+  }
 }
 
 // ── campaigns ─────────────────────────────────────────────────────────
@@ -1089,6 +1127,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!sub && method === 'GET') return getProposal(url, env, id);
     if (sub === 'changes' && method === 'POST') return postProposalChanges(request, url, env, id);
   }
+
+  if (resource === 'ai' && id === 'brief' && method === 'POST') return postBrief(request, env);
 
   if (resource === 'campaigns') {
     if (!id && method === 'GET') return listCampaigns(request, env);

@@ -1,7 +1,7 @@
 import type { Specification } from '@data-model';
 import { getArtworkGuide } from '@/lib/artwork';
 import { formatAspectRatio, getScreenSize } from '@/lib/malls';
-import { getScreenLayout } from '@/lib/screenLayouts';
+import { getSafeMargin, getScreenLayout } from '@/lib/screenLayouts';
 import { ScreenLayoutDrawing } from './ScreenLayoutDrawing';
 
 /**
@@ -13,6 +13,7 @@ export function ArtworkGuideCard({ spec }: { spec: Specification }) {
   const size = getScreenSize(spec);
   const guide = getArtworkGuide(spec);
   const layout = getScreenLayout(spec);
+  const safe = getSafeMargin(spec);
   // Size, ratio and orientation are shown large above; the rest is the delivery list.
   const delivery = [
     // Multi-panel screens: the panel geometry comes first — it's the size designers work to.
@@ -27,7 +28,7 @@ export function ArtworkGuideCard({ spec }: { spec: Specification }) {
             : []),
           ...(layout.safeMargin ? [{ label: 'Safe area', value: `${layout.safeMargin} px inside each panel`, suggested: false }] : []),
         ]
-      : []),
+      : size ? [{ label: 'Safe area', value: `${safe} px inside each edge`, suggested: false }] : []),
     ...guide.items.filter((item) => !['Artwork size', 'Aspect ratio', 'Orientation'].includes(item.label)),
   ];
   const anySuggested = delivery.some((item) => item.suggested);
@@ -59,6 +60,12 @@ export function ArtworkGuideCard({ spec }: { spec: Specification }) {
                 className="relative flex items-center justify-center rounded-md border-2 border-accent bg-[linear-gradient(135deg,rgba(40,97,253,0.28),rgba(40,97,253,0.06))] shadow-[0_0_48px_rgba(40,97,253,0.35)]"
                 style={ratio >= 200 / 200 ? { width: `min(100%, ${Math.round(200 * Math.min(ratio, 4.5))}px)`, aspectRatio: String(ratio) } : { height: 200, aspectRatio: String(ratio) }}
               >
+                {/* The safe area, as the spec sheet draws it: dashed, 40 px inside each edge. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute rounded-[3px] border border-dashed"
+                  style={{ borderColor: 'rgba(255,90,110,0.8)', left: `${(safe / size!.width) * 100}%`, right: `${(safe / size!.width) * 100}%`, top: `${(safe / size!.height) * 100}%`, bottom: `${(safe / size!.height) * 100}%` }}
+                />
                 <span className="font-mono text-[11px] font-semibold text-white/80">{formatAspectRatio(size!)}</span>
                 <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[11px] text-white/60">
                   {size!.width} px

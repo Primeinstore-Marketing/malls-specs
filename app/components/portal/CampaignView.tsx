@@ -135,7 +135,14 @@ function ClientChangesBox({ c }: { c: Campaign }) {
 
 /** What the signed-in user can do next, given where the campaign is. */
 function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
-  const [note, setNote] = useState('');
+  // A note the AI drafted from the client's brief, when the proposal started that way.
+  const [note, setNote] = useState(() => {
+    try {
+      return sessionStorage.getItem(`malls-specs:draft-note:${c.id}`) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [asking, setAsking] = useState(false);
   const sales = user.role === 'sales';
   const email = useClientEmail(c, user);

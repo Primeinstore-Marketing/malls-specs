@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { useSearchParams } from 'next/navigation';
-import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands } from '@/lib/insights';
-import { MALL_PLACES } from '@/lib/mallPlaces';
+import { getMall } from '@/lib/malls';
+import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands, mapIdOf } from '@/lib/insights';
+import { mallPlace } from '@/lib/sites';
 import { AddToCampaign, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -50,8 +51,8 @@ function Mall({ id }: { id: string }) {
           <div><dt className="text-body-sm text-fg-muted">Household income</dt><dd className="text-display-md text-fg">{p?.householdIncome ? `R${compact(p.householdIncome)}` : '—'}</dd></div>
           <div><dt className="text-body-sm text-fg-muted">LSM affinity</dt><dd className="text-display-md text-fg">{p?.lsm?.replace('&', ' & ') ?? '—'}</dd></div>
         </dl>
-        {m.appMallId ? (
-          <Link href={`/explorer?mall=${m.appMallId}`} className="inline-flex h-11 items-center justify-center rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
+        {getMall(mapIdOf(m)) ? (
+          <Link href={`/explorer?mall=${mapIdOf(m)}`} className="inline-flex h-11 items-center justify-center rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
             Screens and specs →
           </Link>
         ) : null}
@@ -125,7 +126,7 @@ function Mall({ id }: { id: string }) {
             {same.map((x) => (
               <Link key={x.id} href={`/insights/mall?id=${x.id}`} className="flex flex-col rounded-lg border border-border bg-bg px-3.5 py-2.5 hover:border-accent">
                 <strong className="text-body-md font-semibold text-fg">{mallName(x)}</strong>
-                <span className="text-body-sm text-fg-muted">{x.appMallId ? MALL_PLACES[x.appMallId]?.area ?? '' : ''}{annualVisits(x) ? `${x.appMallId ? ' · ' : ''}${compact(annualVisits(x) as number)} visits/yr` : ''}</span>
+                <span className="text-body-sm text-fg-muted">{mallPlace(mapIdOf(x))?.area ?? ''}{annualVisits(x) ? `${mallPlace(mapIdOf(x))?.area ? ' · ' : ''}${compact(annualVisits(x) as number)} visits/yr` : ''}</span>
               </Link>
             ))}
           </div>

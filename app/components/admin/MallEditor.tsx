@@ -5,22 +5,32 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
-import { baseMall, deckMall, deckPhoto, mallName, packagePhotos } from '@/lib/insights';
+import { deckMallForApp, deckPhoto, packagePhotos } from '@/lib/insights';
 import type { MallContent, MediaPackage, UploadedPhoto } from '@/lib/insights';
 import type { ShopperProfile } from '@/lib/insights/types';
 import { contentUpdatedAt } from '@/lib/content';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { NETWORK_SPEC_IDS, resolvePackageSpec, sheetHref } from '@/lib/portal/screens';
 import { getAssets } from '@/lib/catalogue';
-import { getScreenSize } from '@/lib/malls';
-import { getMalls } from '@/lib/malls';
+import { getAllMallsForAdmin, getMalls, getScreenSize } from '@/lib/malls';
+import { allSites, placeLine, pointLocation, SA_PROVINCES, siteById, slugifySite } from '@/lib/sites';
+import type { SiteGroup, SiteRecord } from '@/lib/sites';
+import { newScreenSpec } from '@/lib/newScreen';
+import { specHref } from '@/lib/liveData';
+import { useAdminSession } from '@/components/auth/AdminSession';
+import { LocationPicker } from './LocationPicker';
 import { getCatalogue } from '@/lib/catalogue';
 import { AdminGate, field, fieldLabel, primaryBtn, quietBtn, uploadPhoto } from './AdminGate';
 
 /**
- * Edit one mall: its details, shopper profile, advertising recall, media
- * packages and photos. Saving stores the whole mall as content "mall:<id>",
- * which replaces the deck's version on the site; "Reset" goes back to it.
+ * One mall, everything about it on one page:
+ *  - name, place and map position, and whether it's published (content
+ *    "site:<id>", see lib/sites.ts) — what puts it in the left-hand list,
+ *    on the map and in the Media Explorer;
+ *  - its screens, added here with a name and size;
+ *  - optional proposal data: photo, shoppers, recall and media packages
+ *    (content "mall:<id>").
+ * Delete hides the mall and archives its screens; Restore brings both back.
  */
 
 const FORMATS = ['Digi Nav', 'Digital Impact', 'Digi Icon TV'];
@@ -134,17 +144,102 @@ function PackageScreen({ pkg, appMallId, onChange }: { pkg: MediaPackage; appMal
   );
 }
 
-function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
+const EMPTY_DECK = (id: string, name: string, province: string): MallContent => ({
+  id, name, appMallId: id, province, address: null, annualFootcount: null, gla: null, profile: null, media: null, packages: [],
+});
+
+const hasProposalData = (m: MallContent) =>
+  Boolean(m.packages.length || m.profile || m.media || m.annualFootcount || m.gla || m.photo || m.address);
+
+/** The mall's screens: what's there, and a quick way to add more. */
+function Screens({ site }: { site: SiteRecord }) {
+  const { catalogue } = useLiveData();
+  const { account } = useAdminSession();
+  const mall = getAllMallsForAdmin(catalogue).find((x) => x.site.id === site.id)?.mall;
+  const specs = (mall?.specIds ?? []).map((id) => catalogue.specifications[id]).filter(Boolean);
+  const [title, setTitle] = useState('');
+  const [w, setW] = useState('');
+  const [h, setH] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const px = (v: string) => (v.trim() ? Number(v) : null);
+
+  async function add() {
+    const width = px(w);
+    const height = px(h);
+    if (!title.trim()) return setMsg({ ok: false, text: 'Give the screen a name, e.g. “Food Court”.' });
+    if ([width, height].some((v) => v != null && !(Number.isInteger(v) && v > 0 && v <= 20000)) || (width == null) !== (height == null)) {
+      return setMsg({ ok: false, text: 'Width and height are whole numbers of pixels (or leave both empty).' });
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const spec = newScreenSpec({ mallId: site.id, mallName: site.name, title: title.trim(), width, height, takenIds: new Set(Object.keys(catalogue.specifications)), by: account?.email ?? 'admin' });
+      await api.putSpec(spec, { mallId: site.id, isNew: true });
+      await refreshLiveData();
+      setTitle('');
+      setW('');
+      setH('');
+      setMsg({ ok: true, text: `Added “${spec.title}”. Add pictures, files and its artwork guide with Edit.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t add the screen.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {specs.length ? (
+        <ul className="overflow-hidden rounded-2xl border border-border">
+          {specs.map((x) => {
+            const size = getScreenSize(x!);
+            const pics = x!.mediaIds.filter((id) => catalogue.assets[id]).length;
+            const href = specHref(x!.id);
+            return (
+              <li key={x!.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-4 py-3 first:border-t-0">
+                <span className="min-w-0 flex-1 truncate text-body-md font-medium text-fg">{x!.title}</span>
+                <span className="w-28 font-mono text-body-sm tabular-nums text-fg-muted">{size ? `${size.width}×${size.height}` : 'No size'}</span>
+                <span className={`w-24 text-body-sm ${pics ? 'text-fg-muted' : 'text-warning-fg'}`}>{pics ? `${pics} ${pics === 1 ? 'picture' : 'pictures'}` : 'No pictures'}</span>
+                <Link href={`${href}${href.includes('?') ? '&' : '?'}edit=1`} className="inline-flex h-9 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:bg-bg-subtle">Edit</Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm text-fg-muted">No screens yet. Add the first one below.</p>
+      )}
+      <div className="grid gap-3 rounded-2xl bg-bg-subtle p-4 sm:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] sm:items-end">
+        <Text label="New screen" value={title} placeholder="e.g. Food Court" onChange={setTitle} />
+        <Text label="Width (px)" value={w} placeholder="1920" onChange={setW} />
+        <Text label="Height (px)" value={h} placeholder="1080" onChange={setH} />
+        <button type="button" disabled={busy} className={primaryBtn} onClick={() => void add()}>{busy ? 'Adding…' : '+ Add screen'}</button>
+      </div>
+      {msg ? <p role="status" className={`text-body-sm ${msg.ok ? 'text-success-fg' : 'text-danger-fg'}`}>{msg.text}</p> : null}
+      <p className="text-body-sm text-fg-muted">
+        To place screens inside the mall, open it on the{' '}
+        <Link href={`/?mall=${site.id}&edit=1`} className="font-semibold text-accent hover:underline">screen map</Link>.
+      </p>
+    </div>
+  );
+}
+
+function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: MallContent | null; isNew: boolean }) {
   const router = useRouter();
-  const [m, setM] = useState<MallContent>(start);
+  const { catalogue } = useLiveData();
+  const { account } = useAdminSession();
+  const [site, setSite] = useState<SiteRecord>(start);
+  const [m, setM] = useState<MallContent>(deckStart ?? EMPTY_DECK(start.id, start.name, start.place?.province ?? 'Gauteng'));
+  const [showProposal, setShowProposal] = useState(Boolean(deckStart));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const p = m.profile ?? EMPTY_PROFILE;
-  const appMalls = getMalls(getCatalogue()).filter((x) => x.group !== 'formats');
-  const edited = contentUpdatedAt(`mall:${m.id}`);
-  const fromDeck = Boolean(baseMall(m.id));
+  const saved = Boolean(siteById(site.id)) && !isNew;
+  const place = site.place ?? { name: '', area: '', city: '', province: 'Gauteng' };
 
+  const setS = (patch: Partial<SiteRecord>) => setSite((cur) => ({ ...cur, ...patch }));
+  const setPlace = (patch: Partial<typeof place>) => setSite((cur) => ({ ...cur, place: { ...(cur.place ?? place), ...patch } }));
   const set = (patch: Partial<MallContent>) => setM((cur) => ({ ...cur, ...patch }));
   const setProfile = (patch: Partial<ShopperProfile>) => setM((cur) => ({ ...cur, profile: { ...(cur.profile ?? EMPTY_PROFILE), ...patch } }));
   const setMedia = (key: keyof NonNullable<MallContent['media']>, v: string) => setM((cur) => ({ ...cur, media: { ...(cur.media ?? {}), [key]: num(v) ?? undefined } }));
@@ -155,7 +250,7 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
     setMessage(null);
     try {
       apply(await uploadPhoto(owner, f));
-      setMessage({ ok: true, text: 'Photo uploaded. Save to publish it.' });
+      setMessage({ ok: true, text: 'Photo uploaded. Save to keep it.' });
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Upload failed.' });
     } finally {
@@ -163,15 +258,25 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
     }
   }
 
-  async function save() {
-    if (!m.name.trim() || !m.id) return setMessage({ ok: false, text: 'Give the mall a name.' });
+  /** Saves the mall (and its proposal data, if it has any). `published` changes whether everyone sees it. */
+  async function save(published = site.published, extra: Partial<SiteRecord> = {}) {
+    const name = site.name.trim();
+    const id = isNew ? slugifySite(name) : site.id;
+    if (!name || !id) return setMessage({ ok: false, text: 'Give the mall a name.' });
+    if (isNew && allSites().some((x) => x.id === id)) return setMessage({ ok: false, text: `There’s already a mall called “${siteById(id)?.name}”. Open it from the list instead.` });
+    if (published && !site.location) return setMessage({ ok: false, text: 'Put the mall on the map before publishing it, so it shows in the right place.' });
     setSaving(true);
     setMessage(null);
     try {
-      await api.putContent(`mall:${m.id}`, m);
+      const next: SiteRecord = { ...site, ...extra, id, name, place: { ...place, name: place.name.trim() || name }, published };
+      await api.putContent(`site:${id}`, next);
+      if (showProposal && (hasProposalData(m) || deckStart)) {
+        await api.putContent(`mall:${m.id || id}`, { ...m, id: m.id || id, name: m.name || place.name || name, province: place.province, appMallId: id, hidden: Boolean(next.deletedAt) });
+      }
       await refreshLiveData();
-      setMessage({ ok: true, text: 'Saved — it’s live on the site.' });
-      if (isNew) router.replace(`/admin/malls/edit?id=${m.id}`);
+      setSite(next);
+      setMessage({ ok: true, text: next.deletedAt ? 'Deleted.' : published ? 'Saved and published: everyone can see it.' : 'Saved as a draft: only admins can see it.' });
+      if (isNew) router.replace(`/admin/malls/edit?id=${id}`);
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t save.' });
     } finally {
@@ -179,19 +284,36 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
     }
   }
 
-  async function reset() {
+  /** Delete: hide the mall and archive its screens (both come back with Restore). */
+  async function remove() {
+    const mall = getAllMallsForAdmin(catalogue).find((x) => x.site.id === site.id)?.mall;
+    const specs = (mall?.specIds ?? []).map((id) => catalogue.specifications[id]).filter((x) => x && !x.archivedAt);
+    if (!window.confirm(`Delete ${site.name}${specs.length ? ` and its ${specs.length} ${specs.length === 1 ? 'screen' : 'screens'}` : ''}? It disappears for everyone. You can restore it from Site admin → Malls → Deleted.`)) return;
     setSaving(true);
     try {
-      await api.deleteContent(`mall:${m.id}`);
-      await refreshLiveData();
-      const base = baseMall(m.id);
-      if (base) setM(base);
-      else router.push('/admin/malls');
-      setMessage({ ok: true, text: fromDeck ? 'Back to the deck’s data.' : 'Mall removed.' });
-    } catch (e) {
-      setMessage({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t reset.' });
-    } finally {
+      const at = new Date().toISOString();
+      for (const x of specs) await api.putSpec({ ...x!, archivedAt: at, archivedBy: (account?.email ?? 'admin') as never }, { mallId: site.id });
       setSaving(false);
+      await save(false, { deletedAt: at, archivedSpecIds: specs.map((x) => x!.id) } as Partial<SiteRecord>);
+    } catch (e) {
+      setSaving(false);
+      setMessage({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t delete.' });
+    }
+  }
+
+  async function restore() {
+    setSaving(true);
+    try {
+      const ids = ((site as SiteRecord & { archivedSpecIds?: string[] }).archivedSpecIds ?? []);
+      for (const id of ids) {
+        const x = catalogue.specifications[id];
+        if (x) await api.putSpec({ ...x, archivedAt: null, archivedBy: null }, { mallId: site.id });
+      }
+      setSaving(false);
+      await save(false, { deletedAt: null, archivedSpecIds: [] } as Partial<SiteRecord>);
+    } catch (e) {
+      setSaving(false);
+      setMessage({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t restore.' });
     }
   }
 
@@ -199,38 +321,77 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
     ...(m.photo ? [{ src: fileUrl(m.photo.storageKey), uploaded: true, key: m.photo.storageKey }] : []),
     ...(!m.photo && deckPhoto(m.id) ? [{ src: deckPhoto(m.id)!.src, uploaded: false }] : []),
   ];
+  const status = site.deletedAt ? { text: 'Deleted', cls: 'bg-danger-bg text-danger-fg' } : site.published ? { text: 'Published', cls: 'bg-success-bg text-success-fg' } : { text: 'Draft · only admins see it', cls: 'bg-warning-bg text-warning-fg' };
 
   return (
-    <div className="flex flex-col gap-6 pb-24">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <Link href="/admin/malls" className="text-body-sm font-semibold text-fg-muted hover:text-fg">← All malls</Link>
-          <h2 className="text-display-md text-fg">{isNew ? 'New mall' : mallName(m)}</h2>
-          <p className="text-body-sm text-fg-muted">{edited ? `Edited ${new Date(edited).toLocaleString('en-ZA')}` : fromDeck ? 'From the proposal deck, not edited yet' : 'Not saved yet'}</p>
+    <div className="flex flex-col gap-6 pb-28">
+      <div className="flex flex-col gap-1">
+        <Link href="/admin/malls" className="text-body-sm font-semibold text-fg-muted hover:text-fg">← All malls</Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-display-md text-fg">{isNew ? 'Add a mall' : site.name}</h2>
+          {!isNew ? <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${status.cls}`}>{status.text}</span> : null}
         </div>
+        <p className="text-body-sm text-fg-muted">
+          {isNew ? 'Three steps: name and place, then the map, then its screens. Save as a draft at any point; publish when it’s ready.' : site.place ? placeLine(site.place) : ''}
+          {saved && site.published && !site.deletedAt ? <> · <Link href={`/?mall=${site.id}`} className="font-semibold text-accent hover:underline">See it on the map</Link></> : null}
+        </p>
+        {site.place?.note ? <p className="text-body-sm font-semibold text-warning-fg">{site.place.note}</p> : null}
       </div>
 
-      <Group title="Details">
+      <Group title="1 · Name and place">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Text label="Name" value={m.name} onChange={(v) => set(isNew ? { name: v, id: slug(v) } : { name: v })} />
-          <Text label="Province" value={m.province} onChange={(v) => set({ province: v })} />
-          <Text label="Address" value={m.address} onChange={(v) => set({ address: v || null })} wide />
-          <Text label="Visits a year" value={m.annualFootcount} onChange={(v) => set({ annualFootcount: num(v) })} />
-          <Text label="Shop floor area (m²)" value={m.gla} onChange={(v) => set({ gla: num(v) })} />
+          <Text label="Name in lists" value={site.name} placeholder="e.g. Cresta" onChange={(v) => setS({ name: v })} />
+          <Text label="Full public name" value={place.name} placeholder="e.g. Cresta Shopping Centre" onChange={(v) => setPlace({ name: v })} />
           <label className="flex flex-col gap-1.5">
-            <span className={fieldLabel}>Screens on this site</span>
-            <select className={field} value={m.appMallId ?? ''} onChange={(e) => set({ appMallId: e.target.value || null })}>
-              <option value="">None — audience data only</option>
-              {appMalls.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <span className={fieldLabel}>Network</span>
+            <select className={field} value={site.group} onChange={(e) => setS({ group: e.target.value as SiteGroup })}>
+              <option value="malls">Primedia Malls</option>
+              <option value="hyprop">Hyprop Malls</option>
+              <option value="formats">Generic specs (not a mall)</option>
             </select>
           </label>
-          <label className="flex items-center gap-3 self-end pb-2.5">
-            <input type="checkbox" checked={Boolean(m.hidden)} onChange={(e) => set({ hidden: e.target.checked })} className="h-5 w-5" />
-            <span className="text-body-md text-fg">Hide from the site</span>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>Province</span>
+            <select className={field} value={place.province} onChange={(e) => setPlace({ province: e.target.value })}>
+              {[...new Set([...SA_PROVINCES, place.province].filter(Boolean))].map((x) => <option key={x}>{x}</option>)}
+            </select>
           </label>
+          <Text label="Suburb or area" value={place.area} placeholder="e.g. Randburg" onChange={(v) => setPlace({ area: v })} />
+          <Text label="City" value={place.city} placeholder="e.g. Johannesburg" onChange={(v) => setPlace({ city: v })} />
         </div>
       </Group>
 
+      {site.group !== 'formats' ? (
+        <Group title="2 · On the map" note="Where the mall is, on the same street map everyone sees.">
+          <LocationPicker
+            value={site.location}
+            suggestion={place.name || site.name}
+            onChange={(location, hint) => {
+              setSite((cur) => {
+                const cp = cur.place ?? place;
+                return {
+                  ...cur,
+                  location,
+                  place: hint
+                    ? { ...cp, name: cp.name || hint.name || cur.name, area: hint.area || cp.area, city: hint.city || cp.city, province: hint.province || cp.province, note: undefined }
+                    : { ...cp, note: undefined },
+                };
+              });
+            }}
+          />
+        </Group>
+      ) : null}
+
+      <span id="screens" className="-mb-6 scroll-mt-24" />
+      <Group title="3 · Screens" note={saved ? 'Each screen gets its own spec page, where you add pictures, the spec sheet and the After Effects template.' : 'Save the mall first (as a draft is fine), then add its screens here.'}>
+        {saved ? <Screens site={site} /> : (
+          <button type="button" disabled={saving} className={`${primaryBtn} self-start`} onClick={() => void save(false)}>Save draft and add screens</button>
+        )}
+      </Group>
+
+      {showProposal ? (
+        <>
+          <h3 className="pt-2 text-display-sm text-fg">Proposal data</h3>
       <Group title="Mall photo" note="Shown on the mall’s insights page and in campaigns. Photos you upload count as cleared for clients.">
         <PhotoPicker
           label="Upload photo"
@@ -327,20 +488,33 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
         </button>
       </Group>
 
+        </>
+      ) : (
+        <button type="button" className={`${quietBtn} self-start text-accent`} onClick={() => setShowProposal(true)}>
+          + Add proposal data (shoppers, packages, mall photo)
+        </button>
+      )}
+
       <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 backdrop-blur lg:left-[var(--sidebar-width)]">
         <div className="mx-auto flex max-w-admin flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <p className={`text-body-sm ${message ? (message.ok ? 'text-success-fg' : 'text-danger-fg') : 'text-fg-muted'}`} role="status">
-            {message?.text ?? 'Changes go live for everyone when you save.'}
+            {message?.text ?? (site.published ? 'Changes go live for everyone when you save.' : 'A draft: only admins see it until you publish.')}
           </p>
-          <div className="flex gap-2">
-            {edited ? (
-              <button type="button" disabled={saving} className={quietBtn} onClick={() => void reset()}>
-                {fromDeck ? 'Reset to deck data' : 'Delete mall'}
-              </button>
-            ) : null}
-            <button type="button" disabled={saving || Boolean(uploading)} className={primaryBtn} onClick={() => void save()}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {saved && !site.deletedAt ? <button type="button" disabled={saving} className={`${quietBtn} text-danger-fg`} onClick={() => void remove()}>Delete mall</button> : null}
+            {site.deletedAt ? (
+              <button type="button" disabled={saving} className={primaryBtn} onClick={() => void restore()}>Restore mall</button>
+            ) : site.published ? (
+              <>
+                <button type="button" disabled={saving} className={quietBtn} onClick={() => void save(false)}>Unpublish</button>
+                <button type="button" disabled={saving || Boolean(uploading)} className={primaryBtn} onClick={() => void save(true)}>{saving ? 'Saving…' : 'Save'}</button>
+              </>
+            ) : (
+              <>
+                <button type="button" disabled={saving || Boolean(uploading)} className={quietBtn} onClick={() => void save(false)}>Save draft</button>
+                <button type="button" disabled={saving || Boolean(uploading)} className={primaryBtn} onClick={() => void save(true)}>{saving ? 'Saving…' : 'Publish'}</button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -350,19 +524,20 @@ function Editor({ start, isNew }: { start: MallContent; isNew: boolean }) {
 
 function Load() {
   const params = useSearchParams();
+  useLiveData(); // malls arrive with the live data
   const id = params.get('id') ?? '';
-  const isNew = params.get('new') === '1';
-  if (isNew) {
+  if (params.get('new') === '1') {
     return (
       <Editor
         isNew
-        start={{ id: '', name: '', appMallId: null, province: 'Gauteng', address: null, annualFootcount: null, gla: null, profile: null, media: null, packages: [] }}
+        deckStart={null}
+        start={{ id: '', name: '', group: 'malls', place: { name: '', area: '', city: '', province: 'Gauteng' }, location: null, subGroupId: null, specIds: [], published: false, deletedAt: null }}
       />
     );
   }
-  const m = deckMall(id);
-  if (!m) return <p className="text-body-md text-fg-muted">No mall with that id. <Link href="/admin/malls" className="font-semibold text-accent">Back to malls</Link></p>;
-  return <Editor key={m.id} start={m} isNew={false} />;
+  const site = siteById(id);
+  if (!site) return <p className="text-body-md text-fg-muted">No mall with that id. <Link href="/admin/malls" className="font-semibold text-accent">Back to malls</Link></p>;
+  return <Editor key={site.id} start={site} deckStart={deckMallForApp(site.id) ?? null} isNew={false} />;
 }
 
 export function MallEditor() {

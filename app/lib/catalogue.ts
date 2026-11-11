@@ -1,6 +1,7 @@
 import { catalogue as codeCatalogue } from '@data/catalogue.seed';
 import liveSnapshot from './liveSnapshot.json';
 import { mergeLiveData } from './mergeLive';
+import { applySites } from './sites';
 import type { LiveDataResponse } from './api';
 import { toSummary } from '@data-model';
 import type { Catalogue } from '@data-model';
@@ -21,6 +22,8 @@ import type { Revision } from '@data-model';
  * applies anything changed since (lib/liveData.ts).
  */
 const snapshot = mergeLiveData(codeCatalogue, liveSnapshot as unknown as LiveDataResponse);
+// The malls (records "site:<id>") are in the snapshot too, so pages show them on first paint.
+applySites(((liveSnapshot as { content?: { key: string; data: unknown }[] }).content ?? []));
 const bakedCatalogue = snapshot.catalogue;
 
 /** Placement and added/edited sets from the snapshot, for the first render. */

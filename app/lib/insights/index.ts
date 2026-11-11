@@ -1,5 +1,5 @@
 import type { DeckImage, DeckImages, DeckMall, MediaPackage, PhotoRights, PhotoRightsStatus, ScreenPhoto } from './types';
-import { MALL_PLACES } from '@/lib/mallPlaces';
+import { mallPlace, placeLine } from '@/lib/sites';
 import { fileUrl } from '@/lib/api';
 
 /*
@@ -55,7 +55,8 @@ let MAX_VISITS = 1;
 function rebuild() {
   DECK_MALLS = ALL_MALLS.filter((m) => !m.hidden);
   BY_ID = new Map(ALL_MALLS.map((m) => [m.id, m]));
-  BY_APP_ID = new Map(DECK_MALLS.filter((m) => m.appMallId).map((m) => [m.appMallId as string, m]));
+  // A deck mall is on the map through its appMallId, or a map mall with the same id.
+  BY_APP_ID = new Map(DECK_MALLS.map((m) => [mapIdOf(m), m]));
   BY_CODE = new Map(ALL_MALLS.flatMap((m) => m.packages.map((p) => [p.code, { mall: m, pkg: p }] as const)));
   RIGHTS = new Map(PHOTO_RIGHTS.map((r) => [r.src, r]));
   PROVINCES = [...new Set(DECK_MALLS.map((m) => m.province))].sort();
@@ -86,15 +87,19 @@ const NAME_FIXES: Readonly<Record<string, string>> = {
   'long-beach': 'Longbeach Mall',
 };
 
+/** The map mall a deck mall belongs to: its appMallId, else the mall with its own id. */
+export const mapIdOf = (m: DeckMall): string => m.appMallId || m.id;
+
 export function mallName(m: DeckMall): string {
   if (NAME_FIXES[m.id]) return NAME_FIXES[m.id];
-  if (m.appMallId && MALL_PLACES[m.appMallId]) return MALL_PLACES[m.appMallId].name;
+  const place = mallPlace(mapIdOf(m));
+  if (place) return place.name;
   return m.name;
 }
 
 export function mallArea(m: DeckMall): string {
-  const place = m.appMallId ? MALL_PLACES[m.appMallId] : undefined;
-  if (place) return `${place.area === place.city ? place.city : `${place.area}, ${place.city}`} · ${m.province}`;
+  const place = mallPlace(mapIdOf(m));
+  if (place) return placeLine({ ...place, province: m.province || place.province });
   const town = m.address?.split(',').map((s) => s.trim()).filter(Boolean).pop();
   return town ? `${town} · ${m.province}` : m.province;
 }
