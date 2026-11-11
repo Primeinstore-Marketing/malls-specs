@@ -1,10 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useAdminSession } from '@/components/auth/AdminSession';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { useSearchPalette } from '@/components/search/SearchPaletteContext';
 import { AccountMenu } from '@/components/auth/AccountMenu';
+import { Notifications, PortalAccount } from '@/components/portal/Chrome';
+import { usePortalUser } from '@/lib/portal/store';
 import { withBasePath } from '@/lib/basePath';
 
 function MenuIcon() {
@@ -24,12 +28,23 @@ function SearchIcon() {
   );
 }
 
-export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
+export function TopBar({ onMenuToggle, compactBrand = false }: { onMenuToggle: () => void; compactBrand?: boolean }) {
   const { setOpen: setSearchOpen } = useSearchPalette();
+  const { user } = usePortalUser();
+  const { isAdmin } = useAdminSession();
+  const pathname = usePathname();
+  // Explorer, Insights and the workspace are for signed-in sales and clients only.
+  const links = user
+    ? [
+        ['/explorer', 'Media Explorer'],
+        ['/insights', 'Insights'],
+        ['/portal', user.role === 'sales' ? 'Workspace' : 'My campaigns'],
+      ]
+    : [];
 
   return (
     <header
-      className="fixed inset-x-0 top-0 z-topbar flex h-[var(--topbar-height-sm)] items-stretch border-b border-border bg-bg/95 shadow-1 backdrop-blur md:h-[var(--topbar-height-md)] lg:h-[var(--topbar-height)]"
+      className="print:hidden fixed inset-x-0 top-0 z-topbar flex h-[var(--topbar-height-sm)] items-stretch border-b border-border bg-bg/95 shadow-1 backdrop-blur md:h-[var(--topbar-height-md)] lg:h-[var(--topbar-height)]"
     >
       <a
         href="#main-content"
@@ -38,7 +53,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         Skip to content
       </a>
 
-      <div className="flex shrink-0 items-center bg-brand-surface px-3 sm:px-4 lg:w-[var(--sidebar-width)]">
+      <div className={`flex shrink-0 items-center bg-brand-surface px-3 sm:px-4 ${compactBrand ? 'lg:px-6' : 'lg:w-[var(--sidebar-width)]'}`}>
         <button
           type="button"
           onClick={onMenuToggle}
@@ -60,9 +75,25 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
       </div>
 
       <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4">
-        <Link href="/" className="hidden shrink-0 text-body-sm font-medium text-fg sm:block">
-          Home
-        </Link>
+        {links.length ? (
+          <nav aria-label="Pages" className="hidden shrink-0 items-center gap-1 md:flex">
+            {links.map(([href, label]) => {
+              const on = pathname === href || pathname.startsWith(`${href}/`);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={on ? 'page' : undefined}
+                  className={`rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors duration-fast ease-standard ${
+                    on ? 'bg-accent-subtle text-accent' : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
 
         <button
           type="button"
@@ -78,7 +109,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
-          <AccountMenu />
+          <Notifications />
+          <PortalAccount />
+          {isAdmin ? <AccountMenu /> : null}
         </div>
       </div>
     </header>

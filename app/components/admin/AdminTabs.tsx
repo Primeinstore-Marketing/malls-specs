@@ -4,11 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { label: 'Specs', href: '/admin/specs' },
-  { label: 'Categories', href: '/admin/categories' },
-  { label: 'Users', href: '/admin/users' },
-  { label: 'Archive', href: '/admin/archive' },
-  { label: 'Settings', href: '/admin/settings' },
+  { label: 'Malls', href: '/admin/malls' },
+  { label: 'Screens', href: '/admin/specs' },
+  { label: 'Clients', href: '/admin/clients' },
+  { label: 'Photo rights', href: '/admin/photos' },
 ] as const;
 
 export function AdminTabs() {

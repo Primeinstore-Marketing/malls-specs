@@ -9,6 +9,8 @@ import { getMalls } from '@/lib/malls';
 import type { ScreenPin } from '@/lib/malls';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { MallIndex } from './MallIndex';
+import { PortalLanding } from '@/components/landing/PortalLanding';
+import { usePortalUser } from '@/lib/portal/store';
 import { MallMap } from './MallMap';
 import { GridCanvas } from './GridCanvas';
 import { ScreenPanel } from './ScreenPanel';
@@ -26,6 +28,7 @@ export function MallExplorer() {
   const { catalogue } = live;
   const malls = useMemo(() => getMalls(catalogue), [catalogue]);
   const searchParams = useSearchParams();
+  const { user: portalUser } = usePortalUser();
   const router = useRouter();
   const pathname = usePathname();
   const { isAdmin, admin, sessionExpired } = useAdminSession();
@@ -179,7 +182,7 @@ export function MallExplorer() {
   }, [mall, step, setFocus]);
 
   if (!mall) {
-    return <MallIndex malls={malls} specifications={catalogue.specifications} isAdmin={isAdmin} />;
+    return <MallIndex malls={malls} specifications={catalogue.specifications} isAdmin={isAdmin} intro={!portalUser ? <PortalLanding /> : undefined} />;
   }
 
   const editorSpec = editor?.specId ? catalogue.specifications[editor.specId] : undefined;

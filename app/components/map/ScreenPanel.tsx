@@ -11,6 +11,9 @@ import { PinStatusDot } from './PinStatusDot';
 import { DownloadButtons } from '@/components/spec/DownloadButtons';
 import { getAssets } from '@/lib/catalogue';
 import { fileUrl } from '@/lib/api';
+import { isCleared, screenPhotos } from '@/lib/insights';
+import { usePortalUser } from '@/lib/portal/store';
+import { useAdminSession } from '@/components/auth/AdminSession';
 
 export type SaveState =
   | { readonly kind: 'idle' }
@@ -82,6 +85,11 @@ function ScreenDetail({
   const downloads = getAssets(spec.downloadIds, live.catalogue);
   const pictures = getAssets(spec.mediaIds, live.catalogue).filter((asset) => asset.kind === 'image');
   const picture = pictures[0];
+  // No uploaded picture: a photo of this screen from the malls proposal deck.
+  // Public visitors only see it once its rights are cleared.
+  const { user } = usePortalUser();
+  const { isAdmin } = useAdminSession();
+  const deckShot = picture ? undefined : screenPhotos(spec.id).find((p) => isCleared(p) || Boolean(user) || isAdmin);
   const size = getScreenSize(spec);
   const explanation = pin ? positionExplanation(pin) : null;
   const isAdded = admin?.isAdded(spec.id) ?? false;
@@ -130,6 +138,20 @@ function ScreenDetail({
           {pictures.length > 1 ? (
             <span className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white">
               +{pictures.length - 1} more {pictures.length === 2 ? 'photo' : 'photos'}
+            </span>
+          ) : null}
+        </Link>
+      ) : deckShot ? (
+        <Link
+          href={specHref(spec.id, live)}
+          title="Open the full specification"
+          className="group relative block overflow-hidden rounded-lg border border-border bg-bg-subtle"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- deck photo from public/ */}
+          <img src={deckShot.src} alt={`${spec.title} on site`} decoding="async" className="aspect-video w-full object-cover transition-transform duration-slow ease-standard group-hover:scale-[1.02]" />
+          {!isCleared(deckShot) ? (
+            <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white" title="Internal use until rights are cleared">
+              Rights pending
             </span>
           ) : null}
         </Link>

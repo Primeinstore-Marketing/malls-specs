@@ -3,63 +3,69 @@
 import Link from 'next/link';
 import { useAuthDialog } from '@/components/auth/AuthDialogContext';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { usePortalUser } from '@/lib/portal/store';
 
-interface FooterLink {
-  readonly label: string;
-  readonly href?: string;
-}
-
-const COLUMNS: { title: string; links: FooterLink[] }[] = [
-  {
-    title: 'Platform',
-    links: [
-      { label: 'Browse', href: '/browse' },
-      { label: 'Search', href: '/search' },
-      { label: 'Bookmarks', href: '/bookmarks' },
-      { label: 'Recently viewed', href: '/recent' },
-    ],
-  },
-  {
-    title: 'Resources',
-    links: [{ label: 'Documentation' }, { label: 'Component inventory' }, { label: 'Data model' }],
-  },
-  {
-    title: 'Admin',
-    links: [{ label: 'Sign in' }, { label: 'Management sheet', href: '/admin' }, { label: 'Settings' }],
-  },
-  { title: 'Legal', links: [{ label: 'Terms' }, { label: 'Privacy' }] },
-];
-
+/**
+ * Only links that go somewhere. The portal columns follow the top bar:
+ * Explorer, Insights and the workspace show once someone is signed in.
+ */
 export function Footer() {
   const { setOpen: setAuthOpen } = useAuthDialog();
   const { isAdmin, signOut } = useAdminSession();
+  const { user } = usePortalUser();
 
+  const columns: { title: string; links: { label: string; href?: string; onClick?: () => void }[] }[] = [
+    {
+      title: 'Screen specs',
+      links: [
+        { label: 'Mall screen map', href: '/' },
+        { label: 'Browse specs', href: '/browse' },
+        { label: 'Search', href: '/search' },
+        { label: 'Bookmarks', href: '/bookmarks' },
+        { label: 'Recently viewed', href: '/recent' },
+      ],
+    },
+    user
+      ? {
+          title: user.role === 'sales' ? 'Sales' : 'Your campaigns',
+          links: [
+            { label: user.role === 'sales' ? 'Workspace' : 'My campaigns', href: '/portal' },
+            { label: user.role === 'sales' ? 'New proposal' : 'Propose a campaign', href: '/portal/new' },
+            { label: 'Media Explorer', href: '/explorer' },
+            { label: 'Insights', href: '/insights' },
+            ...(user.role === 'sales' ? [{ label: 'Photo rights', href: '/portal/photos' }] : []),
+          ],
+        }
+      : { title: 'Sales', links: [{ label: 'Sales sign in', href: '/sign-in' }] },
+    {
+      title: 'Admin',
+      links: isAdmin
+        ? [
+            { label: 'Site admin', href: '/admin/malls' },
+            { label: 'Sign out of admin', onClick: () => void signOut() },
+          ]
+        : [{ label: 'Admin sign in', onClick: () => setAuthOpen(true) }],
+    },
+  ];
+
+  const linkClass = 'text-left text-body-sm text-fg-muted transition-colors duration-fast ease-standard hover:text-fg';
   return (
-    <footer className="mt-16 border-t border-border bg-bg-subtle">
-      <div className="mx-auto grid max-w-page grid-cols-2 gap-8 px-4 py-10 sm:px-6 md:grid-cols-4 lg:px-8">
-        {COLUMNS.map((column) => (
+    <footer className="print:hidden mt-16 border-t border-border bg-bg-subtle">
+      <div className="mx-auto grid max-w-page grid-cols-2 gap-8 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
+        {columns.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
             <span className="text-label-md uppercase text-fg-subtle">{column.title}</span>
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>
                   {link.href ? (
-                    <Link
-                      href={link.href}
-                      className="text-body-sm text-fg-muted transition-colors duration-fast ease-standard hover:text-fg"
-                    >
+                    <Link href={link.href} className={linkClass}>
                       {link.label}
                     </Link>
-                  ) : link.label === 'Sign in' ? (
-                    <button
-                      type="button"
-                      onClick={() => (isAdmin ? void signOut() : setAuthOpen(true))}
-                      className="text-body-sm text-fg-muted transition-colors duration-fast ease-standard hover:text-fg"
-                    >
-                      {isAdmin ? 'Sign out' : link.label}
-                    </button>
                   ) : (
-                    <span className="cursor-default text-body-sm text-fg-muted">{link.label}</span>
+                    <button type="button" onClick={link.onClick} className={linkClass}>
+                      {link.label}
+                    </button>
                   )}
                 </li>
               ))}
@@ -68,7 +74,7 @@ export function Footer() {
         ))}
       </div>
       <div className="mx-auto flex max-w-page flex-col gap-1 border-t border-border px-4 py-4 text-body-sm text-fg-subtle sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <span>Primedia Malls — Media Specs</span>
+        <span>Primedia Malls</span>
         <span>v0.1.0</span>
       </div>
     </footer>

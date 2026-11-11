@@ -48,6 +48,22 @@ export interface LiveDataResponse {
   readonly pins: readonly LivePinRecord[];
   readonly assets?: readonly LiveAssetRecord[];
   readonly planPins?: readonly LivePlanPinRecord[];
+  /** Site content admins edit: "mall:<id>", "client:<id>", "photo-rights". */
+  readonly content?: readonly LiveContentRecord[];
+}
+
+export interface ProposalApproval {
+  readonly campaignId: string;
+  readonly name: string;
+  readonly note: string;
+  readonly screens: number;
+  readonly at: string;
+}
+
+export interface LiveContentRecord {
+  readonly key: string;
+  readonly data: unknown;
+  readonly updatedAt: string;
 }
 
 /** Public URL of an uploaded file. */
@@ -141,6 +157,11 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
 
 export const api = {
   data: () => request<LiveDataResponse>('/data'),
+  /** A client approves a proposal on its booking page (no account). */
+  approveProposal: (campaignId: string, fields: { name: string; note: string; screens: number }) =>
+    request<{ ok: true; approval: ProposalApproval }>('/approvals', { method: 'POST', body: JSON.stringify({ campaignId, ...fields }) }),
+  approvals: (campaignIds: readonly string[]) =>
+    request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`),
   login: (email: string, password: string) =>
     request<{ token: string; expiresAt: string; admin: AdminProfile }>('/auth/login', {
       method: 'POST',
@@ -187,5 +208,11 @@ export const api = {
   },
   updateAsset: (assetId: string, changes: { alt?: string; caption?: string }) =>
     request<{ ok: true }>(`/assets/${assetId}`, { method: 'PATCH', body: JSON.stringify(changes) }, true),
+  /** Save the order of a screen's files (any role); the first picture is the main one. */
+  reorderAssets: (specId: string, ids: readonly string[]) =>
+    request<{ ok: true }>('/assets/order', { method: 'POST', body: JSON.stringify({ specId, ids }) }, true),
   deleteAsset: (assetId: string) => request<{ ok: true }>(`/assets/${assetId}`, { method: 'DELETE' }, true),
+  putContent: (key: string, data: unknown) =>
+    request<{ ok: true }>(`/content/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ data }) }, true),
+  deleteContent: (key: string) => request<{ ok: true }>(`/content/${encodeURIComponent(key)}`, { method: 'DELETE' }, true),
 };

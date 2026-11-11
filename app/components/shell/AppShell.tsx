@@ -12,6 +12,8 @@ import { CommandPalette } from '@/components/search/CommandPalette';
 import { AuthDialogProvider } from '@/components/auth/AuthDialogContext';
 import { AdminSessionProvider } from '@/components/auth/AdminSession';
 import { SignInDialog } from '@/components/auth/SignInDialog';
+import { CampaignPicker, CampaignTray, PortalDrawer, ToastHost } from '@/components/portal/Chrome';
+import { ApprovalSync } from '@/components/portal/ApprovalSync';
 import { CollectionsProvider } from '@/components/collections/CollectionsContext';
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -39,11 +41,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // The print view is a bare, standalone document — no chrome, no palette —
   // matching the Phase 1 route table ("Print view | Bare | Public").
-  if (pathname.endsWith('/print')) {
+  if (pathname.endsWith('/print') || pathname === '/share' || pathname.startsWith('/share/')) {
     return <>{children}</>;
   }
 
   const drawerInert = !isDesktop && !mobileNavOpen;
+  // The portal (campaigns, insights, explorer) is its own app: no spec-library sidebar.
+  const portalPage = /^\/(portal|insights|explorer|sign-in)(\/|$)/.test(pathname);
   // The specification detail view is a dedicated one-viewport app shell, and
   // the home page is now a pure hero (matching the reference app) — neither
   // shows a footer.
@@ -55,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AdminSessionProvider>
         <CollectionsProvider>
           <div className="min-h-screen">
-            <TopBar onMenuToggle={() => setMobileNavOpen((open) => !open)} />
+            <TopBar onMenuToggle={() => setMobileNavOpen((open) => !open)} compactBrand={portalPage} />
 
             {!isDesktop && mobileNavOpen ? (
               <button
@@ -69,16 +73,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <aside
               aria-label="Mall navigation"
               inert={drawerInert}
-              className={`fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)] lg:z-sticky lg:w-[var(--sidebar-width)] lg:translate-x-0 lg:border-r lg:border-border-strong lg:shadow-none ${
+              className={`print:hidden fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)] lg:z-sticky lg:w-[var(--sidebar-width)] lg:translate-x-0 lg:border-r lg:border-border-strong lg:shadow-none ${portalPage ? 'lg:hidden' : ''} ${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
             >
-              <Sidebar onNavigate={() => setMobileNavOpen(false)} />
+              {portalPage ? <PortalDrawer /> : <Sidebar onNavigate={() => setMobileNavOpen(false)} />}
             </aside>
 
             <main
               id="main-content"
-              className="flex min-h-screen flex-col pt-[var(--topbar-height-sm)] md:pt-[var(--topbar-height-md)] lg:ml-[var(--sidebar-width)] lg:pt-[var(--topbar-height)]"
+              className={`flex min-h-screen flex-col pt-[var(--topbar-height-sm)] print:!ml-0 print:!pt-0 md:pt-[var(--topbar-height-md)] lg:pt-[var(--topbar-height)] ${portalPage ? '' : 'lg:ml-[var(--sidebar-width)]'}`}
             >
               <div className="flex-1">{children}</div>
               {showFooter ? <Footer /> : null}
@@ -86,6 +90,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <CommandPalette />
             <SignInDialog />
+            <CampaignTray />
+            <CampaignPicker />
+            <ToastHost />
+            <ApprovalSync />
           </div>
         </CollectionsProvider>
         </AdminSessionProvider>

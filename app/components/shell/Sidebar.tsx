@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePortalUser } from '@/lib/portal/store';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { Specification } from '@data-model';
 import { useLiveData } from '@/lib/liveData';
@@ -85,6 +86,7 @@ function MallNav({ active, onNavigate }: { active: ActiveLocation; onNavigate?: 
   const malls = useMemo(() => getMalls(catalogue), [catalogue]);
   const pathname = usePathname();
   const [query, setQuery] = useState('');
+  const { user: portalUser } = usePortalUser();
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 
@@ -157,6 +159,23 @@ function MallNav({ active, onNavigate }: { active: ActiveLocation; onNavigate?: 
       }}
     >
       <div className="flex flex-col gap-3 border-b border-white/10 px-3 pb-3 pt-4">
+        {portalUser ? (
+        <div className="grid grid-cols-3 gap-1 md:hidden">
+          {[
+            ['/explorer', 'Explorer'],
+            ['/insights', 'Insights'],
+            ['/portal', 'Campaigns'],
+          ].map(([href, label]) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-md bg-white/[0.08] px-2 py-1.5 text-center text-body-sm font-medium text-brand-on-surface hover:bg-white/[0.14]"
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+        ) : null}
         <label className="relative block">
           <span className="sr-only">Find a mall or screen</span>
           <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-on-surface-muted">

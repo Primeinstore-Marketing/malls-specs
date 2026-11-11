@@ -2,6 +2,8 @@
  * Primedia Malls specs API.
  *
  * Public:  GET  /data           — admin edits layered on the built-in catalogue
+ *          POST /approvals    { campaignId, name?, note?, screens? }  (a client approves on the booking page)
+ *          GET  /approvals?ids=a,b  — approvals for those campaigns
  * Auth:    POST /auth/login      { email, password } -> { token, expiresAt, admin }
  *          POST /auth/logout
  *          GET  /auth/me
@@ -11,6 +13,7 @@
  *                                        X-Image-Width / X-Image-Height for images
  *          PATCH  /assets/:id    { alt?, caption? }
  *          DELETE /assets/:id
+ *          POST   /assets/order  { specId, ids }     (the order of a screen's files)
  *          PUT    /pins/:specId  { lng, lat, level? }
  *          DELETE /pins/:specId                       (back to the automatic position)
  *          PUT    /plan-pins/:specId { x, y }          (position on the mall's directory map, 0–1)
@@ -54,6 +57,11 @@ const LOCKOUT_MINUTES = 15;
 const MIN_PASSWORD_LENGTH = 10;
 const SPEC_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,99}$/;
 const MALL_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** Content keys: a kind, then an id — "mall:canal-walk", "client:rialto", "photo-rights". */
+/** Campaign ids from the portal, e.g. "c-festive" or "c-k3x9a2b". */
+const CAMPAIGN_ID_PATTERN = /^c-[a-z0-9-]{2,60}$/;
+const MAX_APPROVALS_PER_IP_HOUR = 30;
+const CONTENT_KEY_PATTERN = /^[a-z][a-z-]{1,31}(:[a-z0-9][a-z0-9-]{0,99})?$/;
 
 class HttpError extends Error {
   constructor(
@@ -229,11 +237,12 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
 // ── data ──────────────────────────────────────────────────────────────
 
 async function getData(env: Env): Promise<Response> {
-  const [specs, pins, assets, planPins] = await env.DB.batch([
+  const [specs, pins, assets, planPins, content] = await env.DB.batch([
     env.DB.prepare('SELECT id, mall_id, is_new, data, updated_at FROM specs'),
     env.DB.prepare('SELECT spec_id, lng, lat, level, updated_at FROM pins'),
-    env.DB.prepare('SELECT * FROM assets ORDER BY created_at'),
+    env.DB.prepare('SELECT * FROM assets ORDER BY position IS NULL, position, created_at'),
     env.DB.prepare('SELECT spec_id, x, y, updated_at FROM plan_pins'),
+    env.DB.prepare('SELECT key, data, updated_at FROM content'),
   ]);
   return json({
     specs: (specs.results as { id: string; mall_id: string | null; is_new: number; data: string; updated_at: string }[]).map(
@@ -249,7 +258,70 @@ async function getData(env: Env): Promise<Response> {
       y: row.y,
       updatedAt: row.updated_at,
     })),
+    content: (content.results as { key: string; data: string; updated_at: string }[]).map((row) => ({
+      key: row.key,
+      data: JSON.parse(row.data),
+      updatedAt: row.updated_at,
+    })),
   });
+}
+
+// ── approvals (public: clients have no account) ─────────────────────────
+
+async function postApproval(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ campaignId?: unknown; name?: unknown; note?: unknown; screens?: unknown }>(request);
+  const campaignId = typeof body.campaignId === 'string' ? body.campaignId : '';
+  if (!CAMPAIGN_ID_PATTERN.test(campaignId)) throw new HttpError(400, 'This proposal link isn’t complete.');
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) : '';
+  const screens = Number.isInteger(body.screens) && (body.screens as number) >= 0 ? Math.min(body.screens as number, 10000) : 0;
+
+  // Rate limit by IP, reusing the login-attempts log.
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const since = minutesAgo(60);
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?')
+    .bind(`approve:${ip}`, since)
+    .first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_APPROVALS_PER_IP_HOUR) throw new HttpError(429, 'Too many approvals from this connection. Try again later.');
+
+  const at = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO approvals (campaign_id, name, note, screens, at) VALUES (?, ?, ?, ?, ?)').bind(campaignId, name, note, screens, at),
+    env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`approve:${ip}`, at),
+  ]);
+  return json({ ok: true, approval: { campaignId, name, note, screens, at } });
+}
+
+async function getApprovals(url: URL, env: Env): Promise<Response> {
+  const ids = (url.searchParams.get('ids') ?? '').split(',').filter((x) => CAMPAIGN_ID_PATTERN.test(x)).slice(0, 100);
+  if (!ids.length) return json({ approvals: [] });
+  const rows = await env.DB.prepare(
+    `SELECT campaign_id, name, note, screens, at FROM approvals WHERE campaign_id IN (${ids.map(() => '?').join(',')}) ORDER BY at`,
+  )
+    .bind(...ids)
+    .all<{ campaign_id: string; name: string; note: string; screens: number; at: string }>();
+  return json({ approvals: rows.results.map((r) => ({ campaignId: r.campaign_id, name: r.name, note: r.note, screens: r.screens, at: r.at })) });
+}
+
+async function putContent(request: Request, env: Env, key: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  const body = await readJson<{ data?: unknown }>(request);
+  if (body.data == null || typeof body.data !== 'object') throw new HttpError(400, 'Send the content as { data: {...} }.');
+  const data = JSON.stringify(body.data);
+  await env.DB.prepare(
+    'INSERT INTO content (key, data, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, updated_by = excluded.updated_by',
+  )
+    .bind(key, data, now(), admin.email)
+    .run();
+  await audit(env, admin, 'content.put', key);
+  return json({ ok: true });
+}
+
+async function deleteContent(request: Request, env: Env, key: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  await env.DB.prepare('DELETE FROM content WHERE key = ?').bind(key).run();
+  await audit(env, admin, 'content.delete', key);
+  return json({ ok: true });
 }
 
 async function putPin(request: Request, env: Env, specId: string): Promise<Response> {
@@ -513,6 +585,18 @@ async function updateAsset(request: Request, env: Env, id: string): Promise<Resp
   return json({ ok: true });
 }
 
+async function reorderAssets(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  const body = await readJson<{ specId?: unknown; ids?: unknown }>(request);
+  const specId = typeof body.specId === 'string' ? body.specId : '';
+  if (!SPEC_ID_PATTERN.test(specId)) throw new HttpError(400, 'Invalid screen id.');
+  const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string' && /^asset-[0-9a-f-]{36}$/.test(x)) : [];
+  if (!ids.length || ids.length > 200) throw new HttpError(400, 'Send the files in their new order.');
+  await env.DB.batch(ids.map((id, i) => env.DB.prepare('UPDATE assets SET position = ? WHERE id = ? AND spec_id = ?').bind(i, id, specId)));
+  await audit(env, admin, 'file.reorder', specId, { ids });
+  return json({ ok: true });
+}
+
 async function deleteAsset(request: Request, env: Env, id: string): Promise<Response> {
   const admin = await requireAdmin(request, env);
   const row = await env.DB.prepare('SELECT storage_key, spec_id, filename FROM assets WHERE id = ?')
@@ -541,11 +625,21 @@ async function route(request: Request, env: Env): Promise<Response> {
       return serveFile(env, safeDecode(url.pathname.slice('/files/'.length), 404), url.searchParams.get('download') === '1');
     }
   }
+  if (resource === 'assets' && id === 'order' && method === 'POST') return reorderAssets(request, env);
   if (resource === 'assets' && /^asset-[0-9a-f-]{36}$/.test(id)) {
     if (method === 'PATCH') return updateAsset(request, env, id);
     if (method === 'DELETE') return deleteAsset(request, env, id);
   }
   if (resource === 'data' && method === 'GET') return getData(env);
+  if (resource === 'approvals' && !id) {
+    if (method === 'POST') return postApproval(request, env);
+    if (method === 'GET') return getApprovals(url, env);
+  }
+  if (resource === 'content' && id) {
+    if (!CONTENT_KEY_PATTERN.test(id)) throw new HttpError(400, 'Invalid content key.');
+    if (method === 'PUT') return putContent(request, env, id);
+    if (method === 'DELETE') return deleteContent(request, env, id);
+  }
 
   if (resource === 'auth') {
     if (id === 'login' && method === 'POST') return login(request, env);

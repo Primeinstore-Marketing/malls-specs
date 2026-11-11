@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Specification } from '@data-model';
@@ -70,13 +70,20 @@ export function SpecActionBar({ spec }: { spec: Specification }) {
   // Screens added by admins have no pre-built print page.
   const printable = !live.addedSpecIds.has(spec.id);
 
+  // "Edit" from Site admin → Screens opens the editor straight away.
+  useEffect(() => {
+    if (isAdmin && new URLSearchParams(window.location.search).get('edit') === '1') setEditing(true);
+  }, [isAdmin]);
+
   const copyLink = async () => {
+    const url = window.location.href.replace(/[?&]edit=1/, '');
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setCopied(false);
+      // Clipboard blocked: show the link to copy by hand.
+      window.prompt('Copy this link:', url);
     }
   };
 

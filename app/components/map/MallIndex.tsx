@@ -167,11 +167,14 @@ export function MallIndex({
   malls,
   specifications,
   isAdmin,
+  intro,
 }: {
   malls: readonly Mall[];
   specifications: Readonly<Record<string, Specification>>;
   /** Position-checking progress is shown to admins only. */
   isAdmin: boolean;
+  /** Shown instead of the spec-library header, e.g. the portal introduction for visitors. */
+  intro?: React.ReactNode;
 }) {
   const [query, setQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
@@ -227,6 +230,19 @@ export function MallIndex({
 
   return (
     <div className="flex flex-col">
+      {intro ? (
+        <>
+          {intro}
+          <div id="specs" className="scroll-mt-16 border-t border-border bg-bg-subtle">
+            <div className="mx-auto flex max-w-page flex-col gap-2 px-4 py-10 sm:px-6 lg:px-8">
+              <h2 className="text-display-lg text-fg">Screen specs</h2>
+              <p className="max-w-prose text-body-md text-fg-muted">
+                {screenCount} screens in {locationCount} locations. Choose a mall to see each screen’s size, format and artwork requirements.
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
       <header className="relative overflow-hidden border-b border-border bg-bg-subtle">
         <div
           aria-hidden="true"
@@ -259,6 +275,7 @@ export function MallIndex({
           </div>
         </div>
       </header>
+      )}
 
       <div className="sticky top-[var(--topbar-height-sm)] z-raised border-b border-border bg-bg md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)]">
         <div className="mx-auto flex max-w-page flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:px-8">

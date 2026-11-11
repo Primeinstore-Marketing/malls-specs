@@ -7,6 +7,7 @@ import type { LiveDataResponse } from './api';
 import { getCodeCatalogue, getSeedCatalogue, setLiveCatalogue, snapshotState } from './catalogue';
 import { mergeLiveData } from './mergeLive';
 import { setLivePlacement } from './malls';
+import { applyContent } from './content';
 
 /**
  * Admin edits from the API, layered over the built-in catalogue.
@@ -55,6 +56,7 @@ function apply(data: LiveDataResponse) {
   const merged = mergeLiveData(getCodeCatalogue(), data);
   setLivePlacement(merged.placement);
   setLiveCatalogue(merged.catalogue);
+  applyContent(data.content);
   publish({
     status: 'ready',
     catalogue: merged.catalogue,

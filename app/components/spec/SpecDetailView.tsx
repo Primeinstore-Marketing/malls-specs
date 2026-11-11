@@ -13,7 +13,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SpecActionBar } from './SpecActionBar';
 import { RelatedSpecs } from './RelatedSpecs';
 import { RevisionHistory } from './RevisionHistory';
-import { MediaPane } from './MediaPane';
+import { ScreenPhotos } from './ScreenPhotos';
 import { RecentlyViewedTracker } from './RecentlyViewedTracker';
 import { ArtworkGuideCard } from './ArtworkGuideCard';
 import { DownloadButtons } from './DownloadButtons';
@@ -178,14 +178,7 @@ export function SpecDetailView({ specId }: { specId: string }) {
 
       <ArtworkGuideCard spec={spec} />
 
-      {media.length > 0 ? (
-        <section id="pictures" className="flex flex-col gap-3">
-          <SectionTitle>Pictures</SectionTitle>
-          <div className="h-[300px] overflow-hidden rounded-2xl border border-border sm:h-[420px]">
-            <MediaPane media={media} />
-          </div>
-        </section>
-      ) : null}
+      <ScreenPhotos spec={spec} media={media} mallId={mall?.id ?? null} />
 
       <DetailsSection fields={details} />
       <FilesSection attachments={attachments} />

@@ -59,6 +59,14 @@ export function mergeLiveData(base: Catalogue, data: LiveDataResponse): MergedLi
       specifications[specId] = { ...spec, [field]: [...spec[field], asset.id as AssetId] };
     }
   }
+  // Uploaded files follow the API's order (admins can rearrange them), even
+  // where a saved spec lists them in an older order. Built-in files go first.
+  const uploadedOrder = new Map((data.assets ?? []).map((a, i) => [a.id, i]));
+  for (const [id, spec] of Object.entries(specifications)) {
+    const ordered = (ids: readonly AssetId[]) =>
+      [...ids.filter((x) => !uploadedOrder.has(x)), ...ids.filter((x) => uploadedOrder.has(x)).sort((a, b) => uploadedOrder.get(a)! - uploadedOrder.get(b)!)];
+    specifications[id] = { ...spec, mediaIds: ordered(spec.mediaIds), downloadIds: ordered(spec.downloadIds), attachmentIds: ordered(spec.attachmentIds) };
+  }
 
   const planPins: Record<string, MallMapPin> = {};
   for (const pin of data.planPins ?? []) planPins[pin.specId] = { x: pin.x, y: pin.y, source: 'confirmed' };

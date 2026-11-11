@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
@@ -132,7 +134,7 @@ export function AccountMenu() {
     return (
       <Button variant="ghost" onClick={() => setAuthOpen(true)} disabled={status === 'checking'} aria-label="Admin sign in">
         <UserIcon />
-        <span className="hidden sm:inline">Sign in</span>
+        <span className="hidden sm:inline">Admin</span>
       </Button>
     );
   }
@@ -164,6 +166,14 @@ export function AccountMenu() {
             <p className="truncate text-body-sm font-semibold text-fg">{displayName}</p>
             <p className="truncate text-body-sm text-fg-subtle">{admin.email}</p>
           </div>
+          <Link
+            href="/admin/malls"
+            role="menuitem"
+            onClick={() => setMenuOpen(false)}
+            className="block w-full px-3 py-2 text-left text-body-sm font-semibold text-fg hover:bg-bg-subtle"
+          >
+            Site admin
+          </Link>
           <button
             type="button"
             role="menuitem"
