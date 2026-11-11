@@ -1,5 +1,6 @@
 'use client';
 
+import { Zoomable } from '@/components/ui/ImageViewer';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -59,8 +60,8 @@ function PhotoPicker({ label, photos, onUpload, onRemove, onMove, busy }: { labe
     <div className="flex flex-wrap items-center gap-3">
       {photos.map((p) => (
         <span key={p.src} className="relative">
-          <img src={p.src} alt="" className="h-20 w-28 rounded-xl object-cover" />
-          <span className="absolute bottom-1 left-1 rounded-full bg-[rgba(6,12,28,0.65)] px-2 py-0.5 text-[10px] font-semibold text-white">{p.uploaded ? 'Uploaded' : 'From deck'}</span>
+          <Zoomable src={p.src} title={label.replace(/^\+ /, '')} className="h-20 w-28 rounded-xl" />
+          <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-[rgba(6,12,28,0.65)] px-2 py-0.5 text-[10px] font-semibold text-white">{p.uploaded ? 'Uploaded' : 'From deck'}</span>
           {p.uploaded && p.key ? (
             <button type="button" onClick={() => onRemove(p.key as string)} aria-label="Remove photo" className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-fg text-[12px] font-bold text-bg">×</button>
           ) : null}

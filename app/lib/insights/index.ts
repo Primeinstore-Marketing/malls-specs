@@ -1,16 +1,25 @@
-import { DECK_MALLS as BASE_MALLS } from './deckMalls';
-import type { DeckMall, MediaPackage } from './types';
+import type { DeckImage, DeckImages, DeckMall, MediaPackage, PhotoRights, PhotoRightsStatus, ScreenPhoto } from './types';
 import { MALL_PLACES } from '@/lib/mallPlaces';
-import { withBasePath } from '@/lib/basePath';
-import { DECK_IMAGES } from './deckImages';
-import type { DeckImage } from './deckImages';
-import { PHOTO_RIGHTS as DECK_RIGHTS } from './photoRights';
-import { SCREEN_PHOTOS, SCREEN_PHOTO_RIGHTS } from './screenPhotos';
-import type { ScreenPhoto } from './screenPhotos';
-
-const BASE_RIGHTS = [...DECK_RIGHTS, ...SCREEN_PHOTO_RIGHTS];
-import type { PhotoRights, PhotoRightsStatus } from './photoRights';
 import { fileUrl } from '@/lib/api';
+
+/*
+ * The proposal deck's data (malls, audiences, packages, photos and their
+ * rights) is not in the code. It lives in the API — content "deck-malls",
+ * "deck-images", "photo-register" and "screen-photos", with the photos in the
+ * file store — and arrives with the rest of the live data (applyDeckData).
+ */
+let BASE_MALLS: readonly DeckMall[] = [];
+let DECK_IMAGES: DeckImages = {};
+let BASE_RIGHTS: readonly PhotoRights[] = [];
+let SCREEN_PHOTOS: Readonly<Record<string, readonly ScreenPhoto[]>> = {};
+
+/** Sets the deck's data from the API. Call before applyMallContent, which layers admin edits on top. */
+export function applyDeckData(d: { malls?: readonly DeckMall[]; images?: DeckImages; register?: readonly PhotoRights[]; screens?: Readonly<Record<string, readonly ScreenPhoto[]>> }) {
+  if (Array.isArray(d.malls)) BASE_MALLS = d.malls;
+  if (d.images) DECK_IMAGES = d.images;
+  if (Array.isArray(d.register)) BASE_RIGHTS = d.register;
+  if (d.screens) SCREEN_PHOTOS = d.screens;
+}
 
 export type { DeckMall, MediaPackage } from './types';
 
@@ -211,7 +220,7 @@ export function networkStats() {
   const visits = DECK_MALLS.reduce((s, m) => s + (annualVisits(m) ?? 0), 0);
   const withMedia = DECK_MALLS.filter((m) => m.media?.noticeMallAds);
   const avg = (key: 'noticeMallAds' | 'seenDigitalScreens') =>
-    Math.round(withMedia.reduce((s, m) => s + (m.media?.[key] ?? 0), 0) / withMedia.length);
+    withMedia.length ? Math.round(withMedia.reduce((s, m) => s + (m.media?.[key] ?? 0), 0) / withMedia.length) : 0;
   return {
     malls: DECK_MALLS.length,
     packages: DECK_MALLS.reduce((s, m) => s + m.packages.length, 0),
@@ -226,12 +235,13 @@ export function networkStats() {
 /* ---------- Photos from the deck ---------- */
 
 
-export type { DeckImage, PhotoRights, PhotoRightsStatus };
+export type { DeckImage, PhotoRights, PhotoRightsStatus, ScreenPhoto };
 
 /** A photo ready to show: deck photos get the base path; uploaded ones are marked so they count as cleared. */
 export type ShownPhoto = DeckImage & { readonly uploaded?: boolean };
 
-const withBase = (img: DeckImage): ShownPhoto => ({ ...img, src: withBasePath(img.src) });
+// Deck photos are served by the API's file store, under their "/malls/…" path.
+const withBase = (img: DeckImage): ShownPhoto => ({ ...img, src: fileUrl(img.src.replace(/^\//, '')) });
 const uploaded = (p: UploadedPhoto): ShownPhoto => ({ src: fileUrl(p.storageKey), width: p.width ?? 0, height: p.height ?? 0, slide: 0, uploaded: true });
 
 /** The mall itself: the admin's upload if there is one, else the deck's title-slide photo. */

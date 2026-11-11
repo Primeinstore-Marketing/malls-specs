@@ -1,12 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/lib/api';
-import { withBasePath } from '@/lib/basePath';
+import { api, fileUrl } from '@/lib/api';
 import { contentPhotoRights } from '@/lib/content';
 import { PHOTO_RIGHTS, deckMall, mallName, packageByCode } from '@/lib/insights';
 import type { PhotoRightsStatus } from '@/lib/insights';
-import { refreshLiveData } from '@/lib/liveData';
+import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { AdminGate, primaryBtn } from './AdminGate';
 
 const OPTIONS: [PhotoRightsStatus, string][] = [
@@ -17,6 +16,7 @@ const OPTIONS: [PhotoRightsStatus, string][] = [
 
 /** Mark deck photos cleared once permission is in. Saved as content "photo-rights". */
 function Register() {
+  useLiveData(); // re-render when the deck's data arrives from the API
   const [statuses, setStatuses] = useState<Record<string, PhotoRightsStatus>>(() => contentPhotoRights());
   const [kind, setKind] = useState<'mall' | 'package' | 'screen'>('mall');
   const [state, setState] = useState<string | null>(null);
@@ -37,7 +37,7 @@ function Register() {
   return (
     <div className="flex flex-col gap-5 pb-24">
       <p className="max-w-prose text-body-md text-fg-muted">
-        {cleared} of {PHOTO_RIGHTS.length} deck photos are cleared. Client pages only show cleared photos (and any you upload). Record who gave permission in <code className="font-mono text-body-sm">deck-images/photo-rights.csv</code>.
+        {cleared} of {PHOTO_RIGHTS.length} deck photos are cleared. Client pages only show cleared photos (and any you upload). Keep a record of who gave permission in the private project files.
       </p>
       <div className="inline-flex self-start rounded-full bg-bg-subtle p-1" role="group" aria-label="Show">
         {(['mall', 'package', 'screen'] as const).map((k) => (
@@ -51,7 +51,7 @@ function Register() {
           const m = deckMall(r.mall);
           return (
             <li key={r.src} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg">
-              <img src={withBasePath(r.src)} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
+              <img src={fileUrl(r.src.replace(/^\//, ''))} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
               <div className="flex flex-col gap-2 p-3">
                 <div className="text-body-md font-semibold text-fg">{r.kind === 'screen' ? r.note.split(' — ')[0] : m ? mallName(m) : r.mall}</div>
                 <div className="text-body-sm text-fg-muted">{r.kind === 'mall' ? r.note : r.kind === 'screen' ? r.note.split(' — ')[1] ?? '' : packageByCode(r.code ?? '')?.pkg.name ?? r.code}</div>

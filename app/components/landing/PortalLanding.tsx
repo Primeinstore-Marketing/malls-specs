@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { compact, networkStats } from '@/lib/insights';
+import { useLiveData } from '@/lib/liveData';
 import { withBasePath } from '@/lib/basePath';
 import { useAuthDialog } from '@/components/auth/AuthDialogContext';
 
@@ -27,7 +28,9 @@ const AUDIENCES = [
 ] as const;
 
 export function PortalLanding() {
+  useLiveData(); // the deck's data arrives from the API after the page loads
   const s = networkStats();
+  const ready = s.malls > 0;
   const { setOpen: openAdminSignIn } = useAuthDialog();
   const link = 'mt-auto self-start text-body-sm font-semibold text-accent hover:underline';
   const ways: Record<(typeof AUDIENCES)[number][0], React.ReactNode> = {
@@ -47,7 +50,7 @@ export function PortalLanding() {
             <span className="text-label-md font-semibold uppercase text-brand-on-surface-muted">Primedia Malls media portal</span>
             <h1 className="text-display-2xl">Put your brand where South Africa shops</h1>
             <p className="text-body-lg text-brand-on-surface-muted">
-              Digital screens in {s.malls} malls across South Africa. Your booking shows every screen you’ll be on and the artwork size each one needs.
+              Digital screens in {ready ? `${s.malls} malls` : 'malls'} across South Africa. Your booking shows every screen you’ll be on and the artwork size each one needs.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/sign-in" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-body-md font-semibold text-fg-on-accent hover:bg-accent-hover">
@@ -59,7 +62,7 @@ export function PortalLanding() {
             </div>
           </div>
           <p className="text-body-sm text-brand-on-surface-muted">Booked with us? Open the link in your email from your account manager.</p>
-          <dl className="grid max-w-2xl grid-cols-3 gap-6 border-t border-white/15 pt-6">
+          <dl className={`grid max-w-2xl grid-cols-3 gap-6 border-t border-white/15 pt-6 transition-opacity ${ready ? 'opacity-100' : 'invisible opacity-0'}`}>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Mall visits a year</dt><dd className="text-display-md">{compact(s.annualVisits)}</dd></div>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Notice mall ads</dt><dd className="text-display-md">{s.noticeMallAds}%</dd></div>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Provinces</dt><dd className="text-display-md">{s.provinces}</dd></div>

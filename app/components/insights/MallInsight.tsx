@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { useSearchParams } from 'next/navigation';
 import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands } from '@/lib/insights';
 import { MALL_PLACES } from '@/lib/mallPlaces';
@@ -100,7 +101,7 @@ function Mall({ id }: { id: string }) {
               {packagePhotos(pkg.code).length ? (
                 <div className="-mx-4 -mt-4 mb-2 flex gap-[2px] overflow-hidden rounded-t-xl">
                   {packagePhotos(pkg.code).map((img) => (
-                    <img key={img.src} src={img.src} alt={`${pkg.format} in place at ${mallName(m)}`} loading="lazy" width={img.width} height={img.height} className="aspect-[16/9] min-w-0 flex-1 object-cover" />
+                    <Zoomable key={img.src} src={img.src} title={`${mallName(m)} · ${pkg.format}${pkg.units ? ` × ${pkg.units}` : ''}`} packageCode={pkg.code} note={pkg.sites} className="aspect-[16/9] min-w-0 flex-1" />
                   ))}
                 </div>
               ) : null}

@@ -30,6 +30,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/portal/screens';
 import { SizeDownloads } from './SizeDownloads';
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { clientEmail } from '@/lib/portal/email';
 import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
@@ -289,7 +290,7 @@ function Items({ c, user }: { c: Campaign; user: PortalUser }) {
         return (
           <div key={mall?.id ?? 'other'} className="overflow-hidden rounded-2xl border border-border bg-bg print:break-inside-avoid">
             <div className="flex items-center gap-3 px-4 py-3">
-              {photo ? <img src={photo.src} alt="" loading="lazy" className="h-11 w-16 shrink-0 rounded-lg object-cover" /> : null}
+              {photo ? <Zoomable src={photo.src} title={mall ? mallName(mall) : 'Mall'} detail={mall ? mallArea(mall) : undefined} className="h-11 w-16 rounded-lg" /> : null}
               <div className="flex min-w-0 flex-col">
                 {mall ? (
                   <Link href={`/insights/mall?id=${mall.id}`} className="truncate text-body-md font-semibold text-fg hover:text-accent">{mallName(mall)}</Link>

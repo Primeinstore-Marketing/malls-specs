@@ -59,3 +59,38 @@ export interface DeckMall {
   readonly media: MediaConsumption | null;
   readonly packages: readonly MediaPackage[];
 }
+
+/* ---------- Deck photos and their rights (loaded from the API) ---------- */
+
+export type PhotoRightsStatus = 'needs-clearance' | 'cleared' | 'replace';
+
+/** Who owns a photo taken from a proposal deck, and whether we may use it. */
+export interface PhotoRights {
+  readonly src: string;
+  readonly mall: string;
+  /** A mall's hero photo, a package's photo, or a photo of one screen. */
+  readonly kind: 'mall' | 'package' | 'screen';
+  readonly code: string | null;
+  /** Where the deck got it from, as far as we can tell. */
+  readonly source: string;
+  readonly note: string;
+  readonly action: string;
+  readonly status: PhotoRightsStatus;
+}
+
+/** A photo from a proposal deck. `src` is "/malls/…"; the file is in the API's file store under that path. */
+export interface DeckImage {
+  readonly src: string;
+  readonly width: number;
+  readonly height: number;
+  readonly slide: number;
+}
+
+export type DeckImages = Readonly<Record<string, { readonly hero: DeckImage | null; readonly packages: Readonly<Record<string, readonly DeckImage[]>> }>>;
+
+/** A photo of one screen from the malls proposal deck. `exact` is false when matched by site location. */
+export interface ScreenPhoto extends DeckImage {
+  readonly package: string;
+  readonly code: string;
+  readonly exact: boolean;
+}

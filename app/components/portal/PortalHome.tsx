@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { useRouter } from 'next/navigation';
 import { DECK_MALLS, annualVisits, compact, mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
 import { addDays, campaignClientName, clientName, itemKey, itemLabel, itemMall, phase, progress, reach, todayIso, visibleTo } from '@/lib/portal/logic';
@@ -156,7 +157,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
               const photo = mallPhoto(m.id);
               return (
                 <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-bg-subtle p-3">
-                  {photo ? <img src={photo.src} alt="" loading="lazy" className="h-12 w-16 shrink-0 rounded-xl object-cover" /> : null}
+                  {photo ? <Zoomable src={photo.src} title={mallName(m)} detail={`${compact(annualVisits(m) ?? 0)} visits a year · ${m.province}`} className="h-12 w-16 rounded-xl" /> : null}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <Link href={`/insights/mall?id=${m.id}`} className="truncate text-body-md font-semibold text-fg hover:text-accent">{mallName(m)}</Link>
                     <span className="truncate text-body-sm text-fg-muted">{compact(annualVisits(m) ?? 0)} visits a year · {m.province}</span>

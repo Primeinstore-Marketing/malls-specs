@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { networkStats, compact } from '@/lib/insights';
+import { useLiveData } from '@/lib/liveData';
 import { userById } from '@/lib/portal/logic';
 import { usePortalUser } from '@/lib/portal/store';
 import { AccountPicker, Page } from './ui';
@@ -12,6 +13,7 @@ import { useAdminSession } from '@/components/auth/AdminSession';
 export function SignInPage() {
   const next = useSearchParams().get('next') ?? '/portal';
   const { user } = usePortalUser();
+  useLiveData(); // the deck's data arrives from the API after the page loads
   const s = networkStats();
   const { setOpen: openAdminSignIn } = useAuthDialog();
   const { isAdmin, admin } = useAdminSession();
@@ -24,7 +26,7 @@ export function SignInPage() {
           <p className="text-body-lg text-brand-on-surface-muted">
             For Primedia sales: explore every screen, see who shops where, and take a campaign from brief to booking.
           </p>
-          <dl className="grid grid-cols-3 gap-4">
+          <dl className={`grid grid-cols-3 gap-4 transition-opacity ${s.malls ? 'opacity-100' : 'invisible opacity-0'}`}>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Malls</dt><dd className="text-display-sm sm:text-display-md">{s.malls}</dd></div>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Visits a year</dt><dd className="text-display-sm sm:text-display-md">{compact(s.annualVisits)}</dd></div>
             <div><dt className="text-body-sm text-brand-on-surface-muted">Notice mall ads</dt><dd className="text-display-sm sm:text-display-md">{s.noticeMallAds}%</dd></div>

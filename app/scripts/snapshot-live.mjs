@@ -40,7 +40,9 @@ try {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data = await response.json();
   if (!Array.isArray(data.specs) || !Array.isArray(data.pins)) throw new Error('unexpected response shape');
-  writeFileSync(out, JSON.stringify(data) + '\n');
+  // Specs, positions and files only: site content (incl. the deck's data) loads at runtime and stays out of the repo.
+  const { content: _content, ...baked } = data;
+  writeFileSync(out, JSON.stringify(baked) + '\n');
   console.log(
     `snapshot-live: ${data.specs.length} specs, ${data.pins.length} positions, ${(data.assets ?? []).length} files -> lib/liveSnapshot.json`,
   );

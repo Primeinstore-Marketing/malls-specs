@@ -1,5 +1,5 @@
 import type { LiveContentRecord } from './api';
-import { applyMallContent } from './insights';
+import { applyDeckData, applyMallContent } from './insights';
 import type { MallContent, PhotoRightsStatus } from './insights';
 import { applyClients } from './portal/seed';
 import type { Client } from './portal/types';
@@ -9,11 +9,15 @@ import type { Client } from './portal/types';
  *   mall:<id>     a mall's audience, packages and photos (MallContent)
  *   client:<id>   a client and their contact (Client)
  *   photo-rights  { statuses: { "<photo src>": "cleared" | ... } }
+ *   deck-malls, deck-images, photo-register, screen-photos
+ *                 the proposal deck's data, which is not kept in the code
  */
 let records: readonly LiveContentRecord[] = [];
 
 export function applyContent(list: readonly LiveContentRecord[] = []) {
   records = list;
+  const get = (key: string) => list.find((r) => r.key === key)?.data as never;
+  applyDeckData({ malls: get('deck-malls'), images: get('deck-images'), register: get('photo-register'), screens: get('screen-photos') });
   const malls = list.filter((r) => r.key.startsWith('mall:')).map((r) => r.data as MallContent);
   const rights = (list.find((r) => r.key === 'photo-rights')?.data as { statuses?: Record<string, PhotoRightsStatus> } | undefined)?.statuses ?? {};
   applyMallContent(malls, rights);

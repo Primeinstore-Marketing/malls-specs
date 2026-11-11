@@ -1,5 +1,6 @@
 'use client';
 
+import { Zoomable } from '@/components/ui/ImageViewer';
 import Link from 'next/link';
 import { PROVINCES, STANDARD_BANDS, mallArea, mallName, mallPhoto } from '@/lib/insights';
 import type { AudienceTarget, MallMatch } from '@/lib/insights';
@@ -71,8 +72,8 @@ export function MatchRow({ m, rank, action }: { m: MallMatch; rank: number; acti
   return (
     <li className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3 rounded-2xl border border-border bg-bg p-3 sm:grid-cols-[96px_minmax(0,1fr)_auto_auto] sm:items-center">
       <span className="relative">
-        {photo ? <img src={photo.src} alt="" loading="lazy" className="h-16 w-full rounded-xl object-cover" /> : <span className="block h-16 rounded-xl bg-bg-subtle" />}
-        <span className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-fg text-[11px] font-bold text-bg">{rank}</span>
+        {photo ? <Zoomable src={photo.src} title={mallName(m.mall)} detail={m.mall.province} className="h-16 w-full rounded-xl" /> : <span className="block h-16 rounded-xl bg-bg-subtle" />}
+        <span className="pointer-events-none absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-fg text-[11px] font-bold text-bg">{rank}</span>
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <Link href={`/insights/mall?id=${m.mall.id}`} className="text-body-md font-semibold text-fg hover:text-accent">

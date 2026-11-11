@@ -17,6 +17,7 @@ import type { SharedProposal } from '@/lib/portal/share';
 import { portal, usePortalState, usePortalUser } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, NewCampaignItem } from '@/lib/portal/types';
 import { SizeDownloads } from './SizeDownloads';
+import { Zoomable } from '@/components/ui/ImageViewer';
 
 /**
  * The client's booking page, opened from the link in their email — no
@@ -136,14 +137,14 @@ function useApproval(p: SharedProposal) {
 
 /* ---------- Small pieces ---------- */
 
-function Photo({ src, w, h, className }: { src: string | null; w: number | null; h: number | null; className: string }) {
-  return src ? (
-    // eslint-disable-next-line @next/next/no-img-element -- uploaded or deck photo
-    <img src={src} alt="" loading="lazy" className={`${className} object-cover`} />
-  ) : (
-    <span className={`${className} flex items-center justify-center bg-bg-subtle`}>
-      <Shape w={w} h={h} size={44} />
-    </span>
+/** A screen's thumbnail: click for the large photo, the spec, the spec sheet and the template. */
+function Photo({ src, w, h, className, title, specId, note }: { src: string | null; w: number | null; h: number | null; className: string; title: string; specId: string | null; note?: string | null }) {
+  return (
+    <Zoomable src={src} title={title} specId={specId} note={note} className={className}>
+      <span className="flex h-full w-full items-center justify-center bg-bg-subtle">
+        <Shape w={w} h={h} size={44} />
+      </span>
+    </Zoomable>
   );
 }
 
@@ -364,10 +365,7 @@ function Booking({ p }: { p: SharedProposal }) {
             return (
               <article key={key} className="overflow-hidden rounded-3xl bg-bg print:break-inside-avoid print:border print:border-border">
                 <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-start">
-                  {hero ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- cleared deck or uploaded photo
-                    <img src={hero} alt="" loading="lazy" className="h-24 w-full shrink-0 rounded-2xl object-cover sm:w-40" />
-                  ) : null}
+                  {hero ? <Zoomable src={hero} title={g.title} detail={g.entry?.area} className="h-24 w-full rounded-2xl sm:w-40" /> : null}
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <h3 className="text-body-lg font-semibold text-fg">{g.title}</h3>
@@ -386,7 +384,7 @@ function Booking({ p }: { p: SharedProposal }) {
                     const files: SizeFiles[] = s.specId && (s.sheet || s.template) ? [{ specId: s.specId, label: s.title, sheet: s.sheet, template: s.template }] : [];
                     return (
                       <li key={`${item.id}-${i}`} className={`grid grid-cols-[96px_minmax(0,1fr)] gap-4 px-5 py-4 sm:grid-cols-[128px_minmax(0,1fr)_auto] ${gone ? 'opacity-50 print:hidden' : ''}`}>
-                        <Photo src={photo} w={s.width} h={s.height} className="h-16 w-24 rounded-xl sm:h-20 sm:w-32" />
+                        <Photo src={photo} w={s.width} h={s.height} className="h-16 w-24 rounded-xl sm:h-20 sm:w-32" title={`${g.title} · ${s.title}`} specId={s.specId} />
                         <div className="flex min-w-0 flex-col gap-1">
                           <span className={`text-body-md font-semibold text-fg ${gone ? 'line-through' : ''}`}>{s.title}</span>
                           <span className="flex items-center gap-2 text-body-sm tabular-nums text-fg-muted">
@@ -503,10 +501,7 @@ function Booking({ p }: { p: SharedProposal }) {
               return (
                 <li key={e.key} className="flex flex-col gap-3 rounded-3xl bg-bg p-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                    {hero ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- cleared deck or uploaded photo
-                      <img src={hero} alt="" loading="lazy" className="h-20 w-full shrink-0 rounded-2xl object-cover sm:w-32" />
-                    ) : null}
+                    {hero ? <Zoomable src={hero} title={e.name} detail={e.area} className="h-20 w-full rounded-2xl sm:w-32" /> : null}
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <h3 className="text-body-lg font-semibold text-fg">{e.name}</h3>
@@ -520,7 +515,7 @@ function Booking({ p }: { p: SharedProposal }) {
                       const inIt = has(r.key);
                       return (
                         <li key={r.key} className={`flex items-center gap-3 rounded-2xl border p-2 pr-3 ${inIt ? 'border-accent bg-accent-subtle' : 'border-border'}`}>
-                          <Photo src={r.photo} w={r.width} h={r.height} className="h-14 w-20 shrink-0 rounded-xl" />
+                          <Photo src={r.photo} w={r.width} h={r.height} className="h-14 w-20 shrink-0 rounded-xl" title={`${e.name} · ${r.title}`} specId={r.specId} note={r.photoNote} />
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-body-sm font-semibold text-fg">{r.title}</span>
                             <span className="font-mono text-[12px] tabular-nums text-fg-muted">

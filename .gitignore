@@ -7,3 +7,12 @@ out/
 
 # Office lock files
 ~$*
+
+# Private copies of documents, deck data and photos (never pushed)
+/Private files (not on GitHub)/
+# Documents and data kept on this computer only
+/Malls specs.*
+/00 Phases/
+/deck-images/
+/Ref/
+/*.pptx

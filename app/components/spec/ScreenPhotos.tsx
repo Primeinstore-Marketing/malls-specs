@@ -1,5 +1,6 @@
 'use client';
 
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { useRef, useState } from 'react';
 import type { Asset, Specification } from '@data-model';
 import { api, fileUrl } from '@/lib/api';
@@ -117,6 +118,7 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
       ) : null}
       {media.length && isAdmin ? (
         <ManagePictures
+          specId={spec.id}
           media={media}
           busy={Boolean(busy)}
           onMove={(ids) => void run('Saving order…', () => api.reorderAssets(spec.id, ids))}
@@ -132,9 +134,9 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
             return (
               <li key={c.photo.src} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg">
                 <div className="relative">
-                  <img src={c.photo.src} alt={c.label} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                  <Zoomable src={c.photo.src} title={c.label} specId={spec.id} className="aspect-[4/3] w-full" />
                   {pending ? (
-                    <span className="absolute left-3 top-3 rounded-full bg-[rgba(6,12,28,0.6)] px-2.5 py-1 text-[11px] font-semibold text-white" title="Internal use until rights are cleared">
+                    <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-[rgba(6,12,28,0.6)] px-2.5 py-1 text-[11px] font-semibold text-white" title="Internal use until rights are cleared">
                       Rights pending
                     </span>
                   ) : null}
@@ -167,7 +169,7 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
 
 
 /** Admin strip: the screen's pictures in order, to move or delete. */
-function ManagePictures({ media, busy, onMove, onDelete }: { media: readonly Asset[]; busy: boolean; onMove: (ids: string[]) => void; onDelete: (a: Asset) => void }) {
+function ManagePictures({ media, busy, onMove, onDelete, specId }: { media: readonly Asset[]; busy: boolean; onMove: (ids: string[]) => void; onDelete: (a: Asset) => void; specId: string }) {
   const ids = media.map((a) => a.id);
   const move = (from: number, to: number) => {
     const next = [...ids];
@@ -190,10 +192,9 @@ function ManagePictures({ media, busy, onMove, onDelete }: { media: readonly Ass
               {a.kind === 'video' ? (
                 <span className="flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-bg-subtle text-body-sm text-fg-muted">▶ Video</span>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- served by the API
-                <img src={fileUrl(a.storageKey)} alt="" className="aspect-[4/3] w-full rounded-xl object-cover" />
+                <Zoomable src={fileUrl(a.storageKey)} title={a.caption || a.filename} specId={specId} className="aspect-[4/3] w-full rounded-xl" />
               )}
-              <span className="absolute left-2 top-2 rounded-full bg-[rgba(6,12,28,0.65)] px-2 py-0.5 text-[11px] font-semibold text-white">{i === 0 ? 'Main' : i + 1}</span>
+              <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-[rgba(6,12,28,0.65)] px-2 py-0.5 text-[11px] font-semibold text-white">{i === 0 ? 'Main' : i + 1}</span>
             </div>
             <span className="truncate text-[12px] text-fg-muted" title={a.filename}>{a.filename}</span>
             <div className="flex items-center justify-between">

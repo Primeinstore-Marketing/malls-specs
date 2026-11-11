@@ -16,6 +16,7 @@ import { useLiveData } from '@/lib/liveData';
 import type { Campaign, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
 import { AudiencePicker, readAudience } from '@/components/insights/AudiencePicker';
 import { ClientField } from './ClientField';
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
 
 const input = 'h-10 w-full rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus';
@@ -189,22 +190,19 @@ function Form({ user }: { user: PortalUser }) {
                             <li key={row.key}>
                               <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-2 pr-3 ${on ? 'border-accent bg-accent-subtle' : 'border-border hover:border-border-strong'}`}>
                                 <input type="checkbox" className="ml-1 accent-[var(--color-accent)]" checked={on} onChange={() => toggle(row.key, row.item)} aria-label={`${e.name}: ${row.title}`} />
-                                {row.photo ? (
-                                  <span className="relative h-12 w-16 shrink-0">
-                                    {/* eslint-disable-next-line @next/next/no-img-element -- deck or API photo */}
-                                    <img src={row.photo} alt="" loading="lazy" className="h-12 w-16 rounded-lg object-cover" />
-                                    {row.photoNote ? <span className="absolute bottom-0.5 left-0.5 rounded bg-[rgba(6,12,28,0.7)] px-1 text-[9px] font-semibold leading-3 text-white" title={row.photoNote}>Deck</span> : null}
-                                  </span>
-                                ) : (
-                                  <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg bg-bg-subtle" aria-hidden>
-                                    {row.width && row.height ? (
-                                      <span
-                                        className="rounded-sm bg-gradient-to-br from-accent to-[#1e2761]"
-                                        style={row.width >= row.height ? { width: 40, height: Math.max(6, Math.round((40 * row.height) / row.width)) } : { height: 36, width: Math.max(6, Math.round((36 * row.width) / row.height)) }}
-                                      />
-                                    ) : null}
-                                  </span>
-                                )}
+                                <span className="relative shrink-0">
+                                  <Zoomable src={row.photo} title={`${e.name} · ${row.title}`} specId={row.specId} note={row.photoNote} detail={row.width && row.height ? `${row.width} × ${row.height} px${row.qty > 1 ? ` · ${row.qty} screens` : ''}` : undefined} className="h-12 w-16 rounded-lg">
+                                    <span className="flex h-full w-full items-center justify-center bg-bg-subtle" aria-hidden>
+                                      {row.width && row.height ? (
+                                        <span
+                                          className="rounded-sm bg-gradient-to-br from-accent to-[#1e2761]"
+                                          style={row.width >= row.height ? { width: 40, height: Math.max(6, Math.round((40 * row.height) / row.width)) } : { height: 36, width: Math.max(6, Math.round((36 * row.width) / row.height)) }}
+                                        />
+                                      ) : null}
+                                    </span>
+                                  </Zoomable>
+                                  {row.photo && row.photoNote ? <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-[rgba(6,12,28,0.7)] px-1 text-[9px] font-semibold leading-3 text-white" title={row.photoNote}>Deck</span> : null}
+                                </span>
                                 <span className="flex min-w-0 flex-1 flex-col">
                                   <span className={`truncate text-body-sm font-semibold ${on ? 'text-accent' : 'text-fg'}`}>{row.title}</span>
                                   <span className="font-mono text-[12px] tabular-nums text-fg-muted">

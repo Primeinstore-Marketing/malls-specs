@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { fileUrl } from '@/lib/api';
 import { PHOTO_RIGHTS, deckMall, mallName, packageByCode } from '@/lib/insights';
+import { useLiveData } from '@/lib/liveData';
 import type { PhotoRights } from '@/lib/insights';
-import { withBasePath } from '@/lib/basePath';
 import type { PortalUser } from '@/lib/portal/types';
 import { Page, Pill, RequireSignIn } from './ui';
 
@@ -17,6 +18,7 @@ const STATUS: Record<PhotoRights['status'], { label: string; tone: 'warning' | '
 /** Sales: every deck photo, where it came from, and whether we may use it. */
 function Register({ user }: { user: PortalUser }) {
   const [kind, setKind] = useState<'all' | 'mall' | 'package' | 'screen'>('mall');
+  useLiveData(); // the register arrives with the live data
   if (user.role !== 'sales') return <Page><p className="text-body-md text-fg-muted">This register is for Primedia staff.</p></Page>;
   const list = PHOTO_RIGHTS.filter((r) => kind === 'all' || r.kind === kind);
   const counts = (s: PhotoRights['status']) => PHOTO_RIGHTS.filter((r) => r.status === s).length;
@@ -63,7 +65,7 @@ function Register({ user }: { user: PortalUser }) {
           const mall = deckMall(r.mall);
           return (
             <li key={r.src} className="flex flex-col overflow-hidden rounded-3xl border border-border bg-bg">
-              <img src={withBasePath(r.src)} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
+              <img src={fileUrl(r.src.replace(/^\//, ''))} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
               <div className="flex flex-1 flex-col gap-2 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLiveData } from '@/lib/liveData';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { usePathname, useRouter } from 'next/navigation';
@@ -13,6 +14,7 @@ import { useAdminSession } from '@/components/auth/AdminSession';
 
 /** "Building: Festive Feast · 4 items" — follows the user round the site while they add media. */
 export function CampaignTray() {
+  useLiveData(); // re-render when the deck's data arrives from the API
   const { campaigns, active, userId } = usePortalState();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -219,6 +221,7 @@ function useOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => void,
 
 /** What the other side did since you last looked. */
 export function Notifications() {
+  useLiveData(); // re-render when the deck's data arrives from the API
   const { campaigns, userId, seen } = usePortalState();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Zoomable } from '@/components/ui/ImageViewer';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Asset, Catalogue, Specification } from '@data-model';
@@ -327,7 +328,7 @@ function Audience({ mallId }: { mallId: string }) {
       <div className="flex flex-wrap gap-2">
         {d.packages.map((pkg) => (
           <div key={pkg.code} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg py-2 pl-2 pr-3">
-            {packagePhotos(pkg.code)[0] ? <img src={packagePhotos(pkg.code)[0].src} alt="" loading="lazy" className="h-11 w-14 rounded object-cover" /> : null}
+            {packagePhotos(pkg.code)[0] ? <Zoomable src={packagePhotos(pkg.code)[0].src} title={`${pkg.format}${pkg.units ? ` × ${pkg.units}` : ''} package`} packageCode={pkg.code} note={pkg.sites} className="h-11 w-14 rounded" /> : null}
             <span className="flex flex-col">
               <span className="text-body-sm font-semibold text-fg">{pkg.format}{pkg.units ? ` × ${pkg.units}` : ''} package</span>
             </span>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLiveData } from '@/lib/liveData';
 import Link from 'next/link';
 import { useState } from 'react';
 import { ALL_MALLS, annualVisits, compact, mallName, mallPhoto } from '@/lib/insights';
@@ -8,6 +9,7 @@ import { AdminGate, field } from './AdminGate';
 
 /** Every mall, with what admins have changed. Click one to edit it. */
 function List() {
+  useLiveData(); // re-render when the deck's data arrives from the API
   const [q, setQ] = useState('');
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const malls = [...ALL_MALLS]
