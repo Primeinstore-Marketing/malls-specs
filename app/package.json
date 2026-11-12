@@ -11,6 +11,7 @@
     "snapshot": "node scripts/snapshot-live.mjs"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "maplibre-gl": "^4.7.1",
     "next": "^15.1.0",

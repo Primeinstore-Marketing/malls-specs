@@ -98,6 +98,32 @@ export interface Campaign {
   readonly shareCode?: string;
   /** Changes the client asked for on their booking page, waiting for sales to apply or dismiss. */
   readonly clientChanges?: ClientChanges | null;
+  /** Sales' prices for this proposal. Goes in the PowerPoint and the Excel rate card, never on the client's link. */
+  readonly rateCard?: RateCard | null;
+}
+
+/** What one line of a proposal costs: the rate card price per period, a discount, and how many periods. */
+export interface RateLine {
+  readonly itemId: string;
+  /** Rate card price per period, in rand, excluding VAT. */
+  readonly rate: number | null;
+  /** Discount off the rate card, in percent. */
+  readonly discount: number | null;
+  /** Periods booked; null works it out from the flight dates. */
+  readonly periods: number | null;
+}
+
+export type RatePeriod = 'week' | '4 weeks' | 'month' | 'flight';
+
+export interface RateCard {
+  readonly per: RatePeriod;
+  readonly lines: readonly RateLine[];
+  /** Show 15% VAT and the total including it. */
+  readonly vat: boolean;
+  /** Terms, production costs, validity: printed under the totals. */
+  readonly note: string;
+  readonly updatedAt: string;
+  readonly updatedBy: string;
 }
 
 export interface ClientChanges {

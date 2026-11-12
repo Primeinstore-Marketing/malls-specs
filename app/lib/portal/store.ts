@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { SESSION_READY, SESSION_USER, onSessionUser, registerPeople } from './seed';
 import { ui } from './ui-state';
 import { newShareCode, newShareKey } from './share';
+import type { RateCard } from './types';
 import type { Campaign, CampaignEvent, CampaignItem, CampaignStatus, NewCampaignItem, PortalState, PortalUser } from './types';
 
 /**
@@ -386,6 +387,12 @@ export const portal = {
   /** Sets aside the changes a client asked for, without applying them. */
   dismissClientChanges(id: string) {
     updateCampaign(id, () => ({ clientChanges: null }), { kind: 'status', text: 'Set aside the changes the client asked for' });
+  },
+
+  /** Saves the proposal's rate card (sales only; it never goes on the client's link). */
+  setRateCard(id: string, card: RateCard) {
+    const { user } = current();
+    updateCampaign(id, () => ({ rateCard: { ...card, updatedAt: now(), updatedBy: user.id } }));
   },
 
   /** Matches site-list lines marked "check" to a screen on the site (its size, spec sheet and template). */

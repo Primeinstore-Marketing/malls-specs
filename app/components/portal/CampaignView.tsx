@@ -47,6 +47,7 @@ import { campaignContact, shareUrl } from '@/lib/portal/share';
 import { Shape } from './ShareView';
 import { canDeleteDraft, countdown, DeleteDraftButton } from './CampaignCard';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { RateCardEditor } from './RateCardEditor';
 
 /**
  * One campaign, for whichever side is looking. Top to bottom: what it is,
@@ -722,6 +723,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             {c.items.some((i) => i.kind !== 'site') || !c.items.length ? <Items c={{ ...c, items: c.items.filter((i) => i.kind !== 'site') }} user={user} /> : null}
             {editable ? <Suggestions c={c} /> : null}
           </section>
+          {user.role === 'sales' ? <RateCardEditor c={c} user={user} editable={editable} /> : null}
         </div>
         <section id="updates" className="flex scroll-mt-28 flex-col gap-4 lg:sticky lg:top-[calc(var(--topbar-height)+24px)] lg:h-fit print:hidden" aria-labelledby="updates-title">
           <h2 id="updates-title" className="text-display-sm text-fg">Updates</h2>

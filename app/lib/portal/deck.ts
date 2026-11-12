@@ -19,7 +19,7 @@ import type { Catalogue } from '@data-model';
 import { getAssets } from '@/lib/catalogue';
 import { withBasePath } from '@/lib/basePath';
 import { fileUrl } from '@/lib/api';
-import { compact, isCleared, mallArea, mallName, mallPhoto, screenPhotos } from '@/lib/insights';
+import { annualVisits, compact, isCleared, mallArea, mallName, mallPhoto, networkStats, screenPhotos } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
 import { docWords, formatDate, formatRange, itemMall, days, reach, campaignClientName } from './logic';
 import { mallFacts } from './mallScreens';
@@ -27,6 +27,8 @@ import { campaignScreens, creativeGroups, creativeLabel } from './screens';
 import type { BookedScreen, CreativeGroup } from './screens';
 import { shareUrl } from './share';
 import type { Campaign, PortalUser } from './types';
+import { hasRates, PERIOD_LABEL, pricedLines, rand, rateTotals, VAT_RATE } from './rates';
+import { itemDetail, itemLabel } from './logic';
 
 /* ---------- Brand ---------- */
 
@@ -187,6 +189,70 @@ function stat(slide: Slide, x: number, y: number, w: number, value: string, labe
   text(slide, label, { x, y: y + 0.82, w, h: 0.5, fontSize: 12, color: sub });
 }
 
+/* ---------- Audience across the proposal's malls ---------- */
+
+interface Audience {
+  readonly malls: number;
+  readonly ages: readonly [string, number][];
+  readonly women: number | null;
+  readonly income: number | null;
+  readonly married: number | null;
+  readonly working: number | null;
+  readonly lsm: string[];
+  readonly notice: number | null;
+  readonly digital: number | null;
+}
+
+/** The shoppers of the proposal's malls together, each mall weighted by its footfall. */
+function audienceOf(decks: readonly DeckMall[]): Audience {
+  const weight = (m: DeckMall) => annualVisits(m) ?? 1;
+  const avg = (get: (m: DeckMall) => number | null | undefined) => {
+    let sum = 0;
+    let wsum = 0;
+    for (const m of decks) {
+      const v = get(m);
+      if (v == null) continue;
+      sum += v * weight(m);
+      wsum += weight(m);
+    }
+    return wsum ? sum / wsum : null;
+  };
+  const bands = new Map<string, { sum: number; w: number }>();
+  for (const m of decks) {
+    for (const b of m.profile?.ageBands ?? []) {
+      const cur = bands.get(b.band) ?? { sum: 0, w: 0 };
+      bands.set(b.band, { sum: cur.sum + b.pct * weight(m), w: cur.w + weight(m) });
+    }
+  }
+  const ages = [...bands.entries()].map(([band, v]) => [band, v.sum / v.w] as [string, number]).sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }));
+  return {
+    malls: decks.length,
+    ages,
+    women: avg((m) => m.profile?.female),
+    income: avg((m) => m.profile?.householdIncome),
+    married: avg((m) => m.profile?.married),
+    working: avg((m) => m.profile?.working),
+    lsm: [...new Set(decks.map((m) => m.profile?.lsm).filter((x): x is string => Boolean(x)))],
+    notice: avg((m) => m.media?.noticeMallAds),
+    digital: avg((m) => m.media?.seenDigitalScreens),
+  };
+}
+
+/** Labelled horizontal bars, drawn with plain rectangles so every viewer shows them. */
+function hbars(pptx: Pptx, slide: Slide, o: { x: number; y: number; w: number; rows: readonly [string, number, string][]; max: number; color: string; alt?: string; ink: string; sub: string; rowH?: number }) {
+  const rowH = o.rowH ?? 0.46;
+  const labelW = Math.min(2.4, o.w * 0.34);
+  const valueW = 1.0;
+  const barW = o.w - labelW - valueW - 0.2;
+  o.rows.forEach(([label, v, shown], k) => {
+    const y = o.y + k * rowH;
+    text(slide, label, { x: o.x, y: y + 0.04, w: labelW - 0.1, h: rowH - 0.1, fontSize: 12, color: o.ink, fit: 'shrink' });
+    const len = Math.max(0.04, (barW * v) / (o.max || 1));
+    slide.addShape(pptx.ShapeType.rect, { x: o.x + labelW, y: y + 0.08, w: len, h: rowH - 0.2, fill: { color: k === 0 && o.alt ? o.alt : o.color }, line: { type: 'none' } } as never);
+    text(slide, shown, { x: o.x + labelW + len + 0.1, y: y + 0.04, w: valueW, h: rowH - 0.1, fontSize: 12, bold: true, color: o.ink });
+  });
+}
+
 /* ---------- The deck ---------- */
 
 export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<string> {
@@ -310,6 +376,100 @@ export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Cat
     footer(slide, dark, label, logos, n);
   }
 
+  /* Why mall media: the network */
+  {
+    n += 1;
+    const slide = pptx.addSlide();
+    const net = networkStats();
+    const dark = look.summary !== 2;
+    slide.background = { color: dark ? look.lead : look.paper };
+    const ink = dark ? BRAND.white : BRAND.ink;
+    const sub = dark ? 'C9D3EA' : BRAND.muted;
+    text(slide, 'Why malls', { x: 0.8, y: 0.6, w: 11.5, h: 0.7, fontSize: 30, bold: true, color: ink });
+    text(slide, 'Shoppers in a mall are out to buy: digital screens meet them on the way to the till, where decisions are made.', { x: 0.8, y: 1.35, w: 11.0, h: 0.6, fontSize: 16, color: sub });
+    const big: [string, string][] = [
+      [compact(net.annualVisits), 'mall visits a year across the network'],
+      [`${net.noticeMallAds}%`, 'of shoppers notice mall advertising'],
+      [`${net.seenDigitalScreens}%`, 'have seen the digital screens'],
+      [String(net.provinces), 'provinces covered'],
+    ];
+    big.forEach(([v, l], k) => {
+      const x = 0.8 + k * 3.0;
+      text(slide, v, { x, y: 2.6, w: 2.8, h: 1.1, fontSize: 48, bold: true, color: dark ? BRAND.white : look.accent });
+      text(slide, l, { x, y: 3.75, w: 2.6, h: 0.9, fontSize: 14, color: sub });
+      slide.addShape(pptx.ShapeType.rect, { x, y: 2.45, w: 0.6, h: 0.07, fill: { color: dark ? BRAND.sky : look.lead }, line: { type: 'none' } } as never);
+    });
+    text(slide, 'Source: Primedia Malls shopper research, as in the malls proposal deck.', { x: 0.8, y: H - 1.05, w: 9, h: 0.3, fontSize: 9, color: sub });
+    footer(slide, dark, label, logos, n);
+  }
+
+  /* Who you'll reach: the shoppers of these malls together */
+  const decks = [...new Map(malls.filter((m) => m.deck).map((m) => [m.deck!.id, m.deck!])).values()];
+  const aud = audienceOf(decks);
+  if (decks.length && (aud.ages.length || aud.women != null)) {
+    n += 1;
+    const slide = pptx.addSlide();
+    slide.background = { color: look.paper };
+    text(slide, 'Who you’ll reach', { x: 0.8, y: 0.6, w: 11.5, h: 0.7, fontSize: 30, bold: true, color: BRAND.ink });
+    text(slide, `The shoppers of ${decks.length === 1 ? decks[0] ? mallName(decks[0]) : 'this mall' : `these ${decks.length} malls`}, weighted by how many people visit each.`, { x: 0.8, y: 1.3, w: 11.5, h: 0.4, fontSize: 14, color: BRAND.muted });
+    const flip = look.mallOffset % 2 === 1;
+    const chartX = flip ? 7.0 : 0.8;
+    const statsX = flip ? 0.8 : 7.6;
+    if (aud.ages.length) {
+      text(slide, 'Age', { x: chartX, y: 2.0, w: 5.5, h: 0.4, fontSize: 14, bold: true, color: BRAND.ink });
+      const top = Math.max(...aud.ages.map((a) => a[1]));
+      const rows = aud.ages.map(([b, v]) => [b, v, `${Math.round(v)}%`] as [string, string | number, string]) as [string, number, string][];
+      // The biggest age group stands out in the accent colour.
+      const sorted = [...rows];
+      hbars(pptx, slide, { x: chartX, y: 2.5, w: 5.6, rows: sorted, max: top, color: look.lead, ink: BRAND.ink, sub: BRAND.muted });
+      const peak = rows.reduce((a, b) => (b[1] > a[1] ? b : a));
+      text(slide, `Most shoppers are aged ${peak[0]}.`, { x: chartX, y: 2.5 + rows.length * 0.46 + 0.15, w: 5.6, h: 0.4, fontSize: 12, italic: true, color: BRAND.muted });
+    }
+    let sy = 2.0;
+    if (aud.women != null) {
+      text(slide, 'Women and men', { x: statsX, y: sy, w: 5.0, h: 0.4, fontSize: 14, bold: true, color: BRAND.ink });
+      const wW = 4.8 * (aud.women / 100);
+      slide.addShape(pptx.ShapeType.rect, { x: statsX, y: sy + 0.5, w: wW, h: 0.5, fill: { color: look.accent }, line: { type: 'none' } } as never);
+      slide.addShape(pptx.ShapeType.rect, { x: statsX + wW, y: sy + 0.5, w: 4.8 - wW, h: 0.5, fill: { color: look.lead }, line: { type: 'none' } } as never);
+      text(slide, `${Math.round(aud.women)}% women`, { x: statsX, y: sy + 1.1, w: 2.4, h: 0.35, fontSize: 12, bold: true, color: BRAND.ink });
+      text(slide, `${100 - Math.round(aud.women)}% men`, { x: statsX + 2.4, y: sy + 1.1, w: 2.4, h: 0.35, fontSize: 12, bold: true, color: BRAND.ink, align: 'right' });
+      sy += 1.8;
+    }
+    const tiles: [string, string][] = [
+      ...(aud.income != null ? [[`R${compact(aud.income)}`, 'average monthly household income'] as [string, string]] : []),
+      ...(aud.lsm.length ? [[`LSM ${aud.lsm.slice(0, 2).join(', ')}`, 'strongest living-standard groups'] as [string, string]] : []),
+      ...(aud.working != null ? [[`${Math.round(aud.working)}%`, 'working'] as [string, string]] : []),
+      ...(aud.digital != null ? [[`${Math.round(aud.digital)}%`, 'have seen the digital screens'] as [string, string]] : []),
+    ].slice(0, 4);
+    tiles.forEach(([v, l], k) => {
+      const tx = statsX + (k % 2) * 2.5;
+      const ty = sy + Math.floor(k / 2) * 1.25;
+      box(pptx, slide, look, { x: tx, y: ty, w: 2.35, h: 1.1, fill: look.paper === BRAND.white ? BRAND.soft : BRAND.white });
+      text(slide, v, { x: tx + 0.15, y: ty + 0.12, w: 2.1, h: 0.5, fontSize: 20, bold: true, color: look.accent, fit: 'shrink' });
+      text(slide, l, { x: tx + 0.15, y: ty + 0.62, w: 2.1, h: 0.42, fontSize: 10, color: BRAND.muted, fit: 'shrink' });
+    });
+    if (r.digitalViewers) {
+      text(slide, `During this campaign: about ${compact(r.visits)} mall visits, ${compact(r.digitalViewers)} of them by people who notice digital screens.`, { x: 0.8, y: H - 1.15, w: 11.7, h: 0.4, fontSize: 13, bold: true, color: look.lead });
+    }
+    footer(slide, false, label, logos, n);
+  }
+
+  /* The malls compared, by footfall */
+  const footfall = decks.map((d) => [mallName(d), annualVisits(d) ?? 0] as [string, number]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (footfall.length >= 2) {
+    n += 1;
+    const slide = pptx.addSlide();
+    const dark = look.closing === 0;
+    slide.background = { color: dark ? look.lead : look.paper };
+    const ink = dark ? BRAND.white : BRAND.ink;
+    text(slide, 'Footfall in your malls', { x: 0.8, y: 0.6, w: 11.5, h: 0.7, fontSize: 30, bold: true, color: ink });
+    text(slide, `Visits a year: ${compact(footfall.reduce((s, [, v]) => s + v, 0))} across the ${footfall.length} malls.`, { x: 0.8, y: 1.3, w: 11.5, h: 0.4, fontSize: 14, color: dark ? 'C9D3EA' : BRAND.muted });
+    const shown = footfall.slice(0, 9);
+    const rowH = Math.min(0.55, 4.6 / shown.length);
+    hbars(pptx, slide, { x: 0.8, y: 2.0, w: 11.7, rows: shown.map(([nm, v]) => [nm, v, compact(v)] as [string, number, string]), max: shown[0][1], color: dark ? BRAND.sky : look.lead, alt: dark ? BRAND.white : look.accent, ink, sub: ink, rowH });
+    footer(slide, dark, label, logos, n);
+  }
+
   /* One slide per mall */
   for (const [i, m] of malls.entries()) {
     n += 1;
@@ -419,6 +579,56 @@ export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Cat
       if (!g.width) text(slide, 'Primedia confirms the size', { x: x + 1.85, y: y + 1.55, w: cw - 2.1, h: 0.35, fontSize: 11, color: BRAND.muted, italic: true });
     });
     if (groups.length > shown.length) text(slide, `…and ${groups.length - shown.length} more on the ${w.noun} page.`, { x: 0.8, y: H - 1.0, w: 11, h: 0.35, fontSize: 12, color: BRAND.muted });
+    footer(slide, false, label, logos, n);
+  }
+
+  /* Investment: the rate card, when sales priced the proposal */
+  if (hasRates(c)) {
+    n += 1;
+    const slide = pptx.addSlide();
+    slide.background = { color: look.paper };
+    const t = rateTotals(c);
+    const card = c.rateCard!;
+    text(slide, 'Investment', { x: 0.8, y: 0.6, w: 8, h: 0.7, fontSize: 30, bold: true, color: BRAND.ink });
+    text(slide, `Rates ${PERIOD_LABEL[card.per]}, in rand, excluding VAT.`, { x: 0.8, y: 1.3, w: 8, h: 0.4, fontSize: 13, color: BRAND.muted });
+    const lines = pricedLines(c).filter((p) => p.total != null).sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
+    const shown = lines.slice(0, 9);
+    const left = look.mallOffset % 2 === 0;
+    const tx = left ? 0.8 : 4.6;
+    const px = left ? 9.1 : 0.8;
+    const rows = [
+      [
+        { text: 'Line', options: { bold: true, color: BRAND.white, fill: { color: look.lead } } },
+        { text: 'Rate card', options: { bold: true, color: BRAND.white, fill: { color: look.lead }, align: 'right' } },
+        { text: 'Discount', options: { bold: true, color: BRAND.white, fill: { color: look.lead }, align: 'right' } },
+        { text: 'Total', options: { bold: true, color: BRAND.white, fill: { color: look.lead }, align: 'right' } },
+      ],
+      ...shown.map((p) => [
+        { text: `${itemLabel(p.item)}\n${itemDetail(p.item)}`, options: { color: BRAND.ink } },
+        { text: p.line.rate != null ? rand(p.line.rate) : '—', options: { color: BRAND.muted, align: 'right' } },
+        { text: `${p.line.discount ?? 0}%`, options: { color: BRAND.muted, align: 'right' } },
+        { text: rand(p.total ?? 0), options: { bold: true, color: BRAND.ink, align: 'right' } },
+      ]),
+    ];
+    slide.addTable(rows as never, { x: tx, y: 1.9, w: 7.9, colW: [3.9, 1.5, 1.0, 1.5], fontFace: FONT, fontSize: 11, margin: 0.06, border: { type: 'solid', pt: 0.75, color: BRAND.line } } as never);
+    if (lines.length > shown.length) text(slide, `…and ${lines.length - shown.length} more lines in the Excel rate card.`, { x: tx, y: H - 1.15, w: 7.9, h: 0.3, fontSize: 11, italic: true, color: BRAND.muted });
+    box(pptx, slide, look, { x: px, y: 1.9, w: 3.45, h: 4.6, fill: look.lead });
+    const figures: [string, string][] = [
+      ['Rate card value', rand(t.gross)],
+      ['Your discount', t.discount > 0 ? `– ${rand(t.discount)}` : rand(0)],
+      [card.vat ? 'Total excl. VAT' : 'Total investment (excl. VAT)', rand(t.net)],
+      ...(card.vat ? ([[`VAT (${Math.round(VAT_RATE * 100)}%)`, rand(t.vat)], ['Total incl. VAT', rand(t.total)]] as [string, string][]) : []),
+    ];
+    const step = figures.length > 3 ? 0.76 : 0.9;
+    figures.forEach(([k, v], i) => {
+      const last = i === figures.length - 1;
+      text(slide, k, { x: px + 0.3, y: 2.1 + i * step, w: 2.9, h: 0.28, fontSize: 11, color: 'C9D3EA' });
+      text(slide, v, { x: px + 0.3, y: 2.38 + i * step, w: 2.9, h: 0.42, fontSize: last ? 19 : 15, bold: true, color: BRAND.white, fit: 'shrink' });
+    });
+    // Under the last figure, never on top of it.
+    const saveY = 2.38 + (figures.length - 1) * step + 0.62;
+    if (t.discount > 0 && t.gross > 0) text(slide, `You save ${Math.round((t.discount / t.gross) * 100)}% on the rate card.`, { x: px + 0.3, y: saveY, w: 2.9, h: 0.32, fontSize: 11, bold: true, color: BRAND.white });
+    if (card.note.trim()) text(slide, card.note.trim(), { x: tx, y: H - 0.85, w: 7.9, h: 0.3, fontSize: 9, color: BRAND.muted, fit: 'shrink' });
     footer(slide, false, label, logos, n);
   }
 
