@@ -1,6 +1,6 @@
 import type { Catalogue } from '@data-model';
 import { formatDate, formatRange } from './logic';
-import { artworkSizes, campaignScreens, sheetHref } from './screens';
+import { campaignScreens, creativeGroups, creativeLabel, sheetHref } from './screens';
 import { campaignContact, shareUrl } from './share';
 import type { Campaign, PortalUser } from './types';
 
@@ -31,7 +31,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catalogue, kind: EmailKind, note = ''): ClientEmail {
   const to = campaignContact(c);
   const screens = campaignScreens(c.items, catalogue);
-  const { sizes, unknown } = artworkSizes(screens);
+  // The creative to supply: one per artwork size, or per kind of site while its size isn't known.
+  const groups = creativeGroups(c.items, screens);
+  const unitOf = (n: number) => `${n} ${c.items.some((i) => i.kind === 'site') ? (n === 1 ? 'site' : 'sites') : n === 1 ? 'screen' : 'screens'}`;
   const total = screens.reduce((n, x) => n + x.qty, 0);
   const malls = new Set(screens.map((x) => x.mallName)).size;
   const first = to?.name.split(' ')[0] || 'there';
@@ -48,7 +50,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     booked: `${c.name} is booked: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
   }[kind];
   const cta = kind === 'booked' ? 'View your booking' : 'Review and approve the site list';
-  const hasTemplates = sizes.some((z) => z.files.some((f) => f.template));
+  const hasTemplates = groups.some((z) => z.files.some((f) => f.template));
 
   /* ---- Plain text ---- */
   const text = [
@@ -60,9 +62,8 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     `${cta}:`,
     link,
     '',
-    `Artwork sizes${deadline ? ` (needed before ${deadline})` : ''}:`,
-    ...sizes.map((z) => `- ${z.width} × ${z.height} px (${z.orientation?.toLowerCase() ?? 'size'}) for ${z.screens} ${z.screens === 1 ? 'screen' : 'screens'}`),
-    ...(unknown ? [`- ${unknown} ${unknown === 1 ? 'screen' : 'screens'}: size to follow`] : []),
+    `Creative to supply${deadline ? ` (needed before ${deadline})` : ''}: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}`,
+    ...groups.map((z, i) => `- Creative ${i + 1}: ${creativeLabel(z)}, for ${unitOf(z.count)} in ${z.malls} ${z.malls === 1 ? 'mall' : 'malls'}`),
     hasTemplates ? '\nThe After Effects templates and spec sheets for each size are on the page above.' : '',
     '',
     'Regards,',
@@ -76,7 +77,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   /* ---- Designed (HTML) ---- */
   const fact = (label: string, value: string) =>
     `<td style="${FONT}padding:12px 16px;border-right:1px solid ${C.line};"><div style="font-size:12px;color:${C.muted};">${esc(label)}</div><div style="font-size:16px;font-weight:bold;color:${C.ink};">${esc(value)}</div></td>`;
-  const fileLinks = (z: (typeof sizes)[number]) =>
+  const fileLinks = (z: (typeof groups)[number]) =>
     z.files
       .flatMap((f) => [
         f.template ? `<a href="${esc(sheetHref(f.template))}" style="color:${C.blue};text-decoration:none;">After Effects template${z.files.length > 1 ? ` (${esc(f.label)})` : ''}</a>` : '',
@@ -84,11 +85,11 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
       ])
       .filter(Boolean)
       .join(' &nbsp;·&nbsp; ');
-  const sizeRows = sizes
+  const sizeRows = groups
     .map(
-      (z) => `<tr>
-        <td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:15px;color:${C.ink};"><strong>${z.width} × ${z.height} px</strong> <span style="color:${C.muted};">${esc(z.orientation?.toLowerCase() ?? '')}</span></td>
-        <td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:14px;color:${C.muted};text-align:right;white-space:nowrap;">${z.screens} ${z.screens === 1 ? 'screen' : 'screens'}</td>
+      (z, i) => `<tr>
+        <td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:15px;color:${C.ink};"><span style="color:${C.muted};font-size:12px;">CREATIVE ${i + 1}</span><br><strong>${esc(creativeLabel(z))}</strong></td>
+        <td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:14px;color:${C.muted};text-align:right;white-space:nowrap;">${esc(unitOf(z.count))} · ${z.malls} ${z.malls === 1 ? 'mall' : 'malls'}</td>
       </tr>${fileLinks(z) ? `<tr><td colspan="2" style="${FONT}padding:0 0 10px;font-size:13px;">${fileLinks(z)}</td></tr>` : ''}`,
     )
     .join('');
@@ -111,10 +112,10 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     </td></tr></table>
     <p style="${FONT}margin:10px 0 0;font-size:12px;color:${C.muted};">Or open <a href="${esc(link)}" style="color:${C.blue};">${esc(link.replace(/^https?:\/\//, ''))}</a></p>
   </td></tr>
-  ${sizes.length || unknown ? `<tr><td style="${FONT}padding:24px 28px 4px;">
-    <div style="font-size:16px;font-weight:bold;color:${C.ink};">Artwork to supply</div>
-    <div style="margin-top:4px;font-size:13px;color:${C.muted};">One file per size${deadline ? `, before ${esc(deadline)}` : ''}.${hasTemplates ? ' Build it in the After Effects template; the spec sheet has the file types and safe areas.' : ''}</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${sizeRows}${unknown ? `<tr><td colspan="2" style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:14px;color:${C.muted};">${unknown} ${unknown === 1 ? 'screen' : 'screens'}: size to follow</td></tr>` : ''}</table>
+  ${groups.length ? `<tr><td style="${FONT}padding:24px 28px 4px;">
+    <div style="font-size:16px;font-weight:bold;color:${C.ink};">Creative to supply: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}</div>
+    <div style="margin-top:4px;font-size:13px;color:${C.muted};">One video or still per creative${deadline ? `, before ${esc(deadline)}` : ''}.${hasTemplates ? ' Build it in the After Effects template; the spec sheet has the file types and safe areas.' : ''} Where the size is still to be confirmed, Primedia will send it. The page lists every site in each group.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${sizeRows}</table>
   </td></tr>` : ''}
   <tr><td style="${FONT}padding:24px 28px 28px;font-size:15px;line-height:22px;color:${C.ink};">
     Regards,<br><strong>${esc(user.name)}</strong>${user.title ? `<br><span style="color:${C.muted};">${esc(user.title)}</span>` : ''}${user.email ? `<br><a href="mailto:${esc(user.email)}" style="color:${C.blue};text-decoration:none;">${esc(user.email)}</a>` : ''}

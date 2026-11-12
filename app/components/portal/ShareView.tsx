@@ -9,7 +9,8 @@ import { isCleared, packagePhotos } from '@/lib/insights';
 import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { days, formatDate, formatRange, phase } from '@/lib/portal/logic';
-import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
+import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
+import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
 import { entryKeyFor, entryPhoto, itemKey, mallEntries, mallFacts, rowsFor } from '@/lib/portal/mallScreens';
 import type { MallEntry, ScreenRow } from '@/lib/portal/mallScreens';
@@ -205,6 +206,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const lines = items
     .flatMap((item) => screens.filter((x) => x.itemId === item.id).map((screen) => ({ item, screen })))
     .sort((a, b) => (a.screen.site?.no ?? 0) - (b.screen.site?.no ?? 0));
+  // The creative to supply: one group per artwork size (or kind of site while its size is unknown).
+  const creatives = creativeGroups(items, screens);
+  const unitWord = lines.some((l) => l.screen.site) ? 'site' : 'screen';
   const total = screens.reduce((s, x) => s + x.qty, 0);
   const flight = days(edits.start, edits.end);
   const status = approved ? { text: 'Approved — Primedia is confirming', tone: 'bg-success-bg text-success-fg' } : statusLine(p);
@@ -408,7 +412,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <dl className="mt-2 grid grid-cols-3 gap-6 border-t border-border pt-5 sm:max-w-xl">
             <div><dt className="text-body-sm text-fg-muted">Malls</dt><dd className="text-display-md text-fg">{[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}</dd></div>
             <div><dt className="text-body-sm text-fg-muted">{lines.some((l) => l.screen.site) ? 'Sites' : 'Screens'}</dt><dd className="text-display-md text-fg">{total}</dd></div>
-            <div><dt className="text-body-sm text-fg-muted">Artwork sizes</dt><dd className="text-display-md text-fg">{sizes.length + (unknown ? 1 : 0)}</dd></div>
+            <div><dt className="text-body-sm text-fg-muted">Creatives to supply</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
           </dl>
           {editable ? (
             <p className="text-body-sm text-fg-muted print:hidden">
@@ -417,49 +421,17 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           ) : null}
         </section>
 
-        {/* ---- The site list: every line, numbered ---- */}
-        <section className="flex flex-col gap-4" aria-labelledby="sites-title">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="sites-title" className="text-display-sm text-fg">Site list</h2>
-            <span className="text-body-sm text-fg-muted">{lines.length} {lines.length === 1 ? 'line' : 'lines'} · {formatRange(edits.start, edits.end)}</span>
+        {/* ---- What to supply: the site list grouped by creative ---- */}
+        <section className="flex flex-col gap-4" aria-labelledby="supply-title">
+          <div className="flex flex-col gap-1">
+            <h2 id="supply-title" className="text-display-sm text-fg">What you need to supply</h2>
+            <p className="max-w-prose text-body-md text-fg">{creativeSummary(creatives, unitWord, 'client')}</p>
+            <p className="text-body-sm text-fg-muted">
+              One video or still per creative{edits.start ? `, before ${formatDate(edits.start)}` : ''}, built in its After Effects template; the spec sheet has the file types and safe areas.
+              Open a creative to see its {unitWord}s. The approval covers the whole list ({lines.length} {lines.length === 1 ? unitWord : `${unitWord}s`}).
+            </p>
           </div>
-          {lines.length ? (
-            <div className="overflow-x-auto rounded-3xl bg-bg print:overflow-visible print:border print:border-border">
-              <table className="w-full min-w-[720px] border-collapse text-left text-body-sm">
-                <thead>
-                  <tr className="border-b border-border text-label-md uppercase text-fg-subtle">
-                    <th scope="col" className="px-4 py-3 font-semibold">No</th>
-                    <th scope="col" className="px-3 py-3 font-semibold">Mall</th>
-                    <th scope="col" className="px-3 py-3 font-semibold">Site / screen</th>
-                    <th scope="col" className="px-3 py-3 font-semibold">Site no.</th>
-                    <th scope="col" className="px-3 py-3 font-semibold">Size</th>
-                    <th scope="col" className="px-3 py-3 font-semibold">Flight</th>
-                    <th scope="col" className="px-4 py-3 font-semibold print:hidden"><span className="sr-only">Files</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map(({ screen: x, item }, i) => {
-                    const files: SizeFiles[] = x.specId && (x.sheet || x.template) ? [{ specId: x.specId, label: x.title, sheet: x.sheet, template: x.template }] : [];
-                    const size = x.width && x.height ? `${x.width} × ${x.height} px` : x.site?.size || 'To be confirmed';
-                    const flight = x.site?.start || x.site?.end ? formatRange(x.site.start, x.site.end) : formatRange(edits.start, edits.end);
-                    return (
-                      <tr key={`${item.id}-${i}`} className="border-b border-border align-top last:border-b-0 print:break-inside-avoid">
-                        <td className="px-4 py-3 tabular-nums text-fg-muted">{x.site?.no ?? i + 1}</td>
-                        <td className="px-3 py-3 font-semibold text-fg">{x.mallName}{x.site?.town ? <span className="block text-[12px] font-normal text-fg-subtle">{x.site.town}</span> : null}</td>
-                        <td className="px-3 py-3 text-fg">{x.title}{x.qty > 1 ? ` × ${x.qty}` : ''}</td>
-                        <td className="px-3 py-3 font-mono text-[12px] text-fg-muted">{x.site?.siteNo || (item.kind === 'package' ? item.code : '')}</td>
-                        <td className="whitespace-nowrap px-3 py-3 tabular-nums text-fg">{size}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-fg-muted">{flight}</td>
-                        <td className="px-4 py-3 print:hidden">{files.length ? <SizeDownloads files={files} compact /> : null}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No sites yet.</p>
-          )}
+          {lines.length ? <CreativeGroups groups={creatives} start={edits.start} end={edits.end} audience="client" /> : <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No sites yet.</p>}
         </section>
 
         {/* ---- The malls: pictures and who shops there ---- */}
@@ -484,32 +456,6 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
             </ul>
           </section>
         ) : null}
-
-        {/* ---- Artwork ---- */}
-        <section className="flex flex-col gap-4 print:break-inside-avoid" aria-labelledby="art-title">
-          <div>
-            <h2 id="art-title" className="text-display-sm text-fg">Artwork you need to supply</h2>
-            <p className="text-body-md text-fg-muted">One file per size{edits.start ? `, before ${formatDate(edits.start)}` : ''}. Build it in the After Effects template; the spec sheet has the file types and safe areas.</p>
-          </div>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sizes.map((s) => (
-              <li key={`${s.width}x${s.height}`} className="flex flex-col gap-4 rounded-3xl bg-bg p-5 print:border print:border-border">
-                <div className="flex h-16 items-center"><Shape w={s.width} h={s.height} size={64} /></div>
-                <div>
-                  <div className="text-display-sm tabular-nums text-fg">{s.width} × {s.height}<span className="text-body-md font-medium text-fg-muted"> px</span></div>
-                  <div className="text-body-sm text-fg-muted">{s.orientation}{s.ratio ? ` · ${s.ratio}` : ''} · for {s.screens} {s.screens === 1 ? 'screen' : 'screens'}</div>
-                </div>
-                <SizeDownloads files={s.files} />
-              </li>
-            ))}
-            {unknown ? (
-              <li className="flex flex-col justify-center gap-1 rounded-3xl border border-dashed border-border-strong p-5">
-                <div className="text-body-lg font-semibold text-fg">{unknown} {unknown === 1 ? 'screen' : 'screens'} to be confirmed</div>
-                <div className="text-body-sm text-fg-muted">Your account manager will send the size.</div>
-              </li>
-            ) : null}
-          </ul>
-        </section>
 
         {/* ---- Approve, or send changes ---- */}
         <section className={`flex flex-col gap-4 rounded-3xl p-5 sm:p-6 print:hidden ${changed ? 'border-2 border-accent bg-bg' : 'bg-bg'}`} aria-labelledby="decide-title">

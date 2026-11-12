@@ -28,7 +28,8 @@ import { campaignOwner, portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, NewCampaignItem, PortalUser, SiteItem } from '@/lib/portal/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
-import { artworkSizes, campaignScreens, screensFor, sheetHref } from '@/lib/portal/screens';
+import { artworkSizes, campaignScreens, creativeGroups, screensFor, sheetHref } from '@/lib/portal/screens';
+import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { buildClientEmail } from '@/lib/portal/email';
@@ -154,6 +155,16 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const [emailing, setEmailing] = useState<EmailKind | null>(() => (params.get('email') === '1' && ['draft', 'changes', 'proposed'].includes(c.status) && c.items.length ? 'proposal' : null));
   const sentNote = useRef('');
 
+  /** The account manager approves the site list for the client (who agreed by email, phone or in a meeting). */
+  const approveForClient = () => {
+    const how = window.prompt(
+      `Approve the site list for ${who(c)}? It moves the campaign to “Approved” so you can confirm the booking.\n\nHow did the client agree? (optional, e.g. “by email from Thandi, 12 Nov”)`,
+      '',
+    );
+    if (how === null) return;
+    portal.move(c.id, 'approved', `Site list approved by ${user.name} for the client${how.trim() ? `: ${how.trim()}` : '.'}`);
+  };
+
   let title = '';
   let body: React.ReactNode = null;
   let tone: 'accent' | 'danger' | 'quiet' = 'accent';
@@ -182,12 +193,13 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           ) : (
             <button type="button" disabled className={btn.primary}>Email proposal to client</button>
           )}
+          {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>Approve site list for the client</button> : null}
           {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>Decline brief</button> : null}
         </div>
       </>
     );
   } else if (sales && c.status === 'approved') {
-    title = `${who(c)} approved`;
+    title = 'Site list approved';
     body = (
       <>
         <p className="text-body-md text-fg-muted">Confirm to lock in the dates.</p>
@@ -202,10 +214,10 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     tone = 'quiet';
     body = (
       <>
-        <p className="text-body-md text-fg-muted">They can approve from the link in the email. Changed something since? “Email a reminder” sends the latest version.</p>
+        <p className="text-body-md text-fg-muted">They can approve the site list from the link in the email. If they agreed another way (email, phone, a meeting), approve it for them. Changed something since? “Email a reminder” sends the latest version.</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={btn.primary} onClick={() => { portal.move(c.id, 'approved', 'Client approved by email.'); portal.move(c.id, 'booked'); }}>
-            Client approved — confirm booking
+          <button type="button" className={btn.primary} onClick={approveForClient}>
+            Approve site list for the client
           </button>
           <button type="button" className={btn.secondary} onClick={() => setEmailing('reminder')}>Email a reminder</button>
           <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Taken back to make changes.')}>Take back to edit</button>
@@ -330,56 +342,20 @@ function Numbers({ c }: { c: Campaign }) {
 
 /* ---------- Screens ---------- */
 
-/** The client's site list on this campaign: every line, numbered, with what still needs checking. */
+/** The client's site list on this campaign, grouped by the creative each line needs, with what still needs checking. */
 function SiteList({ c, editable }: { c: Campaign; editable: boolean }) {
   const { catalogue } = useLiveData();
   const sites = c.items.filter((i): i is SiteItem => i.kind === 'site').sort((a, b) => (a.no ?? 0) - (b.no ?? 0));
+  const screens = campaignScreens(sites, catalogue);
+  const groups = creativeGroups(sites, screens);
   const toCheck = sites.filter((x) => !x.specId).length;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <p className="text-body-sm text-fg-muted">
-        {sites.length} {sites.length === 1 ? 'site' : 'sites'} from the client’s list
-        {toCheck ? <> · <span className="font-semibold text-warning-fg">{toCheck} not matched to a screen on the site</span>: check their size and details before sending</> : ' · all matched to screens on the site'}.
+        {sites.length} {sites.length === 1 ? 'site' : 'sites'} from the client’s list in {groups.length} {groups.length === 1 ? 'creative group' : 'creative groups'}. {creativeSummary(groups, 'site', 'sales')}
+        {toCheck ? <> <span className="font-semibold text-warning-fg">{toCheck} not matched to a screen on the site.</span></> : null}
       </p>
-      <div className="overflow-x-auto rounded-2xl border border-border">
-        <table className="w-full min-w-[680px] border-collapse text-left text-body-sm">
-          <thead>
-            <tr className="border-b border-border bg-bg-subtle text-label-md uppercase text-fg-subtle">
-              <th scope="col" className="px-3 py-2.5 font-semibold">No</th>
-              <th scope="col" className="px-3 py-2.5 font-semibold">Mall</th>
-              <th scope="col" className="px-3 py-2.5 font-semibold">Site / screen</th>
-              <th scope="col" className="px-3 py-2.5 font-semibold">Site no.</th>
-              <th scope="col" className="px-3 py-2.5 font-semibold">Size</th>
-              <th scope="col" className="px-3 py-2.5 font-semibold">Flight</th>
-              {editable ? <th scope="col" className="px-3 py-2.5"><span className="sr-only">Remove</span></th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {sites.map((x, i) => {
-              const spec = x.specId ? catalogue.specifications[x.specId] : undefined;
-              const px = spec ? getScreenSize(spec) : null;
-              return (
-                <tr key={x.id} className="border-b border-border align-top last:border-b-0">
-                  <td className="px-3 py-2.5 tabular-nums text-fg-muted">{x.no ?? i + 1}</td>
-                  <td className="px-3 py-2.5 font-semibold text-fg">{x.mall}{x.town ? <span className="block text-[12px] font-normal text-fg-subtle">{x.town}</span> : null}</td>
-                  <td className="px-3 py-2.5 text-fg">
-                    {x.location || '—'}
-                    {spec ? <span className="block text-[12px] text-success-fg">Screen: {spec.title}</span> : <span className="block text-[12px] font-semibold text-warning-fg">Check: not a screen on the site yet</span>}
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-[12px] text-fg-muted">{x.siteNo}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-fg">{px ? `${px.width} × ${px.height} px` : x.size || 'To confirm'}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-fg-muted">{x.start || x.end ? formatRange(x.start, x.end) : formatRange(c.start, c.end)}</td>
-                  {editable ? (
-                    <td className="px-3 py-2.5 text-right">
-                      <button type="button" onClick={() => portal.remove(c.id, x.id)} aria-label={`Remove site ${x.no ?? i + 1}`} className="h-8 rounded-full px-3 text-body-sm text-fg-muted hover:bg-bg-subtle hover:text-danger-fg">Remove</button>
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <CreativeGroups groups={groups} start={c.start} end={c.end} audience="sales" onRemove={editable ? (itemId) => portal.remove(c.id, itemId) : undefined} />
     </div>
   );
 }

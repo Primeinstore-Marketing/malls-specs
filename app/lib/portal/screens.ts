@@ -237,3 +237,69 @@ export function artworkSizes(screens: readonly BookedScreen[]): { sizes: Artwork
 export function campaignScreens(items: readonly CampaignItem[], catalogue: Catalogue): BookedScreen[] {
   return items.flatMap((i) => screensFor(i, catalogue));
 }
+
+/**
+ * The creative a client has to supply, grouped from a campaign's lines: one
+ * group per artwork size (one video or still each, built in that size's
+ * templates), and, for lines whose size isn't known yet, one group per kind
+ * of site (from the site code, e.g. "MAPP"). Each group lists its lines so
+ * the site list can be checked group by group instead of line by line.
+ */
+export interface CreativeGroup {
+  readonly key: string;
+  /** Artwork size, when known. */
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly orientation: BookedScreen['orientation'];
+  readonly ratio: string | null;
+  /** For groups whose size isn't known: what the sites have in common, e.g. "MAPP sites". */
+  readonly kind: string | null;
+  /** Templates and spec sheets for this creative (one per distinct spec). */
+  readonly files: readonly SizeFiles[];
+  /** The lines this creative runs on. */
+  readonly lines: readonly { readonly item: CampaignItem; readonly screen: BookedScreen }[];
+  /** Screens or sites (counting units). */
+  readonly count: number;
+  readonly malls: number;
+}
+
+/** "WAL/MAPP/001/02" → "MAPP"; "Package BA33" → null. */
+function siteKind(siteNo: string | undefined): string | null {
+  const parts = (siteNo ?? '').split('/');
+  return parts.length >= 3 && /^[A-Z0-9]{2,6}$/.test(parts[1]) ? parts[1] : null;
+}
+
+export function creativeGroups(items: readonly CampaignItem[], screens: readonly BookedScreen[]): CreativeGroup[] {
+  const groups = new Map<string, { g: Omit<CreativeGroup, 'malls' | 'count' | 'files' | 'lines'>; lines: { item: CampaignItem; screen: BookedScreen }[] }>();
+  for (const item of items) {
+    for (const screen of screens.filter((x) => x.itemId === item.id)) {
+      const known = Boolean(screen.width && screen.height);
+      const kind = known ? null : siteKind(screen.site?.siteNo) ?? (screen.site?.size ? screen.site.size : null);
+      const key = known ? `${screen.width}x${screen.height}` : `tbc:${kind ?? 'other'}`;
+      const cur = groups.get(key) ?? {
+        g: { key, width: known ? screen.width : null, height: known ? screen.height : null, orientation: known ? screen.orientation : null, ratio: known ? screen.ratio : null, kind: known ? null : kind },
+        lines: [],
+      };
+      cur.lines.push({ item, screen });
+      groups.set(key, cur);
+    }
+  }
+  return [...groups.values()]
+    .map(({ g, lines }) => {
+      const files: SizeFiles[] = [];
+      for (const { screen: s } of lines) {
+        if (!s.specId || !(s.sheet || s.template)) continue;
+        const at = files.findIndex((f) => f.specId === s.specId);
+        if (at < 0) files.push({ specId: s.specId, label: s.specTitle && s.specTitle !== s.mallName ? `${s.mallName} · ${s.specTitle}` : s.mallName, sheet: s.sheet, template: s.template });
+        else if (!files[at].label.includes(s.mallName)) files[at] = { ...files[at], label: `${files[at].label}, ${s.mallName}` };
+      }
+      return { ...g, files, lines, count: lines.reduce((n, l) => n + l.screen.qty, 0), malls: new Set(lines.map((l) => l.screen.mallName)).size };
+    })
+    .sort((a, b) => Number(a.width === null) - Number(b.width === null) || b.count - a.count);
+}
+
+/** A creative group's name: "1920 × 1080 px landscape" or "MAPP sites · size to be confirmed". */
+export function creativeLabel(g: Pick<CreativeGroup, 'width' | 'height' | 'orientation' | 'kind'>): string {
+  if (g.width && g.height) return `${g.width} × ${g.height} px${g.orientation ? ` ${g.orientation.toLowerCase()}` : ''}`;
+  return `${g.kind ? `${g.kind} sites` : 'Other sites'} · size to be confirmed`;
+}
