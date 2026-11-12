@@ -1,4 +1,5 @@
 import type { Catalogue } from '@data-model';
+import { withBasePath } from '@/lib/basePath';
 import { docWords, formatDate, formatRange } from './logic';
 import { campaignScreens, creativeGroups, creativeLabel, sheetHref } from './screens';
 import { campaignContact, shareUrl } from './share';
@@ -22,6 +23,13 @@ export interface ClientEmail {
   readonly html: string;
   readonly link: string;
 }
+
+/**
+ * The Primedia Malls logo for email: a PNG (Gmail and Outlook don't show SVG),
+ * white on the navy band, served by the site itself so it's always the current one.
+ */
+const LOGO_PATH = withBasePath('/brand/logo-white-email.png');
+const logoUrl = () => (typeof window === 'undefined' ? LOGO_PATH : `${window.location.origin}${LOGO_PATH}`);
 
 const C = { navy: '#1B3769', blue: '#2861FD', ink: '#0D1E3F', muted: '#4B5870', line: '#E7E8EC', soft: '#F5F7FC' };
 const FONT = "font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;";
@@ -104,7 +112,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
 
   const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.soft};"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background:#ffffff;border:1px solid ${C.line};">
-  <tr><td style="${FONT}background:${C.navy};padding:18px 28px;color:#ffffff;font-size:14px;font-weight:bold;letter-spacing:2px;">PRIMEDIA MALLS</td></tr>
+  <tr><td style="${FONT}background:${C.navy};padding:18px 28px;color:#ffffff;font-size:16px;font-weight:bold;"><img src="${logoUrl()}" width="180" height="38" alt="Primedia Malls" style="display:block;width:180px;height:38px;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:16px;font-weight:bold;"></td></tr>
   <tr><td style="${FONT}padding:28px 28px 8px;">
     <div style="font-size:22px;font-weight:bold;color:${C.ink};">${esc(heading)}</div>
     <p style="margin:16px 0 0;font-size:15px;line-height:22px;color:${C.ink};">Hi ${esc(first)},</p>
@@ -112,7 +120,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     ${note ? `<p style="margin:16px 0 0;padding:12px 16px;background:${C.soft};border-left:3px solid ${C.blue};font-size:15px;line-height:22px;color:${C.ink};">${esc(note).replace(/\n/g, '<br>')}</p>` : ''}
   </td></tr>
   <tr><td style="padding:16px 28px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${C.line};"><tr>
-    ${fact('Campaign', c.name)}${fact('Dates', dates)}${fact('Sites', `${total} in ${malls} ${malls === 1 ? 'mall' : 'malls'}`)}
+    ${fact('Campaign', c.name)}${fact('Dates', dates)}${fact(w.unit === 'site' ? 'Sites' : 'Screens', `${total} in ${malls} ${malls === 1 ? 'mall' : 'malls'}`)}
   </tr></table></td></tr>
   <tr><td align="left" style="padding:24px 28px 4px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${C.blue};border-radius:24px;">
