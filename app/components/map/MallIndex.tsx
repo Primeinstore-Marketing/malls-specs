@@ -11,15 +11,6 @@ import { MallOutlinePreview } from './MallOutlinePreview';
 
 type GroupFilter = MallGroup | 'all';
 
-function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
 function ArrowIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
@@ -176,7 +167,8 @@ export function MallIndex({
   /** Shown instead of the spec-library header, e.g. the portal introduction for visitors. */
   intro?: React.ReactNode;
 }) {
-  const [query, setQuery] = useState('');
+  // The site-wide search (top bar) and the left-hand list's search cover finding a mall; this page only filters by network.
+  const query = '';
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
 
   const groupKeys = useMemo(
@@ -279,19 +271,6 @@ export function MallIndex({
 
       <div className="sticky top-[var(--topbar-height-sm)] z-raised border-b border-border bg-bg md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)]">
         <div className="mx-auto flex max-w-page flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:px-8">
-          <label className="relative w-full lg:max-w-xs">
-            <span className="sr-only">Find a mall or screen</span>
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle">
-              <SearchIcon />
-            </span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Find a mall or screen…"
-              className="h-9 w-full rounded-full border border-border-strong bg-bg pl-9 pr-3 text-body-sm text-fg outline-none transition-colors duration-fast ease-standard placeholder:text-fg-subtle focus:border-border-focus"
-            />
-          </label>
           <div
             className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0"
             role="group"
@@ -313,7 +292,7 @@ export function MallIndex({
 
       <div className="mx-auto flex w-full max-w-page flex-col gap-10 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         {groups.length === 0 ? (
-          <EmptyState title="No matching malls" description="Try a mall name or a screen name like “Food Court”." />
+          <EmptyState title="No malls in this network" description="Choose “All” to see every mall." />
         ) : (
           groups.map(({ group, malls: groupMalls }) => (
             <section key={group} className="flex flex-col gap-4" aria-labelledby={`group-${group}`}>

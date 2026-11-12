@@ -227,7 +227,7 @@ function List() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. Salespeople can create their own account on the sign-in page (work email only); approve them here. You can also add someone yourself, and reset a password when someone asks.</p>
+      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. Anyone can ask for an account on the sign-in page; nobody can sign in until an admin approves them here. You can also add someone yourself, and reset a password when someone asks.</p>
       {accounts ? <Requests list={accounts.filter((a) => a.pending)} onChanged={load} /> : null}
       <NewAccount onCreated={load} />
       {error ? <p className="text-body-sm text-danger-fg">{error}</p> : null}

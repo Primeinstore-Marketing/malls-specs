@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { pointLocation, SA_PROVINCES } from '@/lib/sites';
+import { mallAt, outlineById } from '@/lib/osm';
 import type { SiteLocation, SitePlace } from '@/lib/sites';
 import { field, quietBtn } from './AdminGate';
 
@@ -72,6 +73,29 @@ export function LocationPicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [looking, setLooking] = useState(false);
+
+  /** Places the mall from OpenStreetMap: its building outline by id, or the mall building at the point. */
+  async function placeFromOsm(lat: number, lng: number, osm?: string, place?: Partial<SitePlace> & { name?: string }) {
+    setLooking(true);
+    setError(null);
+    try {
+      const loc = (osm && /^[WR]\d+$/.test(osm) ? await outlineById(osm) : null) ?? (await mallAt(lat, lng));
+      if (loc) {
+        latest.current(loc, place);
+        map.current?.fitBounds(loc.bounds as [[number, number], [number, number]], { padding: 40, maxZoom: 18, duration: 600 });
+      } else {
+        latest.current(pointLocation(Number(lng.toFixed(6)), Number(lat.toFixed(6))), place);
+      }
+    } catch (e) {
+      latest.current(pointLocation(Number(lng.toFixed(6)), Number(lat.toFixed(6))), place);
+      setError(e instanceof Error ? e.message : 'OpenStreetMap isn’t answering just now.');
+    } finally {
+      setLooking(false);
+    }
+  }
+  const placeRef = useRef(placeFromOsm);
+  placeRef.current = placeFromOsm;
 
   // The map, once.
   useEffect(() => {
@@ -87,9 +111,13 @@ export function LocationPicker({
         attributionControl: { compact: true },
       });
       m.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
-      m.on('click', (e) => {
-        const loc = pointLocation(+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6), current.current?.osm ?? '', current.current?.osmName ?? '');
-        latest.current(loc);
+      m.on('click', (e) => void placeRef.current(e.lngLat.lat, e.lngLat.lng));
+      m.on('load', () => {
+        m.addSource('mall-outline', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        m.addLayer({ id: 'mall-outline-fill', type: 'fill', source: 'mall-outline', paint: { 'fill-color': '#2861FD', 'fill-opacity': 0.18 } });
+        m.addLayer({ id: 'mall-outline-line', type: 'line', source: 'mall-outline', paint: { 'line-color': '#2861FD', 'line-width': 2.5 } });
+        setReady(false);
+        setReady(true);
       });
       map.current = m;
       setReady(true);
@@ -116,10 +144,16 @@ export function LocationPicker({
       marker.current = new M({ color: '#2861FD', draggable: true }).setLngLat(at).addTo(m);
       marker.current.on('dragend', () => {
         const p = marker.current!.getLngLat();
-        const was = current.current;
-        latest.current(pointLocation(+p.lng.toFixed(6), +p.lat.toFixed(6), was?.osm ?? '', was?.osmName ?? ''));
+        void placeRef.current(p.lat, p.lng);
       });
     } else marker.current.setLngLat(at);
+  }, [value, ready]);
+
+  // The building outline from OpenStreetMap, drawn on the map.
+  useEffect(() => {
+    const src = map.current?.getSource('mall-outline') as { setData?: (d: unknown) => void } | undefined;
+    if (!src?.setData) return;
+    src.setData(value?.outline ? { type: 'Feature', properties: {}, geometry: value.outline } : { type: 'FeatureCollection', features: [] });
   }, [value, ready]);
 
   async function find() {
@@ -138,9 +172,9 @@ export function LocationPicker({
   }
 
   function choose(h: Hit) {
-    latest.current(pointLocation(h.lng, h.lat, h.osm, h.name), { ...h.place, name: h.name });
     setHits(null);
     map.current?.flyTo({ center: [h.lng, h.lat], zoom: 16 });
+    void placeFromOsm(h.lat, h.lng, h.osm, { ...h.place, name: h.name });
   }
 
   return (
@@ -179,10 +213,13 @@ export function LocationPicker({
       ) : null}
       <div ref={box} className="h-80 w-full overflow-hidden rounded-2xl border border-border bg-bg-subtle" />
       <p className="text-body-sm text-fg-muted">
-        {value
-          ? `Pin at ${value.center[1].toFixed(5)}, ${value.center[0].toFixed(5)}. Drag it, or click the map, to move it onto the mall.`
-          : 'Find the mall above, or click the map where it is.'}{' '}
-        Search by OpenStreetMap.
+        {looking
+          ? 'Looking up the mall on OpenStreetMap…'
+          : value?.outline
+            ? <span className="text-success-fg">Placed from OpenStreetMap{value.osmName ? `: ${value.osmName}` : ''}, with its building outline. Wrong building? Click the right one on the map.</span>
+            : value
+              ? <span className="font-semibold text-warning-fg">OpenStreetMap has no mall building here. Click on the mall’s building on the map, or search for it by name.</span>
+              : 'Search for the mall above, or click its building on the map. The location and outline come from OpenStreetMap.'}
       </p>
     </div>
   );

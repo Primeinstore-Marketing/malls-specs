@@ -57,8 +57,6 @@ export interface Env {
   FILES: KVNamespace;
   /** Comma-separated origins allowed to call the API. */
   ALLOWED_ORIGINS: string;
-  /** Comma-separated email domains that may ask for an account, e.g. "primedia.co.za,primeinstore.co.za". */
-  SIGNUP_DOMAINS?: string;
   /** Workers AI (free daily allowance): reads briefs and drafts campaigns. */
   AI: Ai;
 }
@@ -307,18 +305,14 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
 
 const MAX_SIGNUPS_PER_IP_HOUR = 5;
 
-/** A salesperson creates their own account with their own password. It waits for an admin to approve it. */
+/** Someone asks for an account with their own password. Every request waits for an admin to approve it before it can sign in. */
 async function signup(request: Request, env: Env): Promise<Response> {
   const body = await readJson<{ email?: unknown; name?: unknown; title?: unknown; password?: unknown }>(request);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
   if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter your work email address.');
-  const domains = (env.SIGNUP_DOMAINS ?? '').split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
-  const domain = email.split('@')[1] ?? '';
-  if (!domains.includes(domain)) {
-    throw new HttpError(400, `Use your work email (${domains.map((d) => '@' + d).join(' or ') || 'a Primedia address'}). Anyone else: ask a Primedia Malls admin to add you.`);
-  }
+  // Anyone can ask; nobody signs in until an admin approves the account.
   if (!name) throw new HttpError(400, 'Enter your name.');
   const password = checkPassword(body.password);
 

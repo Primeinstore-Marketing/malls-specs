@@ -80,7 +80,7 @@ export function SignInForm({ onSignedIn, autoFocus = false }: { onSignedIn?: (ac
         <div className="flex flex-col gap-1">
           <strong className="text-body-lg text-fg">{mode === 'signup' ? 'Create your account' : 'Forgot your password?'}</strong>
           <span className="text-body-sm text-fg-muted">
-            {mode === 'signup' ? 'For Primedia sales. Use your work email and choose your own password. An admin approves new accounts.' : 'Enter your work email and we’ll ask an admin to reset it.'}
+            {mode === 'signup' ? 'Choose your own password. Every new account waits for a Primedia Malls admin to approve it before you can sign in.' : 'Enter your work email and we’ll ask an admin to reset it.'}
           </span>
         </div>
       ) : null}
