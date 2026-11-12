@@ -152,17 +152,30 @@ export function entryPhoto(e: MallEntry, publicOnly: boolean): string | null {
 
 /**
  * Everything that can be booked, one line each, for the AI that drafts a
- * campaign from a client's brief: "key | mall (place) | screen | size | shoppers".
+ * campaign from a client's brief or site list:
+ * "key | mall (place) | screen | size | package codes | shoppers".
+ * Package codes (e.g. BA33, PR12) let booking sheets that quote them match exactly.
  */
 export function briefInventory(catalogue: Catalogue): string {
   return mallEntries(catalogue)
     .flatMap((e) => {
-      const facts = mallFacts(e.deck).join(', ');
-      return rowsFor(e, catalogue).map((r) =>
-        [r.key, `${e.name}${e.area ? ` (${e.area})` : ''}`, `${r.title}${r.qty > 1 ? ` × ${r.qty} screens` : ''}`, r.width && r.height ? `${r.width}×${r.height} px` : 'size tbc', facts]
+      const facts = mallFacts(e.deck).slice(0, 3).join(', ');
+      const also = e.deck && e.deck.name !== e.name ? ` aka ${e.deck.name}` : '';
+      return rowsFor(e, catalogue).map((r) => {
+        const codes = r.item.kind === 'package'
+          ? [r.item.code]
+          : e.packages.filter((p) => screensFor({ id: p.code, kind: 'package', code: p.code }, catalogue)[0]?.specId === r.specId).map((p) => p.code);
+        return [
+          r.key,
+          `${e.name}${also}${e.area ? ` (${e.area})` : ''}`,
+          `${r.title}${r.qty > 1 ? ` × ${r.qty} screens` : ''}`,
+          r.width && r.height ? `${r.width}×${r.height} px` : 'size tbc',
+          codes.length ? `packages ${codes.join(', ')}` : '',
+          facts,
+        ]
           .filter(Boolean)
-          .join(' | '),
-      );
+          .join(' | ');
+      });
     })
     .join('\n');
 }

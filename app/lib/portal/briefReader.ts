@@ -111,6 +111,21 @@ async function pptx(files: Map<string, () => Promise<string>>): Promise<string> 
   return parts.join('\n');
 }
 
+/** Column letters to an index: A → 0, AA → 26. */
+function colIndex(letters: string): number | null {
+  if (!letters) return null;
+  return [...letters].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+}
+
+/** An Excel day number as YYYY-MM-DD (1900 date system). */
+function excelDate(n: number): string {
+  if (n < 36526 || n > 73050) return String(n); // only 2000–2099
+  return new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Excel's escaped line breaks and stray whitespace. */
+const cleanCell = (v: string) => v.replace(/_x000D_/g, '').replace(/\s+/g, ' ').trim();
+
 async function xlsx(files: Map<string, () => Promise<string>>): Promise<string> {
   const sharedXml = files.get('xl/sharedStrings.xml');
   const shared = sharedXml ? (await sharedXml()).split('<si>').slice(1).map((si) => [...si.matchAll(/<t(?: [^>]*)?>([^<]*)<\/t>/g)].map((m) => unescape(m[1])).join('')) : [];
@@ -119,17 +134,29 @@ async function xlsx(files: Map<string, () => Promise<string>>): Promise<string> 
   const parts: string[] = [];
   for (const [i, name] of sheets.entries()) {
     const xml = await files.get(name)!();
-    const rows = [...xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)].map((row) =>
-      [...row[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)]
-        .map((c) => {
-          const attrs = c[1] ?? '';
-          const inner = c[2] ?? '';
-          const v = inner.match(/<v>([^<]*)<\/v>/)?.[1] ?? inner.match(/<t(?: [^>]*)?>([^<]*)<\/t>/)?.[1] ?? '';
-          return /t="s"/.test(attrs) ? shared[Number(v)] ?? '' : unescape(v);
-        })
-        .join('\t')
-        .trim(),
-    );
+    // Each cell in its own column (by its reference, e.g. "C5"), so gaps stay gaps.
+    const grid = [...xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)].map((row) => {
+      const cells: string[] = [];
+      for (const c of row[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const attrs = c[1] ?? '';
+        const inner = c[2] ?? '';
+        const v = inner.match(/<v>([^<]*)<\/v>/)?.[1] ?? inner.match(/<t(?: [^>]*)?>([^<]*)<\/t>/)?.[1] ?? '';
+        const col = colIndex(attrs.match(/r="([A-Z]+)\d+"/)?.[1] ?? '') ?? cells.length;
+        cells[col] = cleanCell(/t="s"/.test(attrs) ? shared[Number(v)] ?? '' : unescape(v));
+      }
+      return Array.from(cells, (x) => x ?? '');
+    });
+    // Excel keeps dates as day numbers (46054 = 1 Feb 2026). Turn them back into dates where the column
+    // heading, or the label beside the value, says it's a date.
+    let headings: string[] = [];
+    const rows = grid.map((cells) => {
+      const out = cells.map((v, col) => {
+        const isDateCol = /date|from|to\b|start|end|period/i.test(headings[col] ?? '') || /date/i.test(cells[col - 1] ?? '');
+        return isDateCol && /^\d{5}(\.\d+)?$/.test(v) ? excelDate(Number(v)) : v;
+      });
+      if (cells.filter((x) => /[a-z]/i.test(x)).length >= 3 && cells.some((x) => /date|from|start/i.test(x))) headings = cells;
+      return out.join('\t').trim();
+    });
     parts.push(`--- Sheet ${i + 1} ---\n${rows.filter(Boolean).join('\n')}`);
   }
   return parts.join('\n');

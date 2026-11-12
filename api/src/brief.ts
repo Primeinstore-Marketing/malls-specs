@@ -62,17 +62,31 @@ const SCHEMA = {
 } as const;
 
 const SYSTEM = `You are a media planner at Primedia Malls, which sells advertising on digital screens in South African shopping malls.
-A salesperson has a brief from a client and wants a proposal they can check and send. Read the brief and draft the campaign as JSON.
+A salesperson has a document from a client or their media agency and wants a proposal they can check and send. Draft the campaign as JSON.
 
-Rules:
-- "name": a short campaign name made of the brand and what the campaign is for, e.g. "Fresh Bakes holiday promotion" or "Sunrise winter yoghurt launch". Not the company's legal name.
-- "items": choose only from the inventory, copying each key exactly (it starts with "scr:" or "pkg:"). Each inventory line shows the mall's province after the "·"; check it. If the brief names provinces, cities or malls, choose only screens there. Prefer what the brief asks for (food courts, portrait screens, busy malls, the audience). If it gives a number of screens, use it; otherwise propose 4 to 12.
-- "reason": a few words on why that screen fits, naming the mall's real province or city from its inventory line.
-- Dates: the brief's dates as YYYY-MM-DD. Resolve relative dates against today's date. If there are none, use null.
-- Company, contact person and email: from the brief only. Never invent an email address; use an empty string.
-- "noteForClient": written TO the client, about their campaign, e.g. "Here's a plan for your December promotion: six food-court screens in Durban and Johannesburg, where families stop to eat. You can change the screens or approve it on the page." Never ask the client to confirm things here.
-- "missing": what the salesperson should confirm before sending (budget, exact dates, contact details, artwork, anything unclear).
+The document is one of two kinds:
+A. A written brief (objective, audience, regions, dates, maybe a budget). Choose suitable screens.
+B. A booking sheet, proposal or site list (rows of sites, packages, site numbers, flight dates, rates). Propose exactly what it lists:
+   - Match each listed line to the inventory: first by package code (e.g. "Package- BA33" matches "packages BA33"), then by mall and location or format (e.g. "Fourways Mall - Promotions Court" matches the Fourways promotions-court screen; "Digi Engage", "Digi Icon TV", "Digital Impact", "Digi Nav" are formats).
+   - Many sites or site numbers in the same mall and area become that mall's matching screen(s), once each. Don't add malls the document doesn't list.
+   - Only lines you could NOT match go in "missing", grouped by mall, e.g. "Not on the site: Walmer Park, 6 sites (WAL/MAPP/…)". Never list a mall you put in "items".
+
+Rules for both:
+- "name": the brand and what the campaign is for, e.g. "MultiChoice February campaign", "Cell C deal cycle". Not a company's legal name.
+- "items": only keys from the inventory, copied exactly (they start with "scr:" or "pkg:"). Each inventory line shows the mall's province after the "·"; when the document limits regions, stay in them. For a written brief with no number given, propose 4 to 12 screens.
+- "reason": a few words on why, naming the mall's real city or province, or the document line it matches.
+- Dates as YYYY-MM-DD. Resolve relative dates against today's date. If the document has flights with different dates, use the earliest start and latest end, and add "Several flights: …" to "missing" (only then). If there are no dates, use null.
+- "objective": what the campaign is for. If the document doesn't say, describe it from what it shows, e.g. "February brand campaign across five malls".
+- "client": the advertiser (e.g. MultiChoice, Cell C), not the media agency. The contact and email must be the advertiser's or agency's person named in the document; an "Account Manager" or "Outdoor Account Manager" is Primedia's own staff, not the client contact. Never invent an email address; use an empty string.
+- Mention the agency, if there is one, in "summary".
+- "noteForClient": written TO the client about their campaign, 2–4 sentences, no greeting or sign-off, no prices or rates. Never ask the client to confirm things here.
+- "missing": what the salesperson should confirm before sending (budget, dates, contact details, artwork, unmatched sites, anything unclear). Rates and totals in the document are not for the proposal.
 - Plain South African English.`;
+
+/** A pick whose own reason says it doesn't belong. */
+const SKIPPED = /\b(skip|skipping|exclud|not in (the )?target|out(side)? of (the )?target|outside (the )?(target|region)|not (a )?match|doesn'?t match)/i;
+/** A "check before sending" line that says there's nothing to check. */
+const NOTHING_TO_DO = /no action (is )?(required|needed)|not applicable|\bn\/a\b|same dates|nothing to (confirm|check)/i;
 
 export type BriefFile = { readonly name: string; readonly mediaType: string; readonly data: string };
 
@@ -108,7 +122,7 @@ ${brief}`;
         { role: 'user', content: user },
       ],
       response_format: { type: 'json_schema', json_schema: SCHEMA },
-      max_tokens: 2048,
+      max_tokens: 3072,
     } as never)) as { response?: unknown };
 
   // JSON mode can occasionally miss the schema; one retry, then a clear message.
@@ -119,8 +133,10 @@ ${brief}`;
       const parsed = BriefDraft.safeParse(raw);
       if (parsed.success) {
         // The model sometimes lists a screen while saying it's leaving it out; drop those.
-        const items = parsed.data.items.filter((i) => !/\b(skip|skipping|exclud|not in (the )?target|outside (the )?target|not (a )?match)/i.test(i.reason));
-        return { draft: { ...parsed.data, items }, model: MODEL, truncated };
+        const items = parsed.data.items.filter((i) => !SKIPPED.test(i.reason));
+        // …and sometimes adds a "missing" note that says there's nothing to do.
+        const missing = parsed.data.missing.filter((m) => m.trim() && !NOTHING_TO_DO.test(m));
+        return { draft: { ...parsed.data, items, missing }, model: MODEL, truncated };
       }
     } catch (error) {
       if (attempt === 1) throw error;

@@ -55,13 +55,13 @@ export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onD
       >
         <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-xl text-fg-on-accent">✦</span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 id="brief-title" className="text-body-lg font-semibold text-fg">Start from the client’s brief</h2>
+          <h2 id="brief-title" className="text-body-lg font-semibold text-fg">Start from the client’s brief or site list</h2>
           <p className="text-body-sm text-fg-muted" role="status">
             {state.step === 'reading'
               ? `Opening ${state.file}…`
               : state.step === 'drafting'
                 ? `The AI is reading ${state.file} and choosing screens. This takes about half a minute…`
-                : `Drop a PDF, Word, PowerPoint, Excel or image file (up to ${MAX_BRIEF_MB} MB). The AI fills in the proposal; you check it and send.`}
+                : `Drop a brief, booking sheet or site list: PDF, Word, PowerPoint, Excel or image (up to ${MAX_BRIEF_MB} MB). The AI fills in the proposal; you check it and send.`}
           </p>
         </div>
         <button
