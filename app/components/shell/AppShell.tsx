@@ -14,6 +14,7 @@ import { AdminSessionProvider } from '@/components/auth/AdminSession';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { SetPasswordGate } from '@/components/auth/SetPasswordGate';
 import { CampaignPicker, CampaignTray, PortalDrawer, ToastHost } from '@/components/portal/Chrome';
+import { usePortalUser } from '@/lib/portal/store';
 import { RequestTray } from '@/components/request/AddToRequest';
 import { ApprovalSync } from '@/components/portal/ApprovalSync';
 import { CollectionsProvider } from '@/components/collections/CollectionsContext';
@@ -25,6 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // tablets get the full width for content.
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const pathname = usePathname();
+  const { user: portalUser } = usePortalUser();
 
   useEffect(() => {
     if (isDesktop) setMobileNavOpen(false);
@@ -50,6 +52,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const drawerInert = !isDesktop && !mobileNavOpen;
   // The portal (campaigns, insights, explorer) is its own app: no spec-library sidebar.
   const portalPage = /^\/(portal|insights|explorer|sign-in|account|request)(\/|$)/.test(pathname);
+  // Signed-in staff get the app menu as a fixed column on desktop; the sign-in page and visitors don't.
+  const appMenu = portalPage && Boolean(portalUser) && !pathname.startsWith('/sign-in');
   // The specification detail view is a dedicated one-viewport app shell, and
   // the home page is now a pure hero (matching the reference app) — neither
   // shows a footer.
@@ -75,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <aside
               aria-label="Mall navigation"
               inert={drawerInert}
-              className={`print:hidden fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)] lg:z-sticky lg:w-[var(--sidebar-width)] lg:translate-x-0 lg:border-r lg:border-border-strong lg:shadow-none ${portalPage ? 'lg:hidden' : ''} ${
+              className={`print:hidden fixed bottom-0 left-0 top-[var(--topbar-height-sm)] z-drawer w-[var(--sidebar-width-md)] bg-brand-surface shadow-3 transition-transform duration-slow ease-expressive md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)] lg:z-sticky lg:w-[var(--sidebar-width)] lg:translate-x-0 lg:border-r lg:border-border-strong lg:shadow-none ${portalPage && !appMenu ? 'lg:hidden' : ''} ${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
             >
@@ -84,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <main
               id="main-content"
-              className={`flex min-h-screen flex-col pt-[var(--topbar-height-sm)] print:!ml-0 print:!pt-0 md:pt-[var(--topbar-height-md)] lg:pt-[var(--topbar-height)] ${portalPage ? '' : 'lg:ml-[var(--sidebar-width)]'}`}
+              className={`flex min-h-screen flex-col pt-[var(--topbar-height-sm)] print:!ml-0 print:!pt-0 md:pt-[var(--topbar-height-md)] lg:pt-[var(--topbar-height)] ${portalPage && !appMenu ? '' : 'lg:ml-[var(--sidebar-width)]'}`}
             >
               <div className="flex-1">{children}</div>
               {showFooter ? <Footer /> : null}

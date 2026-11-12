@@ -385,41 +385,65 @@ export function PortalAccount() {
 }
 
 /** Phone menu on portal pages: just the pages, big and tappable. */
+const NAV_ICONS: Record<string, React.ReactNode> = {
+  plus: <path d="M12 5v14M5 12h14" />,
+  list: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></>,
+  home: <><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6.5 6.5 0 0 0-2.5-5.1" /></>,
+  screen: <><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M8 20h8M12 16v4" /></>,
+  chart: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
+  map: <><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2Z" /><path d="M9 4v14M15 6v14" /></>,
+  photo: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8.5" cy="10" r="1.5" /><path d="m21 16-5-5-8 8" /></>,
+  gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></>,
+  person: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+};
+
+/** The sales app's menu: grouped by job, the current page highlighted. A fixed column on desktop, the drawer on phones. */
 export function PortalDrawer() {
   const { userId } = usePortalState();
+  const { isAdmin } = useAdminSession();
   const pathname = usePathname();
+  const [search, setSearch] = useState('');
+  useEffect(() => setSearch(window.location.search), [pathname]);
   const user = userId ? userById(userId) : undefined;
-  const links = user
+  const sales = user?.role === 'sales';
+  const groups: [string, [string, string, string][]][] = user
     ? [
-        ['/portal', user.role === 'sales' ? 'Workspace' : 'My campaigns'],
-        ['/explorer', 'Media Explorer'],
-        ['/insights', 'Insights'],
-        ['/portal/new', 'New proposal'],
-        ['/portal/new?kind=sitelist', 'Site list from PIMS'],
-        ['/portal/clients', 'Client contacts'],
-        ['/portal/photos', 'Photo rights'],
-        ['/account', 'Your account'],
-        ['/', 'Screen specs'],
+        ...(sales ? ([['Create', [['/portal/new', 'New proposal', 'plus'], ['/portal/new?kind=sitelist', 'Site list from PIMS', 'list']]]] as [string, [string, string, string][]][]) : []),
+        ['Work', [['/portal', sales ? 'Workspace' : 'My campaigns', 'home'], ...(sales ? ([['/portal/clients', 'Client contacts', 'users']] as [string, string, string][]) : [])]],
+        ['Explore', [['/explorer', 'Media Explorer', 'screen'], ['/insights', 'Insights', 'chart'], ['/', 'Screen specs and map', 'map']]],
+        ['Manage', [['/portal/photos', 'Photo rights', 'photo'], ...(isAdmin ? ([['/admin/malls', 'Site admin', 'gear']] as [string, string, string][]) : []), ['/account', 'Your account', 'person']]],
       ]
-    : [
-        ['/sign-in', 'Sign in'],
-        ['/', 'Screen specs'],
-      ];
+    : [['', [['/sign-in', 'Sign in', 'person'], ['/', 'Screen specs and map', 'map']]]];
+  const isOn = (href: string) => {
+    const [path, query] = href.split('?');
+    const here = pathname.replace(/\/$/, '') || '/';
+    if ((path.replace(/\/$/, '') || '/') !== here) return false;
+    const kind = new URLSearchParams(search).get('kind');
+    return query ? new URLSearchParams(query).get('kind') === kind : !kind;
+  };
   return (
-    <nav aria-label="Portal" className="flex flex-col gap-1 p-3">
-      {links.map(([href, label]) => {
-        const on = href === pathname;
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={on ? 'page' : undefined}
-            className={`flex h-12 items-center rounded-xl px-4 text-body-md font-semibold ${on ? 'bg-white/15 text-brand-on-surface' : 'text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface'}`}
-          >
-            {label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Portal" className="flex h-full flex-col gap-5 overflow-y-auto p-3 pt-5">
+      {groups.map(([title, links]) => (
+        <div key={title || 'main'} className="flex flex-col gap-0.5">
+          {title ? <span className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-brand-on-surface-muted">{title}</span> : null}
+          {links.map(([href, label, icon]) => {
+            const on = isOn(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={on ? 'page' : undefined}
+                className={`flex h-11 items-center gap-3 rounded-xl px-3 text-body-sm font-semibold transition-colors ${on ? 'bg-white/15 text-brand-on-surface' : 'text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface'}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{NAV_ICONS[icon]}</svg>
+                {label}
+                {on ? <span className="ml-auto h-5 w-1 rounded-full bg-accent" aria-hidden="true" /> : null}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }

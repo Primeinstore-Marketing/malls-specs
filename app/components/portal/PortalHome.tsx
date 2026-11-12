@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { Zoomable } from '@/components/ui/ImageViewer';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { DECK_MALLS, annualVisits, compact, mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
 import { addDays, campaignClientName, clientName, itemKey, itemLabel, itemMall, phase, progress, reach, todayIso, visibleTo } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
@@ -106,54 +107,109 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
   }
   const popular = [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 4);
 
+  type Tab = 'needs' | 'clients' | 'upcoming' | 'live' | 'drafts' | 'all';
+  const tabs: { id: Tab; label: string; list: readonly Campaign[]; empty: string; highlight?: (c: Campaign) => string | undefined }[] = [
+    { id: 'needs', label: 'Needs you', list: needs, empty: 'All caught up.', highlight: (c) => (c.status === 'approved' ? 'Confirm the booking' : c.status === 'changes' ? 'See what changed' : 'Turn into a proposal') },
+    { id: 'clients', label: 'With clients', list: by('sent'), empty: 'Nothing waiting on clients.' },
+    { id: 'upcoming', label: 'Coming up', list: upcoming, empty: 'Nothing booked ahead.' },
+    { id: 'live', label: 'Live', list: live, empty: 'Nothing live right now.' },
+    { id: 'drafts', label: 'Drafts', list: by('draft'), empty: 'No drafts.' },
+    { id: 'all', label: 'All', list: mine, empty: 'No proposals yet. Start one above.' },
+  ];
+  const params = useSearchParams();
+  const fromUrl = params.get('tab') as Tab | null;
+  const [tab, setTabState] = useState<Tab>(() => (fromUrl && tabs.some((t) => t.id === fromUrl) ? fromUrl : needs.length ? 'needs' : 'all'));
+  // Arriving with ?tab= (e.g. "← Workspace" from a proposal) opens that tab.
+  useEffect(() => {
+    if (fromUrl && tabs.some((t) => t.id === fromUrl)) setTabState(fromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromUrl]);
+  const [query, setQuery] = useState('');
+  // The tab is in the address, so Back returns to it after opening a proposal.
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', t);
+      window.history.replaceState(window.history.state, '', url);
+      window.sessionStorage.setItem('malls-specs:workspace-tab', t);
+    } catch {
+      /* ignore */
+    }
+  };
+  const active = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const q = query.trim().toLowerCase();
+  const shown = q ? active.list.filter((c) => `${c.name} ${campaignClientName(c)}`.toLowerCase().includes(q)) : active.list;
+
   return (
     <Page>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-display-xl text-fg">{greeting(user)}</h1>
-          <p className="text-body-lg text-fg-muted">{screensLive ? `${screensLive} screens live for ${live.length} ${live.length === 1 ? 'campaign' : 'campaigns'}` : 'Nothing live right now'} · {by('sent').length} with clients</p>
-        </div>
-        {/* The two jobs first, then contacts. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/portal/new" className={primary}>New proposal</Link>
-          <Link href="/portal/new?kind=sitelist" className="inline-flex h-11 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">Site list from PIMS</Link>
-          <Link href="/portal/clients" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
-        </div>
+      <header className="flex flex-col gap-2">
+        <h1 className="text-display-xl text-fg">{greeting(user)}</h1>
+        <p className="text-body-lg text-fg-muted">{screensLive ? `${screensLive} screens live for ${live.length} ${live.length === 1 ? 'campaign' : 'campaigns'}` : 'Nothing live right now'} · {by('sent').length} with clients{needs.length ? ` · ${needs.length} need you` : ''}</p>
       </header>
+
+      {/* The two jobs, as big starting points. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {([
+          ['/portal/new', 'New proposal', 'Suggest malls and screens for a client, or drop their brief and let the AI draft it.', true],
+          ['/portal/new?kind=sitelist', 'Site list from PIMS', 'A booked campaign: drop the PIMS export, check the sites and send it for approval.', false],
+        ] as const).map(([href, title, note, lead]) => (
+          <Link
+            key={href}
+            href={href}
+            className={`group flex items-center gap-4 rounded-3xl p-5 transition-colors ${lead ? 'bg-accent text-fg-on-accent hover:bg-accent-hover' : 'border border-border-strong bg-bg text-fg hover:border-accent'}`}
+          >
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl font-light ${lead ? 'bg-white/15' : 'bg-accent-subtle text-accent'}`} aria-hidden="true">+</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-body-lg font-semibold">{title}</span>
+              <span className={`text-body-sm ${lead ? 'text-fg-on-accent/80' : 'text-fg-muted'}`}>{note}</span>
+            </span>
+            <span className="ml-auto text-xl transition-transform group-hover:translate-x-1" aria-hidden="true">→</span>
+          </Link>
+        ))}
+      </div>
 
       <ClientRequests user={user} />
 
-      <Block title="Needs you" count={needs.length}>
-        {needs.length ? (
-          <Grid>
-            {needs.map((c) => (
-              <CampaignCard key={c.id} c={c} user={user} highlight={c.status === 'approved' ? 'Confirm the booking' : c.status === 'changes' ? 'See what changed' : 'Turn into a proposal'} />
+      <section className="flex min-w-0 flex-col gap-4" aria-label="Your proposals and site lists">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div role="tablist" aria-label="Show" className="no-scrollbar -mx-1 flex max-w-full gap-1 overflow-x-auto px-1">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={t.id === tab}
+                onClick={() => setTab(t.id)}
+                className={`flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-body-sm font-semibold transition-colors ${t.id === tab ? 'bg-fg text-bg' : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'}`}
+              >
+                {t.label}
+                <span className={`rounded-full px-1.5 text-[12px] tabular-nums ${t.id === tab ? 'bg-bg/20' : t.id === 'needs' && t.list.length ? 'bg-warning-bg text-warning-fg' : 'bg-bg-subtle'}`}>{t.list.length}</span>
+              </button>
             ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a proposal or client"
+              aria-label="Find a proposal or client"
+              className="h-10 w-56 rounded-full border border-border-strong bg-bg px-4 text-body-sm text-fg outline-none focus:border-border-focus"
+            />
+            <Link href="/portal/clients" className="inline-flex h-10 items-center rounded-full px-3 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
+          </div>
+        </div>
+        {tab === 'live' && live.length && !q ? (
+          <div className="flex flex-col gap-3">{live.map((c) => <LiveHero key={c.id} c={c} user={user} />)}</div>
+        ) : shown.length ? (
+          <Grid>
+            {shown.map((c) => <CampaignCard key={c.id} c={c} user={user} highlight={active.highlight?.(c)} />)}
           </Grid>
         ) : (
-          <Empty>All caught up.</Empty>
+          <Empty>{q ? `Nothing in “${active.label}” matches “${query}”.` : active.empty}</Empty>
         )}
-      </Block>
-
-      {live.length ? (
-        <Block title="Live now" count={live.length}>
-          <div className="flex flex-col gap-3">{live.map((c) => <LiveHero key={c.id} c={c} user={user} />)}</div>
-        </Block>
-      ) : null}
-
-      <div className="grid gap-10 lg:grid-cols-3">
-        {(
-          [
-            ['With clients', by('sent'), 'Nothing waiting on clients.'],
-            ['Coming up', upcoming, 'Nothing booked ahead.'],
-            ['Drafts', by('draft'), 'No drafts.'],
-          ] as const
-        ).map(([title, list, empty]) => (
-          <Block key={title} title={title} count={list.length}>
-            {list.length ? <div className="flex flex-col gap-3">{list.map((c) => <CampaignCard key={c.id} c={c} user={user} />)}</div> : <Empty>{empty}</Empty>}
-          </Block>
-        ))}
-      </div>
+      </section>
 
       <div className="grid gap-10 lg:grid-cols-2">
         <Block title="Quiet malls" note="Big audiences with nothing booked in the next 60 days.">

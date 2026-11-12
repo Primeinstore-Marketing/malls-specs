@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
 import { useLiveData } from '@/lib/liveData';
 import type { DeckMall } from '@/lib/insights';
@@ -645,6 +645,16 @@ function View({ id, user }: { id: string; user: PortalUser }) {
   const editable = canEdit(c, user);
   const isActive = active[user.id] === c.id;
   const { isAdmin } = useAdminSession();
+  // Back to the workspace tab you came from.
+  const [backHref, setBackHref] = useState('/portal');
+  useEffect(() => {
+    try {
+      const t = window.sessionStorage.getItem('malls-specs:workspace-tab');
+      if (t) setBackHref(`/portal?tab=${t}`);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const messages = c.events.filter((e) => e.kind === 'message').length;
 
   return (
@@ -658,7 +668,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
       <header className="flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
-            <Link href="/portal" className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
+            <Link href={backHref} className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
             <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docKind(c) === 'sitelist' ? 'Site list · from PIMS' : 'Proposal'}</span>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
             {campaignOwner(c.id) && c.createdBy !== user.id ? <p className="text-body-sm text-fg-subtle print:hidden">Sales: {campaignOwner(c.id)}</p> : null}
