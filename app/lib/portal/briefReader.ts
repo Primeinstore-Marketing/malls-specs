@@ -1,19 +1,32 @@
 /**
- * Turns a client's brief into something the AI can read, in the browser:
- *  - PDF and images are sent as they are (the AI reads them directly);
- *  - Word (.docx), PowerPoint (.pptx) and Excel (.xlsx) are opened here —
- *    they're zip files of XML — and their text is sent;
- *  - CSV, text and Markdown are sent as text.
- * Old binary formats (.doc, .ppt, .xls) can't be read: save as the newer
- * format or PDF first.
+ * Turns a client's brief into something the AI can read:
+ *  - Word (.docx), PowerPoint (.pptx) and Excel (.xlsx) are opened here, in
+ *    the browser — they're zip files of XML — and their text is sent;
+ *  - CSV, text and Markdown are sent as text;
+ *  - PDFs, images and older or other formats (.xls, .odt, .ods, .numbers)
+ *    are sent as files, and the server turns them into text (Workers AI).
+ * .doc and .ppt can't be read: save as the newer format or PDF first.
  */
 
 export type BriefPayload =
-  | { readonly kind: 'pdf'; readonly pdf: string }
-  | { readonly kind: 'image'; readonly image: { data: string; mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' } }
+  | { readonly kind: 'file'; readonly file: { name: string; mediaType: string; data: string } }
   | { readonly kind: 'text'; readonly text: string };
 
-export const BRIEF_ACCEPT = '.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg,.webp';
+export const BRIEF_ACCEPT = '.pdf,.docx,.pptx,.xlsx,.xls,.ods,.odt,.numbers,.csv,.txt,.md,.png,.jpg,.jpeg,.webp';
+
+/** Formats the server converts (Workers AI), by extension. */
+const SERVER_TYPES: Readonly<Record<string, string>> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  xls: 'application/vnd.ms-excel',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  numbers: 'application/vnd.apple.numbers',
+};
 export const MAX_BRIEF_MB = 8;
 
 async function base64(file: Blob): Promise<string> {
@@ -125,13 +138,9 @@ async function xlsx(files: Map<string, () => Promise<string>>): Promise<string> 
 export async function readBrief(file: File): Promise<BriefPayload> {
   if (file.size > MAX_BRIEF_MB * 1024 * 1024) throw new Error(`That file is over ${MAX_BRIEF_MB} MB. Save a smaller copy (or a PDF) and try again.`);
   const ext = file.name.toLowerCase().split('.').pop() ?? '';
-  if (ext === 'pdf' || file.type === 'application/pdf') return { kind: 'pdf', pdf: await base64(file) };
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) {
-    const mediaType = (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`) as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
-    return { kind: 'image', image: { data: await base64(file), mediaType } };
-  }
+  if (SERVER_TYPES[ext]) return { kind: 'file', file: { name: file.name, mediaType: SERVER_TYPES[ext], data: await base64(file) } };
   if (['csv', 'txt', 'md', 'tsv'].includes(ext)) return { kind: 'text', text: await file.text() };
-  if (['doc', 'ppt', 'xls'].includes(ext)) throw new Error(`.${ext} is an old Office format we can’t open. Save it as .${ext}x or PDF and try again.`);
+  if (['doc', 'ppt'].includes(ext)) throw new Error(`.${ext} is an old Office format we can’t open. Save it as .${ext}x or PDF and try again.`);
   if (['docx', 'pptx', 'xlsx'].includes(ext)) {
     if (typeof DecompressionStream === 'undefined') throw new Error('This browser can’t open Office files. Save the brief as a PDF, or use Chrome, Edge or Safari.');
     const files = await unzip(await file.arrayBuffer());

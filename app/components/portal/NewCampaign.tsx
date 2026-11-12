@@ -106,10 +106,10 @@ function Form({ user }: { user: PortalUser }) {
   const rowsFor = (e: Entry) => rowsForEntry(e, catalogue);
 
   /* A proposal drafted by the AI from the client's brief. */
-  const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; undo: () => void } | null>(null);
+  const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; truncated: boolean; undo: () => void } | null>(null);
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
   const [clientKey, setClientKey] = useState(0);
-  function applyDraft(draft: BriefDraft, file: string) {
+  function applyDraft(draft: BriefDraft, file: string, truncated = false) {
     const before = { name, client, objective, start, end, picked, reasons };
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
     const chosen = draft.items.filter((i) => rows.has(i.key));
@@ -135,6 +135,7 @@ function Form({ user }: { user: PortalUser }) {
     setAiDraft({
       draft,
       file,
+      truncated,
       kept: chosen.length,
       dropped: draft.items.length - chosen.length,
       undo: () => {
@@ -177,6 +178,7 @@ function Form({ user }: { user: PortalUser }) {
             </div>
             <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
           </div>
+          {aiDraft.truncated ? <p className="text-body-sm font-semibold text-warning-fg">The file was very long, so the AI read only the first part. Check the dates and screens against the rest of the brief.</p> : null}
           {aiDraft.draft.missing.length ? (
             <div className="flex flex-col gap-1 rounded-xl bg-bg p-3">
               <span className="text-body-sm font-semibold text-warning-fg">Check before sending</span>

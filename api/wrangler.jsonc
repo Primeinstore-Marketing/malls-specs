@@ -14,6 +14,9 @@
   },
   // Uploaded pictures and files. Behind the FileStore interface in
   // src/files.ts, so moving to R2 later only changes that file and this.
+  // Workers AI: reads client briefs and drafts campaigns (free daily allowance).
+  // remote: local dev (wrangler dev) calls the real Workers AI; ignored on deploy.
+  "ai": { "binding": "AI", "remote": true },
   "kv_namespaces": [{ "binding": "FILES", "id": "d94dcda5c0464234a9d1f060538ba2ed" }],
   "d1_databases": [
     {

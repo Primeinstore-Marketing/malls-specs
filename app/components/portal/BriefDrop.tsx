@@ -11,7 +11,7 @@ type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } |
  * "Start from the client's brief": drop or choose a PDF, Word, PowerPoint,
  * Excel or image file, and the AI drafts the whole proposal from it.
  */
-export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string) => void }) {
+export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -23,14 +23,14 @@ export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onD
     try {
       const payload = await readBrief(file);
       setState({ step: 'drafting', file: file.name });
-      const { draft } = await api.briefDraft({
+      const { draft, truncated } = await api.briefDraft({
         filename: file.name,
-        ...(payload.kind === 'pdf' ? { pdf: payload.pdf } : payload.kind === 'image' ? { image: payload.image } : { text: payload.text }),
+        ...(payload.kind === 'file' ? { file: payload.file } : { text: payload.text }),
         inventory: inventory(),
         today: new Date().toISOString().slice(0, 10),
       });
       setState({ step: 'idle' });
-      onDraft(draft, file.name);
+      onDraft(draft, file.name, truncated);
     } catch (e) {
       setState({ step: 'error', text: e instanceof Error ? e.message : 'That didn’t work. Try again.' });
     }
@@ -60,7 +60,7 @@ export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onD
             {state.step === 'reading'
               ? `Opening ${state.file}…`
               : state.step === 'drafting'
-                ? `The AI is reading ${state.file} and choosing screens. This takes up to a minute…`
+                ? `The AI is reading ${state.file} and choosing screens. This takes about half a minute…`
                 : `Drop a PDF, Word, PowerPoint, Excel or image file (up to ${MAX_BRIEF_MB} MB). The AI fills in the proposal; you check it and send.`}
           </p>
         </div>

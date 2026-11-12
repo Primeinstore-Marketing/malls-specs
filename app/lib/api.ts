@@ -217,9 +217,9 @@ export const api = {
   updateMe: (fields: { name: string; title: string }) =>
     request<{ account: AdminProfile }>('/auth/me', { method: 'PATCH', body: JSON.stringify(fields) }, true),
   accounts: () => request<{ accounts: ManagedAccount[] }>('/accounts', {}, true),
-  /** Drafts a campaign from a client's brief with Claude (signed-in accounts). */
-  briefDraft: (body: { filename: string; text?: string; pdf?: string; image?: { data: string; mediaType: string }; inventory: string; today: string }) =>
-    request<{ draft: BriefDraft; model: string }>('/ai/brief', { method: 'POST', body: JSON.stringify(body) }, true),
+  /** Drafts a campaign from a client's brief with Workers AI (signed-in accounts). */
+  briefDraft: (body: { filename: string; text?: string; file?: { name: string; mediaType: string; data: string }; inventory: string; today: string }) =>
+    request<{ draft: BriefDraft; model: string; truncated: boolean }>('/ai/brief', { method: 'POST', body: JSON.stringify(body) }, true),
   /** Your campaigns (admins: everyone's), with their revision. */
   campaigns: () => request<{ campaigns: { campaign: Campaign; rev: number; ownerId: number; ownerName: string; updatedAt: string }[]; people: { id: string; name: string; email: string; title: string }[] }>('/campaigns', {}, true),
   /** Saves a campaign; `rev` is the revision it was based on (0 for new). 409 carries `latest`. */

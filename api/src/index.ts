@@ -19,7 +19,7 @@
  *          Accounts are admins or sales. Sales may also edit client:* content.
  * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
- * AI:      POST /ai/brief { filename, text? | pdf? | image?, inventory, today } -> { draft }  (signed in; drafts a campaign from a brief)
+ * AI:      POST /ai/brief { filename, text? | file?: { name, mediaType, data }, inventory, today } -> { draft, truncated }  (signed in; Workers AI)
  * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
  *          PATCH /accounts/:id { name?, title?, role?, disabled?, password?, approve? } · DELETE /accounts/:id (a request not yet approved)
  * Files:   GET  /files/:key       — an uploaded picture or file (public)
@@ -50,7 +50,7 @@ import {
   verifyPassword,
 } from './auth';
 import { ALLOWED_TYPES, MAX_FILE_BYTES, kvFileStore, safeFilename } from './files';
-import { draftFromBrief } from './brief';
+import { draftFromBrief, fileToText } from './brief';
 
 export interface Env {
   DB: D1Database;
@@ -59,8 +59,8 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   /** Comma-separated email domains that may ask for an account, e.g. "primedia.co.za,primeinstore.co.za". */
   SIGNUP_DOMAINS?: string;
-  /** Secret: Claude API key, for drafting a campaign from a client's brief. */
-  ANTHROPIC_API_KEY?: string;
+  /** Workers AI (free daily allowance): reads briefs and drafts campaigns. */
+  AI: Ai;
 }
 
 type Role = 'admin' | 'sales';
@@ -580,32 +580,43 @@ async function postProposalChanges(request: Request, url: URL, env: Env, id: str
 const MAX_BRIEF_BYTES = 12 * 1024 * 1024; // base64 PDF plus the inventory
 const MAX_BRIEFS_PER_ACCOUNT_HOUR = 30;
 
+/** Files the browser sends as they are, for Workers AI to turn into text. */
+const BRIEF_FILE_TYPES = new Set([
+  'application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'application/vnd.ms-excel', 'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.apple.numbers',
+]);
+
 async function postBrief(request: Request, env: Env): Promise<Response> {
   const me = await requireAccount(request, env);
-  if (!env.ANTHROPIC_API_KEY) throw new HttpError(503, 'Reading briefs isn’t switched on yet: an admin needs to add the Claude API key to the server.');
   const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`brief:${me.id}`, minutesAgo(60)).first<{ n: number }>();
   if ((recent?.n ?? 0) >= MAX_BRIEFS_PER_ACCOUNT_HOUR) throw new HttpError(429, 'That’s a lot of briefs this hour. Try again a little later.');
-  const body = await readJson<{ filename?: unknown; text?: unknown; pdf?: unknown; image?: unknown; inventory?: unknown; today?: unknown }>(request, MAX_BRIEF_BYTES);
+  const body = await readJson<{ filename?: unknown; text?: unknown; file?: unknown; inventory?: unknown; today?: unknown }>(request, MAX_BRIEF_BYTES);
   const filename = typeof body.filename === 'string' ? body.filename.slice(0, 200) : 'brief';
-  const text = typeof body.text === 'string' ? body.text.slice(0, 400_000) : undefined;
-  const pdf = typeof body.pdf === 'string' && /^[A-Za-z0-9+/=]+$/.test(body.pdf.slice(0, 200)) ? body.pdf : undefined;
-  const img = body.image as { data?: unknown; mediaType?: unknown } | undefined;
-  const image =
-    img && typeof img.data === 'string' && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(img.mediaType as string)
-      ? { data: img.data, mediaType: img.mediaType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' }
+  const f = body.file as { name?: unknown; mediaType?: unknown; data?: unknown } | undefined;
+  const file =
+    f && typeof f.data === 'string' && typeof f.mediaType === 'string' && BRIEF_FILE_TYPES.has(f.mediaType)
+      ? { name: typeof f.name === 'string' ? f.name.slice(0, 200) : filename, mediaType: f.mediaType, data: f.data }
       : undefined;
-  const inventory = typeof body.inventory === 'string' ? body.inventory.slice(0, 200_000) : '';
+  const inventory = typeof body.inventory === 'string' ? body.inventory.slice(0, 60_000) : '';
   const today = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : now().slice(0, 10);
-  if (!text?.trim() && !pdf && !image) throw new HttpError(400, 'We couldn’t find any text in that file. Try a PDF, Word, PowerPoint or Excel file.');
   if (!inventory) throw new HttpError(400, 'The list of screens is missing. Reload the page and try again.');
   await env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`brief:${me.id}`, now()).run();
   try {
-    const result = await draftFromBrief(env.ANTHROPIC_API_KEY, { filename, text, pdf, image, inventory, today });
+    const text = file ? await fileToText(env.AI, file) : typeof body.text === 'string' ? body.text : '';
+    if (!text.trim()) throw new HttpError(400, 'We couldn’t find any text in that file. Try a PDF, Word, PowerPoint or Excel file.');
+    const result = await draftFromBrief(env.AI, { text, filename, inventory, today });
     await audit(env, me, 'ai.brief', filename, { items: result.draft.items.length, model: result.model });
     return json(result);
   } catch (error) {
+    if (error instanceof HttpError) throw error;
     console.error('brief', error);
-    throw new HttpError(502, error instanceof Error && error.message.startsWith('The AI') ? error.message : 'The AI couldn’t read the brief just now. Try again in a minute, or fill the proposal in by hand.');
+    const message = error instanceof Error ? error.message : '';
+    // The free daily allowance is used up (or Workers AI is busy).
+    if (/neuron|quota|limit|429|capacity/i.test(message)) {
+      throw new HttpError(429, 'Today’s free AI allowance is used up. Try again tomorrow, or fill the proposal in by hand.');
+    }
+    throw new HttpError(502, message.startsWith('The AI') ? message : 'The AI couldn’t read the brief just now. Try again in a minute, or fill the proposal in by hand.');
   }
 }
 

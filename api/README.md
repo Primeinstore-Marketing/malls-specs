@@ -99,16 +99,14 @@ them back. The build snapshot (`app/lib/liveSnapshot.json`) carries the
 
 ## Drafting a campaign from a brief (AI)
 
-`POST /ai/brief` reads a client's brief (PDF or image as is; Word, PowerPoint
-and Excel as text extracted in the browser) and drafts a campaign with Claude
-(`src/brief.ts`). It needs the secret:
-
-```sh
-npx wrangler secret put ANTHROPIC_API_KEY
-```
-
-Without it the endpoint answers 503 and the site says reading briefs isn't
-switched on. Limited to 30 briefs per account per hour.
+`POST /ai/brief` drafts a campaign from a client's brief with Cloudflare
+Workers AI (`src/brief.ts`, binding `AI` in wrangler.jsonc): free within the
+account's daily allowance of 10,000 neurons, about 15–20 briefs a day; no API
+key. Word, PowerPoint, Excel and CSV are read in the browser; PDFs, images
+and older formats are converted to text with Workers AI's `toMarkdown`. The
+model is Llama 3.3 70B in JSON mode, checked on the server. Limited to 30
+briefs per account per hour. Past the daily allowance, briefs stop until the
+next day (00:00 UTC) unless the account moves to Workers Paid.
 
 ## Campaigns
 
