@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AddToProposal } from '@/components/portal/ui';
@@ -73,7 +74,7 @@ export function AddScreenButton(props: { specId: string; title: string; mallId: 
   const { user, ready } = usePortalUser();
   if (!ready) return null;
   if (user) return <AddToProposal compact={props.compact} item={{ kind: 'screen', specId: props.specId, appMallId: props.mallId, title: props.title }} />;
-  return <AddScreenToRequest {...props} />;
+  return CLIENT_REQUESTS ? <AddScreenToRequest {...props} /> : null;
 }
 
 /** Signed-out visitors with something in their request: a way back to it from any page. */
@@ -82,7 +83,7 @@ export function RequestTray() {
   const { user, ready } = usePortalUser();
   const pathname = usePathname();
   const n = draftCount(draft);
-  if (!ready || user || !n || pathname.startsWith('/request') || pathname.startsWith('/share') || pathname.startsWith('/sign-in')) return null;
+  if (!CLIENT_REQUESTS || !ready || user || !n || pathname.startsWith('/request') || pathname.startsWith('/share') || pathname.startsWith('/sign-in')) return null;
   const parts = [
     draft.screens.length ? `${draft.screens.length} ${draft.screens.length === 1 ? 'screen' : 'screens'}` : '',
     draft.malls.length ? `${draft.malls.length} ${draft.malls.length === 1 ? 'mall' : 'malls'}` : '',

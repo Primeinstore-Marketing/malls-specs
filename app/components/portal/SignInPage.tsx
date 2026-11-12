@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { networkStats, compact } from '@/lib/insights';
@@ -53,8 +54,12 @@ export function SignInPage() {
                 <p className="text-body-sm text-fg-muted">
                   You don’t need to sign in. Open the link your account manager emailed you: it shows every screen booked, the artwork to supply, and lets you change or approve the proposal.
                 </p>
-                <p className="text-body-sm text-fg-muted">New campaign? Plan it yourself and send it to sales.</p>
-                <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link>
+                {CLIENT_REQUESTS ? (
+                  <>
+                    <p className="text-body-sm text-fg-muted">New campaign? Plan it yourself and send it to sales.</p>
+                    <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link>
+                  </>
+                ) : null}
               </div>
             </div>
           )}

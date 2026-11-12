@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import type { Specification } from '@data-model';
 import { LinkButton } from '@/components/ui/Button';
@@ -229,7 +230,7 @@ function ScreenDetail({
 /** Clients (signed out): ask for this mall and let sales suggest the screens. */
 function MallRequestButton({ mall }: { mall: Mall }) {
   const { user, ready } = usePortalUser();
-  if (!ready || user) return null;
+  if (!CLIENT_REQUESTS || !ready || user) return null;
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-bg-subtle p-3">
       <span className="text-body-sm text-fg-muted">Planning a campaign? Add screens below, or the whole mall, and send the request to Primedia sales.</span>

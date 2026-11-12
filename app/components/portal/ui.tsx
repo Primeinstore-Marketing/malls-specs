@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -136,8 +137,8 @@ export function RequireSignIn({ children, what = 'this page' }: { children: (use
         </div>
         <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5">
           <h2 className="text-body-lg font-semibold text-fg">Clients</h2>
-          <p className="text-body-sm text-fg-muted">You don’t need to sign in. Open the link your account manager emailed you, or plan a new campaign and send it to sales.</p>
-          <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link>
+          <p className="text-body-sm text-fg-muted">You don’t need to sign in. Open the link your account manager emailed you{CLIENT_REQUESTS ? ', or plan a new campaign and send it to sales' : ''}.</p>
+          {CLIENT_REQUESTS ? <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link> : null}
         </div>
       </div>
     </Page>

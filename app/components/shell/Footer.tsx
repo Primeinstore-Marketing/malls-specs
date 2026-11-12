@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { usePortalUser } from '@/lib/portal/store';
@@ -36,7 +37,7 @@ export function Footer() {
           ],
         }
       : { title: 'Sales', links: [{ label: 'Sign in', href: '/sign-in' }] },
-    ...(user ? [] : [{ title: 'Clients', links: [{ label: 'Plan your campaign', href: '/request' }] }]),
+    ...(user || !CLIENT_REQUESTS ? [] : [{ title: 'Clients', links: [{ label: 'Plan your campaign', href: '/request' }] }]),
     ...(user
       ? [
           {

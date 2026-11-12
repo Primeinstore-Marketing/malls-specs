@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -98,7 +99,7 @@ export function ClientRequests({ user }: { user: PortalUser }) {
     }
   }
 
-  if (!requests) return null;
+  if (!requests || !CLIENT_REQUESTS) return null;
   const open = requests.filter((r) => r.status === 'new').sort((a, b) => Number(b.assignedTo === me) - Number(a.assignedTo === me));
   const handled = requests.filter((r) => r.status !== 'new').slice(0, 6);
   if (!open.length && !handled.length && !error) return null;
