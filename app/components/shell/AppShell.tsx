@@ -14,6 +14,7 @@ import { AdminSessionProvider } from '@/components/auth/AdminSession';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { SetPasswordGate } from '@/components/auth/SetPasswordGate';
 import { CampaignPicker, CampaignTray, PortalDrawer, ToastHost } from '@/components/portal/Chrome';
+import { RequestTray } from '@/components/request/AddToRequest';
 import { ApprovalSync } from '@/components/portal/ApprovalSync';
 import { CollectionsProvider } from '@/components/collections/CollectionsContext';
 
@@ -48,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const drawerInert = !isDesktop && !mobileNavOpen;
   // The portal (campaigns, insights, explorer) is its own app: no spec-library sidebar.
-  const portalPage = /^\/(portal|insights|explorer|sign-in|account)(\/|$)/.test(pathname);
+  const portalPage = /^\/(portal|insights|explorer|sign-in|account|request)(\/|$)/.test(pathname);
   // The specification detail view is a dedicated one-viewport app shell, and
   // the home page is now a pure hero (matching the reference app) — neither
   // shows a footer.
@@ -93,6 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SignInDialog />
             <SetPasswordGate />
             <CampaignTray />
+            <RequestTray />
             <CampaignPicker />
             <ToastHost />
             <ApprovalSync />

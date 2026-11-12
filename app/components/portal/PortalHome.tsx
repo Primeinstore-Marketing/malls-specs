@@ -7,8 +7,9 @@ import { DECK_MALLS, annualVisits, compact, mallArea, mallName, mallPhoto, match
 import { addDays, campaignClientName, clientName, itemKey, itemLabel, itemMall, phase, progress, reach, todayIso, visibleTo } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
-import { AddToCampaign, Page, RequireSignIn } from './ui';
+import { AddToProposal, Page, RequireSignIn } from './ui';
 import { CampaignCard, countdown } from './CampaignCard';
+import { ClientRequests } from './ClientRequests';
 
 /**
  * Home for each side. Each fact appears once: a one-line summary under the
@@ -114,9 +115,12 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <Link href="/portal/clients" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
+          <Link href="/portal/new?kind=sitelist" className="inline-flex h-11 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">Site list from PIMS</Link>
           <Link href="/portal/new" className={primary}>New proposal</Link>
         </div>
       </header>
+
+      <ClientRequests user={user} />
 
       <Block title="Needs you" count={needs.length}>
         {needs.length ? (
@@ -162,7 +166,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
                     <Link href={`/insights/mall?id=${m.id}`} className="truncate text-body-md font-semibold text-fg hover:text-accent">{mallName(m)}</Link>
                     <span className="truncate text-body-sm text-fg-muted">{compact(annualVisits(m) ?? 0)} visits a year · {m.province}</span>
                   </div>
-                  <AddToCampaign compact item={{ kind: 'package', code: m.packages[0].code }} />
+                  <AddToProposal compact item={{ kind: 'package', code: m.packages[0].code }} />
                 </li>
               );
             })}
@@ -172,7 +176,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
           {!popular.length ? <p className="rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm text-fg-muted">Fills in as you make proposals.</p> : null}
           <ol className="flex flex-col gap-2">
             {popular.map((p, i) => (
-              <li key={p.label} className="flex items-center gap-3 rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm">
+              <li key={`${i}-${p.label}`} className="flex items-center gap-3 rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm">
                 <span className="w-5 text-body-md font-bold tabular-nums text-fg-subtle">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate font-medium text-fg">{p.label}</span>
                 <span className="shrink-0 text-fg-muted">×{p.n}</span>
@@ -254,7 +258,7 @@ function ClientHome({ user, campaigns }: { user: PortalUser; campaigns: readonly
                       <span className="text-body-md font-bold tabular-nums text-accent">{m.score}</span>
                     </div>
                     <span className="text-body-sm text-fg-muted">{mallArea(m.mall)}</span>
-                    <div className="mt-auto pt-1"><AddToCampaign compact item={{ kind: 'package', code: m.mall.packages[0].code }} /></div>
+                    <div className="mt-auto pt-1"><AddToProposal compact item={{ kind: 'package', code: m.mall.packages[0].code }} /></div>
                   </div>
                 </div>
               );

@@ -10,6 +10,7 @@ import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { SpecEditor } from './SpecEditor';
 import { BookmarkButton } from './BookmarkButton';
+import { AddScreenButton } from '@/components/request/AddToRequest';
 
 function MapIcon() {
   return (
@@ -118,6 +119,9 @@ export function SpecActionBar({ spec }: { spec: Specification }) {
           <PrintIcon />
           Print
         </Link>
+      ) : null}
+      {mall && mall.group !== 'formats' && !isAdmin ? (
+        <span className="ml-1"><AddScreenButton compact specId={spec.id} title={spec.title} mallId={mall.id} mallName={mall.name} /></span>
       ) : null}
       {isAdmin ? (
         <button

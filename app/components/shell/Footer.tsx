@@ -29,12 +29,14 @@ export function Footer() {
           links: [
             { label: 'Workspace', href: '/portal' },
             { label: 'New proposal', href: '/portal/new' },
+            { label: 'Site list from PIMS', href: '/portal/new?kind=sitelist' },
             { label: 'Client contacts', href: '/portal/clients' },
             { label: 'Media Explorer', href: '/explorer' },
             { label: 'Insights', href: '/insights' },
           ],
         }
       : { title: 'Sales', links: [{ label: 'Sign in', href: '/sign-in' }] },
+    ...(user ? [] : [{ title: 'Clients', links: [{ label: 'Plan your campaign', href: '/request' }] }]),
     ...(user
       ? [
           {

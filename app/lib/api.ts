@@ -98,6 +98,32 @@ export interface LiveDataResponse {
   readonly content?: readonly LiveContentRecord[];
 }
 
+/** A campaign a client planned on the site and sent to sales (no account). */
+export interface ClientRequestDraft {
+  readonly name: string;
+  readonly contact: { readonly name: string; readonly company: string; readonly email: string; readonly phone: string };
+  readonly salesEmail: string;
+  readonly start: string | null;
+  readonly end: string | null;
+  readonly budget: string;
+  readonly note: string;
+  readonly screens: readonly { readonly specId: string; readonly appMallId: string; readonly title: string }[];
+  readonly malls: readonly { readonly id: string; readonly name: string }[];
+}
+
+export interface ClientRequest extends ClientRequestDraft {
+  readonly id: string;
+  readonly status: 'new' | 'taken' | 'dismissed';
+  /** The salesperson the client named, when that email is an account. */
+  readonly assignedTo: number | null;
+  readonly assignedName: string | null;
+  readonly takenBy: number | null;
+  readonly takenName: string | null;
+  readonly campaignId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 export interface ProposalApproval {
   readonly campaignId: string;
   readonly name: string;
@@ -219,6 +245,14 @@ export const api = {
     request<{ ok: true }>(`/proposals/${encodeURIComponent(id)}/changes?k=${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify(changes) }),
   approvals: (campaignIds: readonly string[]) =>
     request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`, {}, true),
+  /** A client sends the campaign they planned (no account). `website` is the bot trap: leave it empty. */
+  sendRequest: (draft: ClientRequestDraft & { website?: string }) =>
+    request<{ ok: true; id: string }>('/requests', { method: 'POST', body: JSON.stringify(draft) }),
+  /** Sales: client requests, new ones first. */
+  requests: () => request<{ requests: ClientRequest[] }>('/requests', {}, true),
+  /** Sales: take a request for the proposal you're building (first one wins), dismiss it, or reopen it. */
+  updateRequest: (id: string, change: { action: 'take'; campaignId: string } | { action: 'dismiss' | 'reopen' }) =>
+    request<{ request: ClientRequest | null }>(`/requests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(change) }, true),
   login: (email: string, password: string) =>
     request<{ token: string; expiresAt: string; account: AdminProfile }>('/auth/login', {
       method: 'POST',

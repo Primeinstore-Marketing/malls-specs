@@ -1,11 +1,24 @@
 import { annualVisits, deckMall, deckMallForApp, packageByCode } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
 import { CLIENTS, USERS } from './seed';
-import type { Campaign, CampaignItem, CampaignStatus, PortalUser } from './types';
+import type { Campaign, CampaignItem, CampaignStatus, DocKind, PortalUser } from './types';
+
+/** Proposal or site list: set when it was made, else a campaign with site lines (from a PIMS export) is a site list. */
+export function docKind(c: { kind?: DocKind; items: readonly CampaignItem[] }): DocKind {
+  return c.kind ?? (c.items.some((i) => i.kind === 'site') ? 'sitelist' : 'proposal');
+}
+
+/** The words for each kind, so every page and email says the same thing. */
+export const DOC_WORDS: Readonly<Record<DocKind, { noun: string; Noun: string; approve: string; unit: 'site' | 'screen' }>> = {
+  proposal: { noun: 'proposal', Noun: 'Proposal', approve: 'Approve proposal', unit: 'screen' },
+  sitelist: { noun: 'site list', Noun: 'Site list', approve: 'Approve site list', unit: 'site' },
+};
+
+export const docWords = (c: { kind?: DocKind; items: readonly CampaignItem[] }) => DOC_WORDS[docKind(c)];
 
 export const STATUS_LABEL: Readonly<Record<CampaignStatus, string>> = {
   draft: 'Draft',
-  proposed: 'Proposed by client',
+  proposed: 'Requested by client',
   sent: 'Awaiting client approval',
   changes: 'Changes requested',
   approved: 'Approved — to confirm',
@@ -26,7 +39,7 @@ export const STATUS_TONE: Readonly<Record<CampaignStatus, 'neutral' | 'info' | '
 /** What the client sees: their side of the same stage, in their words. */
 export const CLIENT_STATUS_LABEL: Readonly<Record<CampaignStatus, string>> = {
   draft: 'Draft',
-  proposed: 'Brief sent',
+  proposed: 'Request sent',
   sent: 'Proposal ready',
   changes: 'Changes with Primedia',
   approved: 'You approved',

@@ -400,7 +400,7 @@ export const portal = {
   move(id: string, status: CampaignStatus, note?: string) {
     const text: Record<CampaignStatus, string> = {
       draft: 'Moved back to draft',
-      proposed: 'Sent a campaign brief to Primedia',
+      proposed: 'Sent a campaign request to Primedia',
       sent: 'Sent the proposal to the client',
       changes: 'Asked for changes',
       approved: 'Approved the proposal',

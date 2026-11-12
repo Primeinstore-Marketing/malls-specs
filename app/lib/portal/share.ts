@@ -1,7 +1,7 @@
 import { withBasePath } from '@/lib/basePath';
 import { CLIENTS } from './seed';
-import { campaignClientName, userById } from './logic';
-import type { Campaign, CampaignItem, CampaignStatus } from './types';
+import { campaignClientName, docKind, userById } from './logic';
+import type { Campaign, CampaignItem, CampaignStatus, DocKind } from './types';
 
 /**
  * The booking page a client opens from an email — no account needed. The
@@ -15,6 +15,8 @@ export interface SharedProposal {
   readonly v: 2;
   readonly id: string;
   readonly name: string;
+  /** Proposal or site list (unset on older links: see docKind). */
+  readonly kind?: DocKind;
   readonly client: string;
   readonly status: CampaignStatus;
   readonly start: string | null;
@@ -44,6 +46,7 @@ export function snapshot(c: Campaign, senderId: string): SharedProposal {
     v: 2,
     id: c.id,
     name: c.name,
+    kind: docKind(c),
     client: campaignClientName(c),
     status: c.status,
     start: c.start,

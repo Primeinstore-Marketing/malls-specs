@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { ANY_AUDIENCE, DECK_MALLS, annualVisits, compact, mallName, matchMalls, networkStats, rand, thousands } from '@/lib/insights';
 import type { AudienceTarget, DeckMall } from '@/lib/insights';
-import { AddToCampaign, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
+import { AddToProposal, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { AudiencePicker, MatchRow, ScoreHelp, audienceQuery } from './AudiencePicker';
 
 function Leaderboard({ title, note, rows }: { title: string; note: string; rows: { mall: DeckMall; value: number; label: string }[] }) {
@@ -127,7 +127,7 @@ function Insights() {
                 key={m.mall.id}
                 m={m}
                 rank={i + 1}
-                action={m.mall.packages[0] ? <AddToCampaign compact item={{ kind: 'package', code: m.mall.packages[0].code }} /> : null}
+                action={m.mall.packages[0] ? <AddToProposal compact item={{ kind: 'package', code: m.mall.packages[0].code }} /> : null}
               />
             ))}
           </ol>

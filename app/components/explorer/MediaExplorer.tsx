@@ -16,7 +16,7 @@ import { PROVINCE_ORDER, mallPlace, placeLine } from '@/lib/sites';
 import { getScreenLayout } from '@/lib/screenLayouts';
 import { MallOutlinePreview } from '@/components/map/MallOutlinePreview';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { AddToCampaign, RequireSignIn } from '@/components/portal/ui';
+import { AddToProposal, RequireSignIn } from '@/components/portal/ui';
 import { annualVisits, compact, deckMallForApp, packagePhotos, topBand } from '@/lib/insights';
 
 /**
@@ -242,7 +242,7 @@ function ScreenCard({ s, live }: { s: Screen; live: LiveState }) {
               Spec PDF
             </a>
           ) : null}
-          {bookable ? <AddToCampaign compact item={{ kind: 'screen', specId: s.spec.id, appMallId: s.mall.id, title: s.spec.title }} /> : null}
+          {bookable ? <AddToProposal compact item={{ kind: 'screen', specId: s.spec.id, appMallId: s.mall.id, title: s.spec.title }} /> : null}
         </div>
       </div>
     </article>
@@ -332,7 +332,7 @@ function Audience({ mallId }: { mallId: string }) {
             <span className="flex flex-col">
               <span className="text-body-sm font-semibold text-fg">{pkg.format}{pkg.units ? ` × ${pkg.units}` : ''} package</span>
             </span>
-            <AddToCampaign compact item={{ kind: 'package', code: pkg.code }} />
+            <AddToProposal compact item={{ kind: 'package', code: pkg.code }} />
           </div>
         ))}
       </div>

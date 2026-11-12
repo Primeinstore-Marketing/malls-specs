@@ -14,7 +14,7 @@ import { useAuthDialog } from '@/components/auth/AuthDialogContext';
  */
 
 const STEPS = [
-  ['Send us your site list or brief', 'Email your account manager the booking sheet, site list or brief you already have: Excel, PDF, Word or PowerPoint. They turn it into a proposal in minutes.'],
+  ['Plan it, or send us your site list', 'Plan your own campaign here: pick malls and screens, add your dates and send it to sales. Or email your account manager the site list or brief you already have (Excel, PDF, Word or PowerPoint). Either way, they turn it into a proposal.'],
   ['You get one link', 'It opens your site list, grouped by creative: how many videos or stills to make, at what size, with the template for each. No account needed.'],
   ['Approve in one click', 'Approve the whole site list, or ask for changes with a note to your account manager.'],
   ['Send the artwork', 'One file per creative, built in its After Effects template, before the campaign starts.'],
@@ -24,7 +24,7 @@ const STEPS = [
 const AUDIENCES = [
   ['Visitors', 'Designers, agencies and studios: find a screen, check its size, download the spec sheet and After Effects template. No sign-in.'],
   ['Sales', 'Primedia account managers: drop the client’s site list or brief and the proposal fills itself in. Check it and email the client one link.'],
-  ['Clients', 'Brands and agencies: send your site list, then approve it from one link that shows how many creatives to supply.'],
+  ['Clients', 'Brands and agencies: plan your own campaign and send it to sales, or send your site list. Then approve the proposal from one link that shows how many creatives to supply.'],
   ['Admin', 'Primedia staff: keep malls, screens, pictures, clients, photo rights and accounts up to date.'],
 ] as const;
 
@@ -37,7 +37,7 @@ export function PortalLanding() {
   const ways: Record<(typeof AUDIENCES)[number][0], React.ReactNode> = {
     Visitors: <a href="#specs" className={link}>Browse screen specs</a>,
     Sales: <Link href="/sign-in" className={link}>Sign in</Link>,
-    Clients: <a href="#how-title" className={link}>How it works</a>,
+    Clients: <Link href="/request" className={link}>Plan your campaign</Link>,
     Admin: <button type="button" onClick={() => openAdminSignIn(true)} className={link}>Admin sign in</button>,
   };
   return (
@@ -54,8 +54,11 @@ export function PortalLanding() {
               Digital screens in {ready ? `${s.malls} malls` : 'malls'} across South Africa. Your booking shows every screen you’ll be on and the artwork size each one needs.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/sign-in" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-body-md font-semibold text-fg-on-accent hover:bg-accent-hover">
-                Sign in
+              <Link href="/request" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-body-md font-semibold text-fg-on-accent hover:bg-accent-hover">
+                Plan your campaign
+              </Link>
+              <Link href="/sign-in" className="inline-flex h-12 items-center rounded-full border border-white/25 px-6 text-body-md font-semibold text-brand-on-surface hover:bg-white/10">
+                Sales sign in
               </Link>
               <a href="#specs" className="inline-flex h-12 items-center rounded-full border border-white/25 px-6 text-body-md font-semibold text-brand-on-surface hover:bg-white/10">
                 Browse screen specs
@@ -88,7 +91,8 @@ export function PortalLanding() {
       <section className="mx-auto grid w-full max-w-page gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:px-8 lg:py-20" aria-labelledby="how-title">
         <div className="flex flex-col gap-3">
           <h2 id="how-title" className="text-display-lg text-fg">How it works</h2>
-          <p className="text-body-md text-fg-muted">For clients and their agencies: from your site list to approved screens and artwork, in four steps.</p>
+          <p className="text-body-md text-fg-muted">For clients and their agencies: from your plan or site list to approved screens and artwork, in four steps.</p>
+          <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link>
         </div>
         <ol className="grid gap-6 sm:grid-cols-2">
           {STEPS.map(([title, text], i) => (

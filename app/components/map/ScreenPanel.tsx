@@ -14,6 +14,7 @@ import { fileUrl } from '@/lib/api';
 import { isCleared, screenPhotos } from '@/lib/insights';
 import { usePortalUser } from '@/lib/portal/store';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { AddMallToRequest, AddScreenButton } from '@/components/request/AddToRequest';
 
 export type SaveState =
   | { readonly kind: 'idle' }
@@ -205,9 +206,12 @@ function ScreenDetail({
         </div>
       ) : null}
 
-      <LinkButton href={specHref(spec.id, live)} variant="primary" className="w-fit">
-        Open full specification
-      </LinkButton>
+      <div className="flex flex-wrap items-center gap-2">
+        <LinkButton href={specHref(spec.id, live)} variant="primary" className="w-fit">
+          Open full specification
+        </LinkButton>
+        {!admin && mall.group !== 'formats' ? <AddScreenButton specId={spec.id} title={spec.title} mallId={mall.id} mallName={mall.name} /> : null}
+      </div>
 
       {admin ? (
         <button
@@ -218,6 +222,18 @@ function ScreenDetail({
           Delete this screen
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** Clients (signed out): ask for this mall and let sales suggest the screens. */
+function MallRequestButton({ mall }: { mall: Mall }) {
+  const { user, ready } = usePortalUser();
+  if (!ready || user) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-bg-subtle p-3">
+      <span className="text-body-sm text-fg-muted">Planning a campaign? Add screens below, or the whole mall, and send the request to Primedia sales.</span>
+      <AddMallToRequest mallId={mall.id} mallName={mall.name} />
     </div>
   );
 }
@@ -254,6 +270,8 @@ function MallOverview({
               : ' · this mall isn’t on OpenStreetMap, so screens are shown in a grid'}
         </p>
       </div>
+
+      {!admin && mall.group !== 'formats' ? <MallRequestButton mall={mall} /> : null}
 
       {admin && mall.location && admin.placing ? (
         <div className="flex flex-col gap-1 rounded-lg border border-accent-border bg-accent-subtle p-3 text-body-sm text-fg">

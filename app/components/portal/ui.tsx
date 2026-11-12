@@ -136,7 +136,8 @@ export function RequireSignIn({ children, what = 'this page' }: { children: (use
         </div>
         <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-subtle p-5">
           <h2 className="text-body-lg font-semibold text-fg">Clients</h2>
-          <p className="text-body-sm text-fg-muted">You don’t need to sign in. Open the link your account manager emailed you.</p>
+          <p className="text-body-sm text-fg-muted">You don’t need to sign in. Open the link your account manager emailed you, or plan a new campaign and send it to sales.</p>
+          <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link>
         </div>
       </div>
     </Page>
@@ -147,9 +148,9 @@ export function clientLabel(id: string | null) {
   return CLIENTS.find((c) => c.id === id)?.name ?? 'No client yet';
 }
 
-/* ---------- Add to campaign ---------- */
+/* ---------- Add to proposal ---------- */
 
-/** Puts an item in the user's current campaign, confirming with a toast and undo. */
+/** Puts an item in the user's current proposal, confirming with a toast and undo. */
 export function addWithToast(campaignId: string, campaignName: string, item: NewCampaignItem) {
   const itemId = portal.addTo(campaignId, item);
   ui.toast({
@@ -165,7 +166,7 @@ const SIZE = {
   normal: 'h-11 px-4 text-body-sm md:h-8 md:px-3',
 };
 
-export function AddToCampaign({ item, compact = false }: { item: NewCampaignItem; compact?: boolean }) {
+export function AddToProposal({ item, compact = false }: { item: NewCampaignItem; compact?: boolean }) {
   const { campaigns, active, userId } = usePortalState();
   if (!userId) return null;
   const user = USERS.find((u) => u.id === userId);
@@ -184,7 +185,7 @@ export function AddToCampaign({ item, compact = false }: { item: NewCampaignItem
         className={`inline-flex items-center gap-1 rounded-full border border-success-border bg-success-bg font-semibold text-success-fg ${compact ? SIZE.compact : SIZE.normal}`}
         title={`In ${c.name} — click to remove`}
       >
-        ✓ In {c.name.length > 18 ? 'campaign' : c.name}
+        ✓ In {c.name.length > 18 ? 'proposal' : c.name}
       </button>
     );
   }
@@ -194,7 +195,7 @@ export function AddToCampaign({ item, compact = false }: { item: NewCampaignItem
       onClick={() => (c ? addWithToast(c.id, c.name, item) : ui.pick(item))}
       className={`inline-flex items-center gap-1 rounded-full bg-accent font-semibold text-fg-on-accent hover:bg-accent-hover ${compact ? SIZE.compact : SIZE.normal}`}
     >
-      + Add to campaign
+      + Add to proposal
     </button>
   );
 }

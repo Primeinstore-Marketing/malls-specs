@@ -9,14 +9,17 @@
  *          POST /approvals    { campaignId, k?, name?, note?, screens? }  (a client approves on the booking page)
  *          GET  /approvals?ids=a,b  — approvals for those campaigns
  *                                   (names and notes only with an admin token)
+ *          POST /requests { name?, contact: { name, company, email, phone? }, salesEmail?, start?, end?, budget?, note?, screens?, malls? }
+ *                                   (a client sends a campaign they planned; no account)
  * Auth:    POST  /auth/login     { email, password } -> { token, expiresAt, account }
  *          POST  /auth/logout
  *          GET   /auth/me
  *          PATCH /auth/me        { name?, title? }        (your own profile)
  *          POST  /auth/password  { current, next }
- *          POST  /auth/signup    { email, name, title, password }  (company email only; waits for an admin)
+ *          POST  /auth/signup    { email, name, title, password }  (anyone; waits for an admin to approve)
  *          POST  /auth/forgot    { email }                         (asks admins for a reset)
  *          Accounts are admins or sales. Sales may also edit client:* content.
+ * Requests: GET /requests (signed in) · PATCH /requests/:id { action: take, campaignId } | { action: dismiss | reopen }
  * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
  * AI:      POST /ai/brief { filename, text? | file?: { name, mediaType, data }, inventory, today } -> { draft, truncated }  (signed in; Workers AI)
@@ -465,6 +468,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CHANGES_PER_IP_HOUR = 30;
 
 type StoredCampaign = {
+  kind?: string;
   id: string; name: string; status: string; start: string | null; end: string | null; objective?: string;
   clientId?: string | null; prospect?: { company?: string; name?: string } | null; items: unknown[];
   events: { at: string; by: string; text: string; kind: string; id: string }[]; shareKey?: string; updatedAt?: string;
@@ -508,6 +512,8 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
       v: 2,
       id: c.id,
       name: c.name,
+      // Proposal or site list (older campaigns: unset, and the page works it out).
+      kind: c.kind === 'sitelist' || c.kind === 'proposal' ? c.kind : undefined,
       client,
       status: c.status,
       start: c.start,
@@ -622,6 +628,128 @@ async function postBrief(request: Request, env: Env): Promise<Response> {
     }
     throw new HttpError(502, message.startsWith('The AI') ? message : 'The AI couldn’t read the brief just now. Try again in a minute, or fill the proposal in by hand.');
   }
+}
+
+// ── client requests (public: clients plan a campaign without an account) ──
+
+const MAX_REQUESTS_PER_IP_HOUR = 5;
+const REQUEST_ID_PATTERN = /^r-[a-z0-9]{8,40}$/;
+
+const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
+const longText = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const isoDate = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+
+/** A client sends the campaign they planned. Anyone can; a few per connection an hour. */
+async function postRequest(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<Record<string, unknown>>(request);
+  // A field people can't see: only bots fill it in. Answer as if it worked.
+  if (text(body.website, 200)) return json({ ok: true }, 201);
+
+  const contact = (body.contact ?? {}) as Record<string, unknown>;
+  const name = text(contact.name, 100);
+  const company = text(contact.company, 120);
+  const email = text(contact.email, 200).toLowerCase();
+  const phone = text(contact.phone, 40);
+  if (!name) throw new HttpError(400, 'Enter your name.');
+  if (!company) throw new HttpError(400, 'Enter your company or brand.');
+  if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter your email address, so sales can reply.');
+
+  const screens = (Array.isArray(body.screens) ? body.screens : []).slice(0, 300).flatMap((s) => {
+    const x = (s ?? {}) as Record<string, unknown>;
+    const specId = text(x.specId, 100);
+    const appMallId = text(x.appMallId, 64);
+    return SPEC_ID_PATTERN.test(specId) && MALL_ID_PATTERN.test(appMallId) ? [{ specId, appMallId, title: text(x.title, 140) || specId }] : [];
+  });
+  const malls = (Array.isArray(body.malls) ? body.malls : []).slice(0, 100).flatMap((m) => {
+    const x = (m ?? {}) as Record<string, unknown>;
+    const id = text(x.id, 64);
+    return MALL_ID_PATTERN.test(id) ? [{ id, name: text(x.name, 120) || id }] : [];
+  });
+  const note = longText(body.note, 4000);
+  if (!screens.length && !malls.length && !note) throw new HttpError(400, 'Choose at least one mall or screen, or tell us what you have in mind.');
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at >= ?').bind(`request:${ip}`, minutesAgo(60)).first<{ n: number }>();
+  if ((recent?.n ?? 0) >= MAX_REQUESTS_PER_IP_HOUR) throw new HttpError(429, 'You’ve sent a few requests already. Try again in an hour, or email Primedia Malls.');
+
+  const data = {
+    name: text(body.name, 120) || `${company} campaign`,
+    contact: { name, company, email, phone },
+    salesEmail: text(body.salesEmail, 200).toLowerCase(),
+    start: isoDate(body.start),
+    end: isoDate(body.end),
+    budget: text(body.budget, 80),
+    note,
+    screens,
+    malls,
+  };
+  const assigned = data.salesEmail && EMAIL_PATTERN.test(data.salesEmail)
+    ? await env.DB.prepare('SELECT id FROM admins WHERE email = ? AND disabled = 0 AND pending = 0').bind(data.salesEmail).first<{ id: number }>()
+    : null;
+  const id = `r-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  const at = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO login_attempts (key, at) VALUES (?, ?)').bind(`request:${ip}`, at),
+    env.DB.prepare('INSERT INTO requests (id, data, status, assigned_to, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, JSON.stringify(data), 'new', assigned?.id ?? null, at, at),
+  ]);
+  return json({ ok: true, id }, 201);
+}
+
+type RequestRow = { id: string; data: string; status: string; assigned_to: number | null; taken_by: number | null; campaign_id: string | null; created_at: string; updated_at: string; assigned_name: string | null; taker_name: string | null };
+const REQUEST_SELECT = `SELECT r.*, COALESCE(NULLIF(a.name, ''), a.email) AS assigned_name, COALESCE(NULLIF(t.name, ''), t.email) AS taker_name
+  FROM requests r LEFT JOIN admins a ON a.id = r.assigned_to LEFT JOIN admins t ON t.id = r.taken_by`;
+const requestJson = (r: RequestRow) => ({
+  id: r.id,
+  ...JSON.parse(r.data),
+  status: r.status,
+  assignedTo: r.assigned_to,
+  assignedName: r.assigned_name,
+  takenBy: r.taken_by,
+  takenName: r.taker_name,
+  campaignId: r.campaign_id,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+/** Sales and admins: new requests, and those handled in the last 60 days. */
+async function listRequests(request: Request, env: Env): Promise<Response> {
+  await requireAccount(request, env);
+  const rows = await env.DB.prepare(`${REQUEST_SELECT} WHERE r.status = 'new' OR r.updated_at >= ? ORDER BY r.status = 'new' DESC, r.created_at DESC LIMIT 200`)
+    .bind(minutesAgo(60 * 24 * 60))
+    .all<RequestRow>();
+  return json({ requests: rows.results.map(requestJson) });
+}
+
+/**
+ * take { campaignId }: claim a new request for the proposal you're about to build (first one wins).
+ * dismiss: not something Primedia can do (spam, out of scope). reopen: back to new (admins, or whoever handled it).
+ */
+async function patchRequest(request: Request, env: Env, id: string): Promise<Response> {
+  const me = await requireAccount(request, env);
+  if (!REQUEST_ID_PATTERN.test(id)) throw new HttpError(400, 'Invalid request id.');
+  const body = await readJson<{ action?: unknown; campaignId?: unknown }>(request);
+  const row = await env.DB.prepare(`${REQUEST_SELECT} WHERE r.id = ?`).bind(id).first<RequestRow>();
+  if (!row) throw new HttpError(404, 'We can’t find that request.');
+  const at = now();
+  if (body.action === 'take' || body.action === 'dismiss') {
+    const campaignId = body.action === 'take' ? (typeof body.campaignId === 'string' ? body.campaignId : '') : null;
+    if (body.action === 'take' && !CAMPAIGN_ID_PATTERN.test(campaignId ?? '')) throw new HttpError(400, 'Invalid campaign id.');
+    const result = await env.DB.prepare("UPDATE requests SET status = ?, taken_by = ?, campaign_id = ?, updated_at = ? WHERE id = ? AND status = 'new'")
+      .bind(body.action === 'take' ? 'taken' : 'dismissed', me.id, campaignId, at, id)
+      .run();
+    if (!result.meta.changes) {
+      throw new HttpError(409, row.status === 'taken' ? `${row.taker_name ?? 'Someone'} is already handling this request.` : 'This request was already closed.');
+    }
+    await audit(env, me, `request.${body.action}`, id, { campaignId });
+  } else if (body.action === 'reopen') {
+    if (row.taken_by !== me.id && me.role !== 'admin') throw new HttpError(403, 'Only whoever handled it, or an admin, can reopen this request.');
+    await env.DB.prepare("UPDATE requests SET status = 'new', taken_by = NULL, campaign_id = NULL, updated_at = ? WHERE id = ?").bind(at, id).run();
+    await audit(env, me, 'request.reopen', id);
+  } else {
+    throw new HttpError(400, 'Say what to do: take, dismiss or reopen.');
+  }
+  const latest = await env.DB.prepare(`${REQUEST_SELECT} WHERE r.id = ?`).bind(id).first<RequestRow>();
+  return json({ request: latest ? requestJson(latest) : null });
 }
 
 // ── campaigns ─────────────────────────────────────────────────────────
@@ -1144,6 +1272,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (resource === 'ai' && id === 'brief' && method === 'POST') return postBrief(request, env);
+
+  if (resource === 'requests') {
+    if (!id && method === 'POST') return postRequest(request, env);
+    if (!id && method === 'GET') return listRequests(request, env);
+    if (id && method === 'PATCH') return patchRequest(request, env, id);
+  }
 
   if (resource === 'campaigns') {
     if (!id && method === 'GET') return listCampaigns(request, env);

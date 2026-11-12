@@ -65,9 +65,20 @@ export interface CampaignEvent {
   readonly kind: 'message' | 'status' | 'edit';
 }
 
+/**
+ * The two things sales (account managers and sales support) send a client:
+ * a proposal (the screens we suggest for their campaign) and, once booked,
+ * the site list generated from PIMS (the screens they're booked on, for the
+ * client to approve, and so everyone knows how many files to make, at what
+ * size, with which spec sheets and templates).
+ */
+export type DocKind = 'proposal' | 'sitelist';
+
 export interface Campaign {
   readonly id: string;
   readonly name: string;
+  /** Unset on older campaigns: a campaign with site lines is a site list. */
+  readonly kind?: DocKind;
   readonly clientId: string | null;
   /** Someone who isn't a client on the site yet: who the proposal goes to. */
   readonly prospect?: Prospect | null;
@@ -108,7 +119,7 @@ export interface PortalState {
   readonly version: 1;
   readonly userId: string | null;
   readonly campaigns: readonly Campaign[];
-  /** Per user: the campaign "Add to campaign" puts things in. */
+  /** Per user: the proposal "Add to proposal" puts things in. */
   readonly active: Readonly<Record<string, string>>;
   /** Per user: when they last opened their notifications. */
   readonly seen: Readonly<Record<string, string>>;

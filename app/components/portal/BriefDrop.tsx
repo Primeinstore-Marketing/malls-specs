@@ -11,7 +11,7 @@ type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } |
  * "Start from the client's brief": drop or choose a PDF, Word, PowerPoint,
  * Excel or image file, and the AI drafts the whole proposal from it.
  */
-export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void }) {
+export function BriefDrop({ inventory, onDraft, pims = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -55,13 +55,15 @@ export function BriefDrop({ inventory, onDraft }: { inventory: () => string; onD
       >
         <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-xl text-fg-on-accent">✦</span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 id="brief-title" className="text-body-lg font-semibold text-fg">Start from the client’s brief or site list</h2>
+          <h2 id="brief-title" className="text-body-lg font-semibold text-fg">{pims ? 'Drop the site list exported from PIMS' : 'Start from the client’s brief or booking sheet'}</h2>
           <p className="text-body-sm text-fg-muted" role="status">
             {state.step === 'reading'
               ? `Opening ${state.file}…`
               : state.step === 'drafting'
                 ? `The AI is reading ${state.file} and choosing screens. This takes about half a minute…`
-                : `Drop a brief, booking sheet or site list: PDF, Word, PowerPoint, Excel or image (up to ${MAX_BRIEF_MB} MB). The AI fills in the proposal; you check it and send.`}
+                : pims
+                  ? `PDF or Excel (up to ${MAX_BRIEF_MB} MB). Every line is kept, matched to its screen, spec sheet and template, and grouped by the files to make. You check it and send.`
+                  : `Drop a brief, booking sheet or site list: PDF, Word, PowerPoint, Excel or image (up to ${MAX_BRIEF_MB} MB). The AI fills in the proposal; you check it and send.`}
           </p>
         </div>
         <button

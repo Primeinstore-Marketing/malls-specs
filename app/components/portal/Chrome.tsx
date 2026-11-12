@@ -12,6 +12,7 @@ import { ui, useUi } from '@/lib/portal/ui-state';
 import { portal, useCampaignSync, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { Avatar, addWithToast } from './ui';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { draftCount, useRequestDraft } from '@/lib/requestDraft';
 
 /** "Building: Festive Feast · 4 items" — follows the user round the site while they add media. */
 export function CampaignTray() {
@@ -29,7 +30,7 @@ export function CampaignTray() {
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        aria-label={`Show campaign tray: ${c.name}, ${summary}`}
+        aria-label={`Show proposal tray: ${c.name}, ${summary}`}
         className="fixed bottom-4 right-4 z-sticky flex h-11 items-center gap-2 rounded-full bg-brand-surface px-4 text-body-sm font-semibold text-brand-on-surface shadow-3 print:hidden"
       >
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-[12px] text-fg-on-accent">{c.items.length}</span>
@@ -50,7 +51,7 @@ export function CampaignTray() {
       <button
         type="button"
         onClick={() => setCollapsed(true)}
-        aria-label="Minimise campaign tray"
+        aria-label="Minimise proposal tray"
         className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -59,7 +60,7 @@ export function CampaignTray() {
   );
 }
 
-/** "Add to which campaign?" — shown the first time someone adds media, so nothing lands in an unnamed draft. */
+/** "Add to which proposal?" — shown the first time someone adds media, so nothing lands in an unnamed draft. */
 export function CampaignPicker() {
   const { picking } = useUi();
   const { campaigns, userId } = usePortalState();
@@ -114,14 +115,14 @@ export function CampaignPicker() {
         className="flex w-full max-w-md flex-col gap-4 rounded-t-2xl bg-bg p-5 shadow-4 sm:rounded-2xl"
       >
         <div className="flex flex-col gap-1">
-          <h2 id="picker-title" className="text-display-sm text-fg">Add to a campaign</h2>
+          <h2 id="picker-title" className="text-display-sm text-fg">Add to a proposal</h2>
           <p className="text-body-sm text-fg-muted">{itemLabel({ ...picking, id: '' } as never)}</p>
         </div>
-        <div className="flex flex-col gap-2" role="radiogroup" aria-label="Campaign">
+        <div className="flex flex-col gap-2" role="radiogroup" aria-label="Proposal">
           <label className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-3 ${choice === 'new' ? 'border-accent bg-accent-subtle' : 'border-border-strong'}`}>
             <span className="flex items-center gap-2 text-body-md font-semibold text-fg">
               <input type="radio" name="campaign" checked={choice === 'new'} onChange={() => setChoice('new')} />
-              New campaign
+              New proposal
             </span>
             <input
               ref={inputRef}
@@ -129,7 +130,7 @@ export function CampaignPicker() {
               onFocus={() => setChoice('new')}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name it, e.g. Winter soup launch"
-              aria-label="New campaign name"
+              aria-label="New proposal name"
               className="h-11 rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus"
             />
           </label>
@@ -163,10 +164,13 @@ export function CampaignPicker() {
 export function ToastHost() {
   const { toast } = useUi();
   const { userId, active, campaigns } = usePortalState();
+  const draft = useRequestDraft();
   const pathname = usePathname();
   if (!toast) return null;
-  // Sit above the tray when it's showing.
-  const trayUp = Boolean(userId && campaigns.some((c) => c.id === active[userId])) && !pathname.startsWith('/portal/campaign');
+  // Sit above the proposal tray (sales) or the request tray (clients) when it's showing.
+  const trayUp = userId
+    ? campaigns.some((c) => c.id === active[userId]) && !pathname.startsWith('/portal/campaign')
+    : draftCount(draft) > 0 && !pathname.startsWith('/request');
   return (
     <div
       role="status"
@@ -318,6 +322,7 @@ export function PortalAccount() {
   const links: [string, string][] = [
     ['/portal', 'Sales workspace'],
     ['/portal/new', 'New proposal'],
+    ['/portal/new?kind=sitelist', 'Site list from PIMS'],
     ['/portal/clients', 'Client contacts'],
     ['/insights', 'Audience insights'],
     ['/portal/photos', 'Photo rights'],
@@ -390,6 +395,7 @@ export function PortalDrawer() {
         ['/explorer', 'Media Explorer'],
         ['/insights', 'Insights'],
         ['/portal/new', 'New proposal'],
+        ['/portal/new?kind=sitelist', 'Site list from PIMS'],
         ['/portal/clients', 'Client contacts'],
         ['/portal/photos', 'Photo rights'],
         ['/account', 'Your account'],

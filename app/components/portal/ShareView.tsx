@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
 import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
-import { days, formatDate, formatRange, phase } from '@/lib/portal/logic';
+import { days, docWords, formatDate, formatRange, phase } from '@/lib/portal/logic';
 import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
@@ -213,6 +213,8 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const flight = days(edits.start, edits.end);
   const status = approved ? { text: 'Approved — Primedia is confirming', tone: 'bg-success-bg text-success-fg' } : statusLine(p);
   const first = p.from?.name.split(' ')[0] ?? 'your account manager';
+  // Proposal (screens we suggest) or site list (from PIMS, once booked).
+  const w = docWords(p);
 
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
@@ -354,7 +356,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
             <p className="text-body-sm text-fg">{applied ? 'Applied. The campaign now matches what the client sent.' : `The client sent changes to “${ownCampaign.name}”.`}</p>
             {applied ? (
-              <a href={withBasePath(`/portal/campaign?id=${ownCampaign.id}`)} className="text-body-sm font-semibold text-accent hover:underline">Open the campaign →</a>
+              <a href={withBasePath(`/portal/campaign?id=${ownCampaign.id}`)} className="text-body-sm font-semibold text-accent hover:underline">Open the proposal →</a>
             ) : (
               <button
                 type="button"
@@ -375,7 +377,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         <div className="border-b border-border bg-accent-subtle print:hidden" role="status">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
             <p className="text-body-md text-fg">
-              <strong>Your message is with {first}.</strong> {sentChanges ? 'They’ve been told and will update the site list; this page always shows the latest version.' : 'They’ll update the site list; this page always shows the latest version.'}
+              <strong>Your message is with {first}.</strong> {sentChanges ? `They’ve been told and will update the ${w.noun}; this page always shows the latest version.` : `They’ll update the ${w.noun}; this page always shows the latest version.`}
             </p>
             <EmailButton href={mail(`Changes to: ${p.name}`, `Hi ${first},\n\nI've sent some changes to ${p.name} from the booking page:\n${link}\n\nThanks`)} className={btnSmall + ' border-border-strong bg-bg text-fg'} align="right">
               Also email {first}
@@ -398,13 +400,13 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
       <main className={`mx-auto flex max-w-5xl flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12 print:gap-6 print:py-6 ${editable ? 'pb-32 sm:pb-32' : ''}`}>
         {/* ---- Summary ---- */}
         <section className="flex flex-col gap-4">
-          <span className="text-label-md font-semibold uppercase text-accent">{p.client && p.client !== 'No client yet' ? `Prepared for ${p.client}` : 'Primedia Malls proposal'}</span>
+          <span className="text-label-md font-semibold uppercase text-accent">{p.client && p.client !== 'No client yet' ? `Prepared for ${p.client}` : `Primedia Malls ${w.noun}`}</span>
           <h1 className="text-display-xl text-fg">{p.name}</h1>
           <div className="flex flex-wrap items-center gap-3 text-body-lg text-fg-muted">
             <span>{formatRange(edits.start, edits.end)}{flight ? ` · ${flight} days` : ''}</span>
             <span className={`rounded-full px-3 py-1 text-body-sm font-semibold ${status.tone}`}>{status.text}</span>
             {editable ? (
-              <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} print:hidden`}>Approve site list</button>
+              <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} print:hidden`}>{w.approve}</button>
             ) : null}
           </div>
           {editingLines ? <DatesEditor start={edits.start} end={edits.end} onChange={(start, end) => setEdits((e) => ({ ...e, start, end }))} /> : null}
@@ -416,7 +418,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           </dl>
           {editable ? (
             <p className="text-body-sm text-fg-muted print:hidden">
-              Please check the site list below and approve it, or tell {first} what to change.
+              Please check the {w.noun} below and approve it, or tell {first} what to change.
             </p>
           ) : null}
         </section>
@@ -492,14 +494,14 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
             </>
           ) : (
             <>
-              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? 'Approve the site list' : 'Questions about your booking?'}</h2>
+              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? `Approve the ${w.noun}` : 'Questions about your booking?'}</h2>
               <p className="text-body-md text-fg-muted">
-                {editable ? `If the site list is right, approve it in one step. If anything should change, tell ${first} below.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
+                {editable ? `If the ${w.noun} is right, approve it in one step. If anything should change, tell ${first} below.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
               </p>
               <div className="flex flex-wrap gap-2">
                 {editable ? (
                   <button type="button" onClick={() => setApproving(true)} className={btnPrimary}>
-                    Approve site list
+                    {w.approve}
                   </button>
                 ) : null}
                 <EmailButton href={mail(`Question about: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className={btnSecondary}>
@@ -539,7 +541,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                     )}
                   </>
                 ) : (
-                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Approve site list</button>
+                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>{w.approve}</button>
                 )}
               </div>
             </div>

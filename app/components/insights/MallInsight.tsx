@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { getMall } from '@/lib/malls';
 import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands, mapIdOf } from '@/lib/insights';
 import { mallPlace } from '@/lib/sites';
-import { AddToCampaign, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
+import { AddToProposal, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 function Mall({ id }: { id: string }) {
@@ -111,7 +111,7 @@ function Mall({ id }: { id: string }) {
                   <h3 className="text-body-md font-semibold text-fg">{pkg.name}</h3>
                   <span className="font-mono text-body-sm text-fg-muted">{pkg.code} · {pkg.format}{pkg.units ? ` × ${pkg.units}` : ''}</span>
                 </div>
-                <AddToCampaign item={{ kind: 'package', code: pkg.code }} />
+                <AddToProposal item={{ kind: 'package', code: pkg.code }} />
               </div>
               <p className="text-body-sm text-fg-muted">{pkg.sites}</p>
             </article>

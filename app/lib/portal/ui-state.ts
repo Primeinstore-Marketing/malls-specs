@@ -5,7 +5,7 @@ import type { NewCampaignItem } from './types';
 
 /**
  * Short-lived UI state shared across the page, not saved: the
- * "add to which campaign?" sheet and the confirmation toast.
+ * "add to which proposal?" sheet and the confirmation toast.
  */
 
 export interface Toast {

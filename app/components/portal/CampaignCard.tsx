@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { compact } from '@/lib/insights';
-import { campaignClientName, clientName, days, formatRange, phase, reach, todayIso } from '@/lib/portal/logic';
+import { campaignClientName, clientName, days, docWords, formatRange, phase, reach, todayIso } from '@/lib/portal/logic';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
 import { StatusPill } from './ui';
 
@@ -31,6 +31,7 @@ export function CampaignCard({ c, user, highlight }: { c: Campaign; user: Portal
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
+          {user.role === 'sales' ? <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">{docWords(c).Noun}</span> : null}
           <strong className="truncate text-body-md font-semibold text-fg">{c.name}</strong>
           <span className="truncate text-body-sm text-fg-muted">
             {user.role === 'sales' ? `${campaignClientName(c)} · ` : ''}

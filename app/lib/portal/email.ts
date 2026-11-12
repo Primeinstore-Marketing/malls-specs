@@ -1,5 +1,5 @@
 import type { Catalogue } from '@data-model';
-import { formatDate, formatRange } from './logic';
+import { docWords, formatDate, formatRange } from './logic';
 import { campaignScreens, creativeGroups, creativeLabel, sheetHref } from './screens';
 import { campaignContact, shareUrl } from './share';
 import type { Campaign, PortalUser } from './types';
@@ -41,15 +41,23 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   const dates = formatRange(c.start, c.end);
   const deadline = c.start ? formatDate(c.start) : null;
 
-  const unit = (n: number) => `${n} ${n === 1 ? 'site' : 'sites'}`;
-  const subject = { proposal: `Site list for approval: ${c.name}`, reminder: `Reminder: the site list for ${c.name} is waiting for your approval`, booked: `Booking confirmed: ${c.name}` }[kind];
-  const heading = { proposal: 'Your site list is ready for approval', reminder: 'Your site list is waiting for approval', booked: 'Your booking is confirmed' }[kind];
+  const w = docWords(c);
+  const unit = (n: number) => `${n} ${n === 1 ? w.unit : `${w.unit}s`}`;
+  const subject = {
+    proposal: w.noun === 'proposal' ? `Proposal: ${c.name}` : `Site list for approval: ${c.name}`,
+    reminder: `Reminder: the ${w.noun} for ${c.name} is waiting for your approval`,
+    booked: `Booking confirmed: ${c.name}`,
+  }[kind];
+  const heading = { proposal: w.noun === 'proposal' ? 'Your proposal is ready' : 'Your site list is ready for approval', reminder: `Your ${w.noun} is waiting for approval`, booked: 'Your booking is confirmed' }[kind];
   const opener = {
-    proposal: `Here’s the site list for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please review it and approve it in one click, or tell me what to change.`,
-    reminder: `A quick reminder that the site list for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
+    proposal:
+      w.noun === 'proposal'
+        ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Have a look and approve it in one click, or tell me what to change.`
+        : `Here’s the site list for ${c.name}, from our booking system: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please check the screens and approve it in one click, or tell me what to change. It also shows how many files to make and the template for each.`,
+    reminder: `A quick reminder that the ${w.noun} for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
     booked: `${c.name} is booked: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
   }[kind];
-  const cta = kind === 'booked' ? 'View your booking' : 'Review and approve the site list';
+  const cta = kind === 'booked' ? 'View your booking' : `Review and approve the ${w.noun}`;
   const hasTemplates = groups.some((z) => z.files.some((f) => f.template));
 
   /* ---- Plain text ---- */

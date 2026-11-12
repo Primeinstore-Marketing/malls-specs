@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { compact } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, reach, todayIso } from '@/lib/portal/logic';
-import { portal } from '@/lib/portal/store';
+import { portal, usePortalState } from '@/lib/portal/store';
 import { clientEmail } from '@/lib/portal/email';
 import { clientContact } from '@/lib/portal/share';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
@@ -14,7 +14,7 @@ import { briefInventory, mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } 
 import { CLIENTS } from '@/lib/portal/seed';
 import type { MallEntry as Entry } from '@/lib/portal/mallScreens';
 import { useLiveData } from '@/lib/liveData';
-import type { Campaign, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
+import type { Campaign, DocKind, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
 import { AudiencePicker, readAudience } from '@/components/insights/AudiencePicker';
 import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
@@ -31,11 +31,16 @@ function Form({ user }: { user: PortalUser }) {
   const router = useRouter();
   const sales = user.role === 'sales';
   const { catalogue } = useLiveData();
-  const [name, setName] = useState('');
-  const [client, setClient] = useState<{ clientId: string | null; prospect: Prospect | null }>({ clientId: sales ? null : user.clientId ?? null, prospect: null });
-  const [objective, setObjective] = useState('');
-  const [start, setStart] = useState(addDays(todayIso(), 30));
-  const [end, setEnd] = useState(addDays(todayIso(), 57));
+  // Two jobs: a proposal (screens we suggest), or the site list from PIMS once it's booked.
+  const [kind, setKind] = useState<DocKind>(params.get('kind') === 'sitelist' ? 'sitelist' : 'proposal');
+  // A site list made from a proposal starts with its name, client and dates.
+  const { campaigns } = usePortalState();
+  const [from] = useState(() => campaigns.find((x) => x.id === params.get('from')) ?? null);
+  const [name, setName] = useState(from ? from.name : '');
+  const [client, setClient] = useState<{ clientId: string | null; prospect: Prospect | null }>(from ? { clientId: from.clientId, prospect: from.prospect ?? null } : { clientId: sales ? null : user.clientId ?? null, prospect: null });
+  const [objective, setObjective] = useState(from?.objective ?? '');
+  const [start, setStart] = useState(from?.start ?? addDays(todayIso(), 30));
+  const [end, setEnd] = useState(from?.end ?? addDays(todayIso(), 57));
   const [audience, setAudience] = useState<AudienceTarget>(() => readAudience(new URLSearchParams(params.toString())));
   // What's in the plan, keyed pkg:<code> or scr:<specId>, in the order it was ticked.
   const [picked, setPicked] = useState<Map<string, NewCampaignItem>>(new Map());
@@ -79,6 +84,7 @@ function Form({ user }: { user: PortalUser }) {
   const [newId] = useState(() => `c-${Math.random().toString(36).slice(2, 9)}`);
   const fields = () => ({
     id: newId,
+    kind,
     name: name.trim() || 'Untitled campaign',
     clientId: client.clientId,
     prospect: client.prospect,
@@ -117,7 +123,9 @@ function Form({ user }: { user: PortalUser }) {
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
   const [clientKey, setClientKey] = useState(0);
   function applyDraft(draft: BriefDraft, file: string, truncated = false) {
-    const before = { name, client, objective, start, end, picked, reasons, siteLines };
+    const before = { name, client, objective, start, end, picked, reasons, siteLines, kind };
+    // A document with site lines (a PIMS export) makes a site list.
+    if (draft.sites?.length) setKind('sitelist');
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
     const chosen = draft.items.filter((i) => rows.has(i.key));
     const iso = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
@@ -170,6 +178,7 @@ function Form({ user }: { user: PortalUser }) {
         setPicked(before.picked);
         setReasons(before.reasons);
         setSiteLines(before.siteLines);
+        setKind(before.kind);
         setAiDraft(null);
       },
     });
@@ -179,16 +188,29 @@ function Form({ user }: { user: PortalUser }) {
   return (
     <Page>
       <header className="flex flex-col gap-3">
-        <span className="text-label-md font-semibold uppercase text-accent">{sales ? 'New proposal' : 'Propose a campaign'}</span>
-        <h1 className="text-display-xl text-fg">{sales ? 'Build a proposal' : 'Tell us about your campaign'}</h1>
+        <span className="text-label-md font-semibold uppercase text-accent">{!sales ? 'Propose a campaign' : kind === 'sitelist' ? 'New site list' : 'New proposal'}</span>
+        <h1 className="text-display-xl text-fg">{!sales ? 'Tell us about your campaign' : kind === 'sitelist' ? 'Site list from PIMS' : 'Build a proposal'}</h1>
         <p className="max-w-prose text-body-lg text-fg-muted">
-          {sales
-            ? 'Pick the malls and screens, then email it to the client. The client can be added now or later.'
-            : 'Who you want to reach and when. We’ll suggest malls as you go, and your account manager will turn it into a proposal.'}
+          {!sales
+            ? 'Who you want to reach and when. We’ll suggest malls as you go, and your account manager will turn it into a proposal.'
+            : kind === 'sitelist'
+              ? 'For a booked campaign. Drop the PIMS site list export: the client approves the screens, and everyone sees how many files to make, at what size, with which spec sheet and template.'
+              : 'Suggest malls and screens for the client’s campaign, then email it to them to approve. Once it’s booked in PIMS, make the site list from the PIMS export.'}
         </p>
+        {sales ? (
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="What are you making?">
+            {([['proposal', 'Proposal', 'Screens we suggest'], ['sitelist', 'Site list from PIMS', 'A booked campaign']] as const).map(([k, label, note]) => (
+              <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={`flex flex-col items-start rounded-2xl border px-4 py-2 text-left ${kind === k ? 'border-accent bg-accent-subtle' : 'border-border-strong hover:border-fg'}`}>
+                <span className="text-body-sm font-semibold text-fg">{label}</span>
+                <span className="text-[12px] text-fg-muted">{note}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {from ? <p className="text-body-sm text-fg-muted">Starting from the proposal “{from.name}”: its client and dates are filled in.</p> : null}
       </header>
 
-      {sales ? <BriefDrop inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
+      {sales ? <BriefDrop pims={kind === 'sitelist'} inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
       {aiDraft ? (
         <section role="status" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -363,7 +385,7 @@ function Form({ user }: { user: PortalUser }) {
                     : 'inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50'
                 }
               >
-                {sales ? (recipient?.email && hasLines ? 'Create without sending' : 'Create proposal') : 'Send brief to Primedia'}
+                {sales ? (recipient?.email && hasLines ? 'Create without sending' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief to Primedia'}
               </button>
               {!sales ? (
                 <button type="button" onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
@@ -407,7 +429,7 @@ function Form({ user }: { user: PortalUser }) {
                 })}
               </ul>
             ) : (
-              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">Tick screens in step 3, or drop the client’s site list above.</p>
+              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">{kind === 'sitelist' ? 'Drop the PIMS site list export above.' : 'Tick screens in step 3, or drop the client’s brief above.'}</p>
             )}
             {sizes.length || unknown ? (
               <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
@@ -440,7 +462,7 @@ function Form({ user }: { user: PortalUser }) {
               onClick={() => (sales && recipient?.email && hasLines ? createAndEmail() : save(!sales))}
               className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
-              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : 'Create proposal') : 'Send brief'}
+              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief'}
             </button>
           </div>
         </div>
@@ -451,5 +473,8 @@ function Form({ user }: { user: PortalUser }) {
 }
 
 export function NewCampaign() {
-  return <RequireSignIn what="campaign planning">{(user) => <Form user={user} />}</RequireSignIn>;
+  const params = useSearchParams();
+  // Switching between "New proposal" and "Site list from PIMS" in the menu starts a fresh form.
+  const key = `${params.get('kind') ?? ''}:${params.get('from') ?? ''}`;
+  return <RequireSignIn what="campaign planning">{(user) => <Form key={key} user={user} />}</RequireSignIn>;
 }

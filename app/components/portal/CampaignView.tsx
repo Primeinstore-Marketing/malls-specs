@@ -16,6 +16,8 @@ import {
   itemKey,
   itemLabel,
   itemMall,
+  docKind,
+  docWords,
   phase,
   progress,
   stepIndex,
@@ -27,7 +29,7 @@ import { CLIENTS } from '@/lib/portal/seed';
 import { campaignOwner, portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, NewCampaignItem, PortalUser, SiteItem } from '@/lib/portal/types';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { AddToCampaign, Avatar, Page, RequireSignIn, StatusPill } from './ui';
+import { AddToProposal, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, creativeGroups, screensFor, sheetHref } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import { SizeDownloads } from './SizeDownloads';
@@ -155,14 +157,21 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const [emailing, setEmailing] = useState<EmailKind | null>(() => (params.get('email') === '1' && ['draft', 'changes', 'proposed'].includes(c.status) && c.items.length ? 'proposal' : null));
   const sentNote = useRef('');
 
-  /** The account manager approves the site list for the client (who agreed by email, phone or in a meeting). */
+  // Proposal (screens we suggest) or site list (from PIMS, once booked): the words follow.
+  const w = docWords(c);
+  const pimsNext =
+    docKind(c) === 'proposal' ? (
+      <Link href={`/portal/new?kind=sitelist&from=${c.id}`} className={btn.secondary}>Next: site list from PIMS</Link>
+    ) : null;
+
+  /** The account manager approves the proposal or site list for the client (who agreed by email, phone or in a meeting). */
   const approveForClient = () => {
     const how = window.prompt(
-      `Approve the site list for ${who(c)}? It moves the campaign to “Approved” so you can confirm the booking.\n\nHow did the client agree? (optional, e.g. “by email from Thandi, 12 Nov”)`,
+      `Approve the ${w.noun} for ${who(c)}? It moves the campaign to “Approved” so you can confirm the booking.\n\nHow did the client agree? (optional, e.g. “by email from Thandi, 12 Nov”)`,
       '',
     );
     if (how === null) return;
-    portal.move(c.id, 'approved', `Site list approved by ${user.name} for the client${how.trim() ? `: ${how.trim()}` : '.'}`);
+    portal.move(c.id, 'approved', `${w.Noun} approved by ${user.name} for the client${how.trim() ? `: ${how.trim()}` : '.'}`);
   };
 
   let title = '';
@@ -175,7 +184,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
       { done: c.items.length > 0, text: 'Screens', href: '#media' },
     ];
     const ready = checks.every((x) => x.done);
-    title = c.status === 'proposed' ? `${campaignClientName(c)} sent a brief` : c.status === 'changes' ? 'Changes requested' : 'Build the proposal';
+    title = c.status === 'proposed' ? `${campaignClientName(c)} sent a request` : c.status === 'changes' ? 'Changes requested' : `Build the ${w.noun}`;
     body = (
       <>
         <ClientChangesBox c={c} />
@@ -188,24 +197,25 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
         <div className="flex flex-wrap gap-2">
           {ready ? (
             <button type="button" className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
-              {contact?.name ? `Email proposal to ${contact.name.split(' ')[0]}` : 'Email proposal'}
+              {contact?.name ? `Email ${w.noun} to ${contact.name.split(' ')[0]}` : `Email ${w.noun}`}
             </button>
           ) : (
-            <button type="button" disabled className={btn.primary}>Email proposal to client</button>
+            <button type="button" disabled className={btn.primary}>Email {w.noun} to client</button>
           )}
-          {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>Approve site list for the client</button> : null}
-          {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>Decline brief</button> : null}
+          {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>{w.approve} for the client</button> : null}
+          {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>{c.status === 'proposed' ? 'Decline request' : 'Decline'}</button> : null}
         </div>
       </>
     );
   } else if (sales && c.status === 'approved') {
-    title = 'Site list approved';
+    title = `${w.Noun} approved`;
     body = (
       <>
         <p className="text-body-md text-fg-muted">Confirm to lock in the dates.</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn.primary} onClick={() => portal.move(c.id, 'booked')}>Confirm booking</button>
-          <button type="button" className={btn.secondary} onClick={() => portal.move(c.id, 'changes', 'Reopened to adjust the plan.')}>Reopen to edit</button>
+          {pimsNext}
+          <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Reopened to adjust the plan.')}>Reopen to edit</button>
         </div>
       </>
     );
@@ -214,10 +224,10 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     tone = 'quiet';
     body = (
       <>
-        <p className="text-body-md text-fg-muted">They can approve the site list from the link in the email. If they agreed another way (email, phone, a meeting), approve it for them. Changed something since? “Email a reminder” sends the latest version.</p>
+        <p className="text-body-md text-fg-muted">They can approve the {w.noun} from the link in the email. If they agreed another way (email, phone, a meeting), approve it for them. Changed something since? “Email a reminder” sends the latest version.</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn.primary} onClick={approveForClient}>
-            Approve site list for the client
+            {w.approve} for the client
           </button>
           <button type="button" className={btn.secondary} onClick={() => setEmailing('reminder')}>Email a reminder</button>
           <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'changes', 'Taken back to make changes.')}>Take back to edit</button>
@@ -230,7 +240,11 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     body = (
       <>
         <p className="text-body-md text-fg-muted">Send {contact?.name.split(' ')[0] ?? 'the client'} the confirmation with the screens and artwork sizes. If you change the booking, send it again: it always has the latest version.</p>
-        <button type="button" className={`${btn.secondary} self-start`} onClick={() => setEmailing('booked')}>Email booking confirmation</button>
+        {docKind(c) === 'proposal' ? <p className="text-body-sm text-fg-muted">Once it’s booked in PIMS, make the site list from the PIMS export: the client approves the screens, and everyone sees how many files to make with which templates.</p> : null}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btn.secondary} onClick={() => setEmailing('booked')}>Email booking confirmation</button>
+          {pimsNext}
+        </div>
       </>
     );
   } else if (!sales && c.status === 'draft') {
@@ -445,7 +459,7 @@ function Suggestions({ c }: { c: Campaign }) {
               <span className="text-body-sm font-bold tabular-nums text-accent">{m.score}</span>
             </span>
             <span className="text-body-sm text-fg-muted">{m.reasons[0]}</span>
-            <div><AddToCampaign compact item={{ kind: 'package', code: m.mall.packages[0].code }} /></div>
+            <div><AddToProposal compact item={{ kind: 'package', code: m.mall.packages[0].code }} /></div>
           </li>
         ))}
       </ul>
@@ -598,7 +612,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
     <Page>
       {/* Print-only letterhead: the PDF a client forwards. */}
       <div className="hidden items-baseline justify-between border-b border-border pb-4 print:flex">
-        <strong className="text-body-lg">Primedia Malls · Campaign proposal</strong>
+        <strong className="text-body-lg">Primedia Malls · {docKind(c) === 'sitelist' ? 'Site list' : 'Campaign proposal'}</strong>
         <span className="text-body-sm text-fg-muted">{new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       </div>
 
@@ -606,6 +620,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
             <Link href="/portal" className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
+            <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docKind(c) === 'sitelist' ? 'Site list · from PIMS' : 'Proposal'}</span>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
             {campaignOwner(c.id) && c.createdBy !== user.id ? <p className="text-body-sm text-fg-subtle print:hidden">Sales: {campaignOwner(c.id)}</p> : null}
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-md text-fg-muted">
@@ -665,7 +680,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-10">
           <section id="media" className="flex scroll-mt-28 flex-col gap-4" aria-labelledby="media-title">
-            <h2 id="media-title" className="text-display-sm text-fg">{c.items.some((i) => i.kind === 'site') ? 'Site list' : 'Media'}</h2>
+            <h2 id="media-title" className="text-display-sm text-fg">{docKind(c) === 'sitelist' ? 'Site list' : 'Screens'}</h2>
             {c.items.some((i) => i.kind === 'site') ? <SiteList c={c} editable={editable} /> : null}
             {c.items.some((i) => i.kind !== 'site') || !c.items.length ? <Items c={{ ...c, items: c.items.filter((i) => i.kind !== 'site') }} user={user} /> : null}
             {editable ? <Suggestions c={c} /> : null}
