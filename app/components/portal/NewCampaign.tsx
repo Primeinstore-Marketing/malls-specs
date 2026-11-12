@@ -20,6 +20,9 @@ import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
 import { BriefDrop } from './BriefDrop';
+import { SiteMatch } from './SiteMatch';
+import { siteStatus, statusText, unmatchedSummary } from '@/lib/portal/siteStatus';
+import { getMalls } from '@/lib/malls';
 import type { SiteItem } from '@/lib/portal/types';
 import type { BriefDraft } from '@/lib/api';
 
@@ -117,6 +120,7 @@ function Form({ user }: { user: PortalUser }) {
     });
 
   const rowsFor = (e: Entry) => rowsForEntry(e, catalogue);
+  const allMalls = useMemo(() => getMalls(catalogue), [catalogue]);
 
   /* A proposal drafted by the AI from the client's brief. */
   const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; truncated: boolean; undo: () => void } | null>(null);
@@ -185,6 +189,11 @@ function Form({ user }: { user: PortalUser }) {
     document.getElementById('plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // What sales should look at: the AI's notes (not its generic unmatched line), then why each unmatched site isn't matched, worked out from the site's malls.
+  const checks = aiDraft
+    ? [...aiDraft.draft.missing.filter((m) => !/aren’t (matched to a screen|screens) on the site/.test(m)), ...unmatchedSummary(siteLines, allMalls)]
+    : [];
+
   return (
     <Page>
       <header className="flex flex-col gap-3">
@@ -227,13 +236,19 @@ function Form({ user }: { user: PortalUser }) {
             <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
           </div>
           {aiDraft.truncated ? <p className="text-body-sm font-semibold text-warning-fg">The file was very long, so the AI read only the first part. Check the dates and screens against the rest of the brief.</p> : null}
-          {aiDraft.draft.missing.length ? (
+          {checks.length ? (
             <div className="flex flex-col gap-1 rounded-xl bg-bg p-3">
               <span className="text-body-sm font-semibold text-warning-fg">Check before sending</span>
               <ul className="list-disc pl-5 text-body-sm text-fg">
-                {aiDraft.draft.missing.map((m) => <li key={m}>{m}</li>)}
+                {checks.map((m) => <li key={m}>{m}</li>)}
               </ul>
             </div>
+          ) : siteLines.length ? <p className="text-body-sm font-semibold text-success-fg">Every site is matched to a screen on the site.</p> : null}
+          {siteLines.some((x) => !x.specId) ? (
+            <SiteMatch
+              lines={siteLines}
+              onMatch={(ids, specId, appMallId) => setSiteLines((cur) => cur.map((x) => (ids.includes(x.id) ? { ...x, specId, appMallId } : x)))}
+            />
           ) : null}
           {aiDraft.draft.noteForClient ? <p className="text-body-sm text-fg-muted">A note for the client is ready in the email: “{aiDraft.draft.noteForClient}”</p> : null}
         </section>
@@ -407,7 +422,7 @@ function Form({ user }: { user: PortalUser }) {
                     <li key={x.id} className="flex gap-2 text-[12px]">
                       <span className="w-6 shrink-0 tabular-nums text-brand-on-surface-muted">{x.no ?? ''}</span>
                       <span className="min-w-0 truncate" title={`${x.siteNo} · ${x.mall} · ${x.location}`}>{x.mall}{x.location ? ` · ${x.location}` : ''}</span>
-                      {x.specId ? null : <span className="ml-auto shrink-0 text-warning-fg">check</span>}
+                      {x.specId ? null : <span className="ml-auto shrink-0 text-warning-fg" title={statusText(siteStatus(x, allMalls))}>{siteStatus(x, allMalls).kind === 'no-mall' ? 'no mall' : 'no screen'}</span>}
                     </li>
                   ))}
                 </ol>

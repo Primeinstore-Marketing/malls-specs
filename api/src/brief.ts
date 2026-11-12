@@ -71,7 +71,7 @@ A salesperson has a site list or booking sheet from a client or their media agen
 - "objective": what the campaign is for; if the document doesn't say, describe it from what it shows.
 - "summary": one or two sentences: the client, what the campaign is, and how many sites are listed. Name the media agency only if the document names one; otherwise don't mention an agency.
 - "noteForClient": written TO the client, 2–4 sentences, no greeting or sign-off, no prices; it asks them to review and approve the site list.
-- "missing": what the salesperson should confirm before sending (contact details, artwork, anything unclear). Not prices.
+- "missing": only what the salesperson must fix in THIS site list before sending it, e.g. "No client email in the document". Usually nothing: return []. Never list artwork, creative, site availability, booking confirmation, materials or prices: the campaign is already booked, and the site list itself tells the client what artwork to make.
 - Plain South African English.`;
 
 /** The same shape as JSON Schema, for the model's JSON mode. */
@@ -132,6 +132,8 @@ Rules for both:
 /** A pick whose own reason says it doesn't belong. */
 const SKIPPED = /\b(skip|skipping|exclud|not in (the )?target|out(side)? of (the )?target|outside (the )?(target|region)|not (a )?match|doesn'?t match)/i;
 /** A "check before sending" line that says there's nothing to check. */
+/** Things that come after the client approves a booked site list: not for "check before sending". */
+const AFTER_APPROVAL = /\b(artwork|creative|material|proof|availability|available|booking confirmation|confirm(ation)? (of )?(the )?booking|price|pricing|rate card|rates?)\b/i;
 const NOTHING_TO_DO = /no action (is )?(required|needed)|not applicable|\bn\/a\b|same dates|nothing to (confirm|check)/i;
 
 export type BriefFile = { readonly name: string; readonly mediaType: string; readonly data: string };
@@ -241,9 +243,10 @@ ${input.text.slice(0, 4000)}`;
       const unmatched = sites.filter((x) => !x.match).length;
       const { matches: _matches, ...details } = parsed.data;
       const missing = [
-        ...details.missing.filter((m) => m.trim() && !NOTHING_TO_DO.test(m)),
+        // A site list from PIMS is booked: drop vague notes, and anything that happens after approval.
+        ...details.missing.filter((m) => m.trim().split(/\s+/).length > 1 && !NOTHING_TO_DO.test(m) && !AFTER_APPROVAL.test(m)),
         ...(flights > 1 ? [`${flights} different flights in the list: each site keeps its own dates`] : []),
-        ...(unmatched ? [`${unmatched} of ${rows.length} sites aren’t screens on the site yet: they’re listed as they are, marked “check”`] : []),
+        ...(unmatched ? [`${unmatched} of ${rows.length} sites aren’t matched to a screen on the site (marked “check”). Match them below, or leave them and the client is told Primedia will confirm the size.`] : []),
       ];
       return {
         draft: {

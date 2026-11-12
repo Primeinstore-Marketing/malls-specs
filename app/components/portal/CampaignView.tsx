@@ -32,6 +32,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToProposal, Avatar, Page, RequireSignIn, StatusPill } from './ui';
 import { artworkSizes, campaignScreens, creativeGroups, screensFor, sheetHref } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
+import { SiteMatch } from './SiteMatch';
+import { unmatchedSummary } from '@/lib/portal/siteStatus';
+import { getMalls } from '@/lib/malls';
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { buildClientEmail } from '@/lib/portal/email';
@@ -367,9 +370,15 @@ function SiteList({ c, editable }: { c: Campaign; editable: boolean }) {
     <div className="flex flex-col gap-3">
       <p className="text-body-sm text-fg-muted">
         {sites.length} {sites.length === 1 ? 'site' : 'sites'} from the client’s list in {groups.length} {groups.length === 1 ? 'creative group' : 'creative groups'}. {creativeSummary(groups, 'site', 'sales')}
-        {toCheck ? <> <span className="font-semibold text-warning-fg">{toCheck} not matched to a screen on the site.</span></> : null}
+        {toCheck ? <> <span className="font-semibold text-warning-fg">{toCheck} not matched to a screen on the site:</span></> : null}
       </p>
-      <CreativeGroups groups={groups} start={c.start} end={c.end} audience="sales" onRemove={editable ? (itemId) => portal.remove(c.id, itemId) : undefined} />
+      {toCheck ? (
+        <ul className="list-disc pl-5 text-body-sm text-fg">
+          {unmatchedSummary(sites, getMalls(catalogue)).map((m) => <li key={m}>{m}</li>)}
+        </ul>
+      ) : null}
+      {editable && toCheck ? <SiteMatch lines={sites} onMatch={(ids, specId, appMallId) => portal.matchSites(c.id, ids, specId, appMallId)} /> : null}
+      <CreativeGroups key={groups.map((g) => `${g.key}:${g.count}`).join(',')} groups={groups} start={c.start} end={c.end} audience="sales" onRemove={editable ? (itemId) => portal.remove(c.id, itemId) : undefined} />
     </div>
   );
 }

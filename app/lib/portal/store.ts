@@ -388,6 +388,15 @@ export const portal = {
     updateCampaign(id, () => ({ clientChanges: null }), { kind: 'status', text: 'Set aside the changes the client asked for' });
   },
 
+  /** Matches site-list lines marked "check" to a screen on the site (its size, spec sheet and template). */
+  matchSites(id: string, itemIds: readonly string[], specId: string, appMallId: string) {
+    const ids = new Set(itemIds);
+    updateCampaign(id, (c) => ({ items: c.items.map((i) => (i.kind === 'site' && ids.has(i.id) ? { ...i, specId, appMallId } : i)) }), {
+      kind: 'edit',
+      text: `Matched ${itemIds.length} ${itemIds.length === 1 ? 'site' : 'sites'} to a screen on the site`,
+    });
+  },
+
   remove(id: string, itemId: string) {
     updateCampaign(id, (c) => ({ items: c.items.filter((i) => i.id !== itemId) }));
   },
