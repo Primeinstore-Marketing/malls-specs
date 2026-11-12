@@ -404,6 +404,7 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
 
       <Group title="Shoppers">
         <div className="grid gap-4 sm:grid-cols-3">
+          <Text label="Visits a year" value={m.annualFootcount} placeholder={p.monthlyFootcount ? `${(p.monthlyFootcount * 12).toLocaleString('en-ZA')} (month × 12)` : 'e.g. 12 000 000'} onChange={(v) => set({ annualFootcount: num(v) })} />
           <Text label="Visits a month" value={p.monthlyFootcount} onChange={(v) => setProfile({ monthlyFootcount: num(v) })} />
           <Text label="Household income (R / month)" value={p.householdIncome} onChange={(v) => setProfile({ householdIncome: num(v) })} />
           <Text label="LSM affinity" value={p.lsm} placeholder="e.g. A or C&A" onChange={(v) => setProfile({ lsm: v || null })} />
@@ -413,6 +414,13 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
           <Text label="Married / living together %" value={p.married} onChange={(v) => setProfile({ married: num(v) })} />
           <Text label="Higher affinity" value={p.affinity} placeholder="e.g. White & Coloured" onChange={(v) => setProfile({ affinity: v || null })} wide />
         </div>
+        <p className="text-body-sm text-fg-muted">
+          {m.annualFootcount
+            ? `The site uses ${m.annualFootcount.toLocaleString('en-ZA')} visits a year (Insights, reach estimates, proposals and the PowerPoint).`
+            : p.monthlyFootcount
+              ? `No yearly figure: the site uses visits a month × 12 = ${(p.monthlyFootcount * 12).toLocaleString('en-ZA')} a year.`
+              : 'Add visits a year (or a month) so this mall shows its reach.'}
+        </p>
         <div className="flex flex-col gap-2">
           <span className={fieldLabel}>Age groups</span>
           {p.ageBands.map((b, i) => (
