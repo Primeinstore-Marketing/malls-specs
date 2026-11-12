@@ -14,17 +14,18 @@ import { useAuthDialog } from '@/components/auth/AuthDialogContext';
  */
 
 const STEPS = [
-  ['Your account manager plans it', 'They pick the malls and screens that reach your shoppers, for your dates.'],
-  ['You get a link by email', 'It opens your booking: every screen, where it is, and its resolution. No account needed.'],
-  ['You send the artwork', 'One file per size, with a spec sheet for each. Approve or ask for changes by replying.'],
+  ['Send us your site list or brief', 'Email your account manager the booking sheet, site list or brief you already have: Excel, PDF, Word or PowerPoint. They turn it into a proposal in minutes.'],
+  ['You get one link', 'It opens your site list, grouped by creative: how many videos or stills to make, at what size, with the template for each. No account needed.'],
+  ['Approve in one click', 'Approve the whole site list, or ask for changes with a note to your account manager.'],
+  ['Send the artwork', 'One file per creative, built in its After Effects template, before the campaign starts.'],
 ] as const;
 
 /** The four groups the site serves, each with its way in. Matches Phase 5 — Portal UX Design, section 2. */
 const AUDIENCES = [
   ['Visitors', 'Designers, agencies and studios: find a screen, check its size, download the spec sheet and After Effects template. No sign-in.'],
-  ['Sales', 'Primedia account managers: plan campaigns, choose malls and screens, and email the client one link.'],
-  ['Clients', 'Brands and agencies: open the link from your account manager to see every screen booked and the artwork to supply.'],
-  ['Admin', 'Primedia staff: keep malls, screens, pictures, clients and photo rights up to date.'],
+  ['Sales', 'Primedia account managers: drop the client’s site list or brief and the proposal fills itself in. Check it and email the client one link.'],
+  ['Clients', 'Brands and agencies: send your site list, then approve it from one link that shows how many creatives to supply.'],
+  ['Admin', 'Primedia staff: keep malls, screens, pictures, clients, photo rights and accounts up to date.'],
 ] as const;
 
 export function PortalLanding() {
@@ -35,8 +36,8 @@ export function PortalLanding() {
   const link = 'mt-auto self-start text-body-sm font-semibold text-accent hover:underline';
   const ways: Record<(typeof AUDIENCES)[number][0], React.ReactNode> = {
     Visitors: <a href="#specs" className={link}>Browse screen specs</a>,
-    Sales: <Link href="/sign-in" className={link}>Sales sign in</Link>,
-    Clients: <a href="#how-title" className={link}>How the link works</a>,
+    Sales: <Link href="/sign-in" className={link}>Sign in</Link>,
+    Clients: <a href="#how-title" className={link}>How it works</a>,
     Admin: <button type="button" onClick={() => openAdminSignIn(true)} className={link}>Admin sign in</button>,
   };
   return (
@@ -87,9 +88,9 @@ export function PortalLanding() {
       <section className="mx-auto grid w-full max-w-page gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:px-8 lg:py-20" aria-labelledby="how-title">
         <div className="flex flex-col gap-3">
           <h2 id="how-title" className="text-display-lg text-fg">How it works</h2>
-          <p className="text-body-md text-fg-muted">For clients: brands and agencies booking mall media with Primedia.</p>
+          <p className="text-body-md text-fg-muted">For clients and their agencies: from your site list to approved screens and artwork, in four steps.</p>
         </div>
-        <ol className="grid gap-6 sm:grid-cols-3">
+        <ol className="grid gap-6 sm:grid-cols-2">
           {STEPS.map(([title, text], i) => (
             <li key={title} className="flex flex-col gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-subtle text-body-md font-bold text-accent">{i + 1}</span>
