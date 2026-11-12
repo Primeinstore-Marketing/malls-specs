@@ -24,7 +24,8 @@
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
  * AI:      POST /ai/brief { filename, text? | file?: { name, mediaType, data }, inventory, today } -> { draft, truncated }  (signed in; Workers AI)
  * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
- *          PATCH /accounts/:id { name?, title?, role?, disabled?, password?, approve? } · DELETE /accounts/:id (a request not yet approved)
+ *          PATCH /accounts/:id { name?, title?, role?, disabled?, password?, approve? }
+ *          DELETE /accounts/:id (a request, or an account: its campaigns move to the admin deleting it)
  * Files:   GET  /files/:key       — an uploaded picture or file (public)
  * Admin:   POST   /files?specId=&role=   raw body; X-Filename, Content-Type,
  *                                        X-Image-Width / X-Image-Height for images
@@ -367,15 +368,15 @@ async function updateMe(request: Request, env: Env): Promise<Response> {
 
 // ── accounts (admins manage everyone's) ───────────────────────────────
 
-type AccountRow = Admin & { disabled: number; created_at: string; pending: number; reset_requested_at: string | null };
+type AccountRow = Admin & { disabled: number; created_at: string; pending: number; reset_requested_at: string | null; campaigns?: number };
 
 async function listAccounts(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env);
   const rows = await env.DB.prepare(
-    'SELECT id, email, name, title, role, must_change_password, disabled, created_at, pending, reset_requested_at FROM admins ORDER BY pending DESC, role, name COLLATE NOCASE',
+    'SELECT a.id, a.email, a.name, a.title, a.role, a.must_change_password, a.disabled, a.created_at, a.pending, a.reset_requested_at, (SELECT COUNT(*) FROM campaigns c WHERE c.owner_id = a.id) AS campaigns FROM admins a ORDER BY a.pending DESC, a.role, a.name COLLATE NOCASE',
   ).all<AccountRow>();
   return json({
-    accounts: rows.results.map((r) => ({ ...profile(r), disabled: r.disabled === 1, createdAt: r.created_at, pending: r.pending === 1, resetRequestedAt: r.reset_requested_at })),
+    accounts: rows.results.map((r) => ({ ...profile(r), disabled: r.disabled === 1, createdAt: r.created_at, pending: r.pending === 1, resetRequestedAt: r.reset_requested_at, campaigns: r.campaigns ?? 0 })),
   });
 }
 
@@ -451,15 +452,39 @@ async function updateAccount(request: Request, env: Env, rawId: string): Promise
 }
 
 /** Turns down a request for an account (only one that hasn't been approved). */
+/**
+ * Deletes an account: a request not yet approved, or an existing account.
+ * An existing account's proposals and site lists move to the admin who
+ * deletes it, so nothing a client was sent is lost. Admins can't delete
+ * themselves or the last admin.
+ */
 async function declineAccount(request: Request, env: Env, rawId: string): Promise<Response> {
   const admin = await requireAdmin(request, env);
   const id = Number(rawId);
-  const target = Number.isInteger(id) ? await env.DB.prepare('SELECT email, pending FROM admins WHERE id = ?').bind(id).first<{ email: string; pending: number }>() : null;
+  const target = Number.isInteger(id)
+    ? await env.DB.prepare('SELECT email, role, pending, disabled FROM admins WHERE id = ?').bind(id).first<{ email: string; role: Role; pending: number; disabled: number }>()
+    : null;
   if (!target) throw new HttpError(404, 'No such account.');
-  if (!target.pending) throw new HttpError(400, 'Only a request that hasn’t been approved can be removed. Switch the account off instead.');
-  await env.DB.prepare('DELETE FROM admins WHERE id = ?').bind(id).run();
-  await audit(env, admin, 'account.decline', target.email);
-  return json({ ok: true });
+  if (target.pending) {
+    await env.DB.prepare('DELETE FROM admins WHERE id = ?').bind(id).run();
+    await audit(env, admin, 'account.decline', target.email);
+    return json({ ok: true, moved: 0 });
+  }
+  if (id === admin.id) throw new HttpError(400, 'You can’t delete your own account. Ask another admin.');
+  if (target.role === 'admin') {
+    const others = await env.DB.prepare("SELECT COUNT(*) AS n FROM admins WHERE role = 'admin' AND pending = 0 AND disabled = 0 AND id != ?").bind(id).first<{ n: number }>();
+    if (!others?.n) throw new HttpError(400, 'This is the last admin. Make someone else an admin first.');
+  }
+  const moved = await env.DB.prepare('SELECT COUNT(*) AS n FROM campaigns WHERE owner_id = ?').bind(id).first<{ n: number }>();
+  await env.DB.batch([
+    env.DB.prepare('UPDATE campaigns SET owner_id = ?, updated_at = ?, updated_by = ? WHERE owner_id = ?').bind(admin.id, now(), admin.email, id),
+    env.DB.prepare('UPDATE requests SET taken_by = ? WHERE taken_by = ?').bind(admin.id, id),
+    env.DB.prepare('UPDATE requests SET assigned_to = NULL WHERE assigned_to = ?').bind(id),
+    env.DB.prepare('DELETE FROM sessions WHERE admin_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM admins WHERE id = ?').bind(id),
+  ]);
+  await audit(env, admin, 'account.delete', target.email, { movedCampaigns: moved?.n ?? 0 });
+  return json({ ok: true, moved: moved?.n ?? 0 });
 }
 
 // ── proposals (the client's booking page; public, with the share key) ──

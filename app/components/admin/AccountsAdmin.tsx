@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ui } from '@/lib/portal/ui-state';
 import { api } from '@/lib/api';
 import { withBasePath } from '@/lib/basePath';
 import type { AccountRole, ManagedAccount } from '@/lib/api';
@@ -110,6 +111,29 @@ function Row({ a, me, onChanged }: { a: ManagedAccount; me: boolean; onChanged: 
             }}
           >
             {a.disabled ? 'Switch on' : 'Switch off'}
+          </button>
+        ) : null}
+        {!me ? (
+          <button
+            type="button"
+            className="inline-flex h-11 items-center justify-center rounded-full px-4 text-body-sm font-semibold text-danger-fg hover:bg-danger-bg disabled:opacity-50"
+            disabled={state === 'saving'}
+            onClick={() => {
+              const who = a.name || a.email;
+              const n = a.campaigns ?? 0;
+              const moving = n ? `\n\nTheir ${n} ${n === 1 ? 'proposal or site list moves' : 'proposals and site lists move'} to you, so clients’ links keep working.` : '';
+              if (!window.confirm(`Delete ${who}’s account (${a.email})? This can’t be undone: they can’t sign in again unless someone adds them back.${moving}`)) return;
+              setState('saving');
+              api
+                .declineAccount(a.id)
+                .then(({ moved }) => {
+                  ui.toast({ text: `Deleted ${who}’s account${moved ? `; ${moved} ${moved === 1 ? 'proposal moved' : 'proposals moved'} to you` : ''}` });
+                  onChanged();
+                })
+                .catch((e) => setState(e instanceof Error ? e.message : 'Couldn’t delete this account.'));
+            }}
+          >
+            Delete
           </button>
         ) : null}
       </div>
@@ -227,7 +251,7 @@ function List() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. Anyone can ask for an account on the sign-in page; nobody can sign in until an admin approves them here. You can also add someone yourself, and reset a password when someone asks.</p>
+      <p className="max-w-prose text-body-md text-fg-muted">Everyone who can sign in. Anyone can ask for an account on the sign-in page; nobody can sign in until an admin approves them here. You can also add someone yourself, reset a password when someone asks, switch an account off for a while, or delete it (their proposals and site lists move to you).</p>
       {accounts ? <Requests list={accounts.filter((a) => a.pending)} onChanged={load} /> : null}
       <NewAccount onCreated={load} />
       {error ? <p className="text-body-sm text-danger-fg">{error}</p> : null}

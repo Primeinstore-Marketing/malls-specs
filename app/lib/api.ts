@@ -55,6 +55,8 @@ export interface BriefDraft {
 
 /** An account as admins see it in Site admin → Accounts. */
 export interface ManagedAccount extends AdminProfile {
+  /** Proposals and site lists this account owns (they move to the admin who deletes it). */
+  readonly campaigns?: number;
   readonly disabled: boolean;
   readonly createdAt: string;
   /** Asked for an account from the sign-in page; waiting for an admin. */
@@ -279,7 +281,8 @@ export const api = {
     request<{ ok: true }>('/accounts', { method: 'POST', body: JSON.stringify(fields) }, true),
   updateAccount: (id: number, fields: Partial<{ name: string; title: string; role: AccountRole; disabled: boolean; password: string; approve: boolean }>) =>
     request<{ ok: true }>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }, true),
-  declineAccount: (id: number) => request<{ ok: true }>(`/accounts/${id}`, { method: 'DELETE' }, true),
+  /** Turns down a request, or deletes an account (its proposals and site lists move to you). */
+  declineAccount: (id: number) => request<{ ok: true; moved: number }>(`/accounts/${id}`, { method: 'DELETE' }, true),
   /** A salesperson asks for an account with their own password (an admin approves it). */
   signup: (fields: { email: string; name: string; title: string; password: string }) =>
     request<{ ok: true }>('/auth/signup', { method: 'POST', body: JSON.stringify(fields) }),
