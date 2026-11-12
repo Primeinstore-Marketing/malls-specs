@@ -20,6 +20,7 @@ import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
 import { BriefDrop } from './BriefDrop';
+import type { SiteItem } from '@/lib/portal/types';
 import type { BriefDraft } from '@/lib/api';
 
 const input = 'h-10 w-full rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus';
@@ -38,6 +39,8 @@ function Form({ user }: { user: PortalUser }) {
   const [audience, setAudience] = useState<AudienceTarget>(() => readAudience(new URLSearchParams(params.toString())));
   // What's in the plan, keyed pkg:<code> or scr:<specId>, in the order it was ticked.
   const [picked, setPicked] = useState<Map<string, NewCampaignItem>>(new Map());
+  // A client's site list, from their document: every row, as they gave it.
+  const [siteLines, setSiteLines] = useState<SiteItem[]>([]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
 
@@ -57,7 +60,11 @@ function Form({ user }: { user: PortalUser }) {
   const visible = showAll || q ? ordered : ordered.filter((e, i) => i < SHORT || hasPick(e));
   const firstOutside = audience.provinces.length ? visible.findIndex((e) => !inArea(e)) : -1;
 
-  const items = [...picked.entries()].map(([key, item]) => ({ ...item, id: key }) as Parameters<typeof campaignScreens>[0][number]);
+  const items = [
+    ...[...picked.entries()].map(([key, item]) => ({ ...item, id: key }) as Parameters<typeof campaignScreens>[0][number]),
+    ...siteLines,
+  ];
+  const hasLines = picked.size > 0 || siteLines.length > 0;
   const r = reach({ items, start, end });
   const screens = campaignScreens(items, catalogue);
   const { sizes, unknown } = artworkSizes(screens);
@@ -110,7 +117,7 @@ function Form({ user }: { user: PortalUser }) {
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
   const [clientKey, setClientKey] = useState(0);
   function applyDraft(draft: BriefDraft, file: string, truncated = false) {
-    const before = { name, client, objective, start, end, picked, reasons };
+    const before = { name, client, objective, start, end, picked, reasons, siteLines };
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
     const chosen = draft.items.filter((i) => rows.has(i.key));
     const iso = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
@@ -126,6 +133,21 @@ function Form({ user }: { user: PortalUser }) {
     }
     setClientKey((k) => k + 1);
     setPicked(new Map(chosen.map((i) => [i.key, rows.get(i.key)!.item] as const)));
+    // A site list: keep every row; a matched row brings its screen (size, spec sheet, template).
+    const used = new Set<string>();
+    setSiteLines(
+      (draft.sites ?? []).map((r, n) => {
+        const row = r.match ? rows.get(r.match) : undefined;
+        const screen = row?.item.kind === 'screen' ? row.item : undefined;
+        let ref = r.siteNo || `line-${n + 1}`;
+        while (used.has(ref)) ref = `${ref}-${n + 1}`;
+        used.add(ref);
+        return {
+          id: `site:${ref}`, kind: 'site' as const, ref, no: r.no, siteNo: r.siteNo, town: r.town, mall: r.mall, location: r.location, size: r.size,
+          start: r.start, end: r.end, specId: row?.specId ?? null, appMallId: screen?.appMallId ?? '',
+        };
+      }),
+    );
     setReasons(new Map(chosen.map((i) => [i.key, i.reason] as const)));
     try {
       if (draft.noteForClient.trim()) sessionStorage.setItem(`malls-specs:draft-note:${newId}`, draft.noteForClient.trim());
@@ -136,7 +158,7 @@ function Form({ user }: { user: PortalUser }) {
       draft,
       file,
       truncated,
-      kept: chosen.length,
+      kept: chosen.length + (draft.sites?.length ?? 0),
       dropped: draft.items.length - chosen.length,
       undo: () => {
         setName(before.name);
@@ -147,6 +169,7 @@ function Form({ user }: { user: PortalUser }) {
         setEnd(before.end);
         setPicked(before.picked);
         setReasons(before.reasons);
+        setSiteLines(before.siteLines);
         setAiDraft(null);
       },
     });
@@ -173,7 +196,10 @@ function Form({ user }: { user: PortalUser }) {
               <strong className="text-body-lg text-fg">Drafted from {aiDraft.file}</strong>
               <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
               <p className="text-body-sm text-fg-muted">
-                {aiDraft.kept} {aiDraft.kept === 1 ? 'screen' : 'screens'} chosen{aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}. Check everything below, change what you like, then create and email it.
+                {aiDraft.draft.sites?.length
+                  ? `All ${aiDraft.draft.sites.length} sites from the document are in the site list: ${aiDraft.draft.sites.filter((x) => x.match).length} matched to screens on the site, ${aiDraft.draft.sites.filter((x) => !x.match).length} marked “check”.`
+                  : `${aiDraft.kept} ${aiDraft.kept === 1 ? 'screen' : 'screens'} chosen${aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}.`}{' '}
+                Check everything below, change what you like, then create and email it.
               </p>
             </div>
             <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
@@ -320,7 +346,7 @@ function Form({ user }: { user: PortalUser }) {
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2">
-              {sales && recipient?.email && picked.size ? (
+              {sales && recipient?.email && hasLines ? (
                 start && end ? (
                   <button type="button" onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
                     Create and email to {recipient.name.split(' ')[0] || 'the client'}
@@ -332,12 +358,12 @@ function Form({ user }: { user: PortalUser }) {
                 disabled={!start || !end}
                 onClick={() => save(!sales)}
                 className={
-                  sales && recipient?.email && picked.size
+                  sales && recipient?.email && hasLines
                     ? 'inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-50'
                     : 'inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50'
                 }
               >
-                {sales ? (recipient?.email && picked.size ? 'Create without sending' : 'Create proposal') : 'Send brief to Primedia'}
+                {sales ? (recipient?.email && hasLines ? 'Create without sending' : 'Create proposal') : 'Send brief to Primedia'}
               </button>
               {!sales ? (
                 <button type="button" onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
@@ -347,6 +373,24 @@ function Form({ user }: { user: PortalUser }) {
               {!start || !end ? <span className="text-body-sm text-brand-on-surface-muted">Choose the dates to continue.</span> : null}
             </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+            {siteLines.length ? (
+              <div className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <strong>Site list · {siteLines.length} {siteLines.length === 1 ? 'site' : 'sites'}</strong>
+                  <button type="button" onClick={() => setSiteLines([])} className="text-[12px] text-brand-on-surface-muted underline hover:text-brand-on-surface">Remove list</button>
+                </div>
+                <span className="text-[12px] text-brand-on-surface-muted">{siteLines.filter((x) => x.specId).length} matched to screens on the site · {siteLines.filter((x) => !x.specId).length} to check</span>
+                <ol className="flex flex-col gap-0.5">
+                  {siteLines.slice(0, 200).map((x) => (
+                    <li key={x.id} className="flex gap-2 text-[12px]">
+                      <span className="w-6 shrink-0 tabular-nums text-brand-on-surface-muted">{x.no ?? ''}</span>
+                      <span className="min-w-0 truncate" title={`${x.siteNo} · ${x.mall} · ${x.location}`}>{x.mall}{x.location ? ` · ${x.location}` : ''}</span>
+                      {x.specId ? null : <span className="ml-auto shrink-0 text-warning-fg">check</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
             {picked.size ? (
               <ul className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
                 {[...picked.keys()].map((k) => {
@@ -363,7 +407,7 @@ function Form({ user }: { user: PortalUser }) {
                 })}
               </ul>
             ) : (
-              <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">Tick screens in step 3.</p>
+              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">Tick screens in step 3, or drop the client’s site list above.</p>
             )}
             {sizes.length || unknown ? (
               <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
@@ -393,10 +437,10 @@ function Form({ user }: { user: PortalUser }) {
             <button
               type="button"
               disabled={!start || !end}
-              onClick={() => (sales && recipient?.email && picked.size ? createAndEmail() : save(!sales))}
+              onClick={() => (sales && recipient?.email && hasLines ? createAndEmail() : save(!sales))}
               className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
-              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && picked.size ? 'Create and email' : 'Create proposal') : 'Send brief'}
+              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : 'Create proposal') : 'Send brief'}
             </button>
           </div>
         </div>

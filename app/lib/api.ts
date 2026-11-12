@@ -39,6 +39,18 @@ export interface BriefDraft {
   readonly items: readonly { readonly key: string; readonly reason: string }[];
   readonly noteForClient: string;
   readonly missing: readonly string[];
+  /** A site list: every row of the client's document, with the screen it matches (inventory key), if any. */
+  readonly sites?: readonly {
+    readonly no: number;
+    readonly siteNo: string;
+    readonly town: string;
+    readonly mall: string;
+    readonly location: string;
+    readonly size: string;
+    readonly start: string | null;
+    readonly end: string | null;
+    readonly match: string | null;
+  }[];
 }
 
 /** An account as admins see it in Site admin → Accounts. */
@@ -203,7 +215,7 @@ export const api = {
   proposal: (id: string, key: string) =>
     request<{ proposal: SharedProposal; changesPending: boolean }>(`/proposals/${encodeURIComponent(id)}?k=${encodeURIComponent(key)}`),
   /** A client sends the changes they made on their booking page. */
-  sendProposalChanges: (id: string, key: string, changes: { items: readonly NewCampaignItem[]; start: string | null; end: string | null; note: string; name: string }) =>
+  sendProposalChanges: (id: string, key: string, changes: { items?: readonly NewCampaignItem[]; start: string | null; end: string | null; note: string; name: string }) =>
     request<{ ok: true }>(`/proposals/${encodeURIComponent(id)}/changes?k=${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify(changes) }),
   approvals: (campaignIds: readonly string[]) =>
     request<{ approvals: ProposalApproval[] }>(`/approvals?ids=${campaignIds.map(encodeURIComponent).join(',')}`, {}, true),

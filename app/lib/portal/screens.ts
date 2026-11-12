@@ -32,6 +32,8 @@ export interface BookedScreen {
   readonly assumed: string | null;
   /** Where the units stand, from the deck. */
   readonly sites: string | null;
+  /** For a line from the client's site list: its site number, row and flight dates. */
+  readonly site?: { readonly siteNo: string; readonly no: number | null; readonly town: string; readonly size: string; readonly start: string | null; readonly end: string | null; readonly matched: boolean } | null;
 }
 
 /** Network-wide spec for each deck format. */
@@ -140,6 +142,21 @@ export function resolvePackageSpec(
 export const NETWORK_SPEC_IDS = Object.values(FORMAT_SPEC).map((r) => r.specId);
 
 export function screensFor(item: CampaignItem, catalogue: Catalogue): BookedScreen[] {
+  if (item.kind === 'site') {
+    const spec = item.specId ? catalogue.specifications[item.specId] : undefined;
+    return [
+      {
+        itemId: item.id,
+        mallName: item.mall || mallPlace(item.appMallId)?.name || '',
+        title: item.location || spec?.title || item.siteNo,
+        qty: 1,
+        ...fromSpec(spec, catalogue),
+        assumed: null,
+        sites: null,
+        site: { siteNo: item.siteNo, no: item.no, town: item.town, size: item.size, start: item.start, end: item.end, matched: Boolean(spec) },
+      },
+    ];
+  }
   if (item.kind === 'screen') {
     const spec = catalogue.specifications[item.specId];
     const mall = getMalls(catalogue).find((m) => m.id === item.appMallId);

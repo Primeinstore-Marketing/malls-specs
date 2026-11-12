@@ -29,7 +29,32 @@ export type CampaignStatus = 'draft' | 'proposed' | 'sent' | 'changes' | 'approv
 
 export type CampaignItem =
   | { readonly id: string; readonly kind: 'package'; readonly code: string }
-  | { readonly id: string; readonly kind: 'screen'; readonly specId: string; readonly appMallId: string; readonly title: string };
+  | { readonly id: string; readonly kind: 'screen'; readonly specId: string; readonly appMallId: string; readonly title: string }
+  | SiteItem;
+
+/**
+ * One line of a client's site list, kept as their document gives it (site
+ * number, mall, location, flight dates). When it matches a screen on the
+ * site, specId/appMallId bring that screen's size, spec sheet and template.
+ */
+export interface SiteItem {
+  readonly id: string;
+  readonly kind: 'site';
+  /** Unique within the campaign, e.g. the site number. */
+  readonly ref: string;
+  /** Row number in the client's document. */
+  readonly no: number | null;
+  readonly siteNo: string;
+  readonly town: string;
+  readonly mall: string;
+  readonly location: string;
+  /** Size as the document gives it, e.g. "1.92m X 1.08m". */
+  readonly size: string;
+  readonly start: string | null;
+  readonly end: string | null;
+  readonly specId: string | null;
+  readonly appMallId: string;
+}
 
 export interface CampaignEvent {
   readonly id: string;

@@ -194,11 +194,17 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const added = items.filter((i) => !original.has(i.id));
   const removed = p.items.filter((i) => !current.has(itemKey(i))).map((i) => ({ ...i, id: itemKey(i) }) as CampaignItem);
   const datesChanged = edits.start !== p.start || edits.end !== p.end;
-  const changed = editable && (added.length > 0 || removed.length > 0 || datesChanged);
+  // The client approves the site list as a whole or asks for changes; they don't edit lines here.
+  const editingLines = false;
+  const changed = editingLines && (added.length > 0 || removed.length > 0 || datesChanged);
 
   const screens = useMemo(() => campaignScreens(items, catalogue), [items, catalogue, live.version]);
   const removedScreens = useMemo(() => campaignScreens(removed, catalogue), [removed, catalogue]);
   const { sizes, unknown } = artworkSizes(screens);
+  // Every line of the proposal, in order (a client's site list keeps its own numbering).
+  const lines = items
+    .flatMap((item) => screens.filter((x) => x.itemId === item.id).map((screen) => ({ item, screen })))
+    .sort((a, b) => (a.screen.site?.no ?? 0) - (b.screen.site?.no ?? 0));
   const total = screens.reduce((s, x) => s + x.qty, 0);
   const flight = days(edits.start, edits.end);
   const status = approved ? { text: 'Approved — Primedia is confirming', tone: 'bg-success-bg text-success-fg' } : statusLine(p);
@@ -283,6 +289,24 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentChanges, setSentChanges] = useState(false);
+  /** The whole list stays as it is; the note goes to the salesperson, who updates the proposal. */
+  async function askForChanges() {
+    if (!shareKey || !changeNote.trim()) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      await api.sendProposalChanges(p.id, shareKey, { start: p.start, end: p.end, note: changeNote.trim(), name: '' });
+      setSentChanges(true);
+      setChangeNote('');
+      reload?.();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : `We couldn’t send that just now. Try again, or email ${first}.`);
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function sendChanges() {
     if (!shareKey) return;
     setSending(true);
@@ -347,7 +371,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         <div className="border-b border-border bg-accent-subtle print:hidden" role="status">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
             <p className="text-body-md text-fg">
-              <strong>Your changes are with {first}.</strong> {sentChanges ? 'They’ve been told and will update the proposal; this page shows the latest version.' : 'They’ll update the proposal; this page shows the latest version.'}
+              <strong>Your message is with {first}.</strong> {sentChanges ? 'They’ve been told and will update the site list; this page always shows the latest version.' : 'They’ll update the site list; this page always shows the latest version.'}
             </p>
             <EmailButton href={mail(`Changes to: ${p.name}`, `Hi ${first},\n\nI've sent some changes to ${p.name} from the booking page:\n${link}\n\nThanks`)} className={btnSmall + ' border-border-strong bg-bg text-fg'} align="right">
               Also email {first}
@@ -375,83 +399,91 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <div className="flex flex-wrap items-center gap-3 text-body-lg text-fg-muted">
             <span>{formatRange(edits.start, edits.end)}{flight ? ` · ${flight} days` : ''}</span>
             <span className={`rounded-full px-3 py-1 text-body-sm font-semibold ${status.tone}`}>{status.text}</span>
-            {editable && !changed ? (
-              <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} print:hidden`}>Approve proposal</button>
+            {editable ? (
+              <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} print:hidden`}>Approve site list</button>
             ) : null}
           </div>
-          {editable ? <DatesEditor start={edits.start} end={edits.end} onChange={(start, end) => setEdits((e) => ({ ...e, start, end }))} /> : null}
+          {editingLines ? <DatesEditor start={edits.start} end={edits.end} onChange={(start, end) => setEdits((e) => ({ ...e, start, end }))} /> : null}
           {p.objective ? <p className="max-w-prose text-body-md text-fg">{p.objective}</p> : null}
           <dl className="mt-2 grid grid-cols-3 gap-6 border-t border-border pt-5 sm:max-w-xl">
             <div><dt className="text-body-sm text-fg-muted">Malls</dt><dd className="text-display-md text-fg">{[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}</dd></div>
-            <div><dt className="text-body-sm text-fg-muted">Screens</dt><dd className="text-display-md text-fg">{total}</dd></div>
+            <div><dt className="text-body-sm text-fg-muted">{lines.some((l) => l.screen.site) ? 'Sites' : 'Screens'}</dt><dd className="text-display-md text-fg">{total}</dd></div>
             <div><dt className="text-body-sm text-fg-muted">Artwork sizes</dt><dd className="text-display-md text-fg">{sizes.length + (unknown ? 1 : 0)}</dd></div>
           </dl>
           {editable ? (
             <p className="text-body-sm text-fg-muted print:hidden">
-              You can remove screens, add screens from any mall below, or change the dates. Nothing changes for Primedia until you send it.
+              Please check the site list below and approve it, or tell {first} what to change.
             </p>
           ) : null}
         </section>
 
-        {/* ---- Screens, by mall, with pictures and who shops there ---- */}
-        <section className="flex flex-col gap-4" aria-labelledby="screens-title">
-          <h2 id="screens-title" className="text-display-sm text-fg">{p.status === 'booked' ? 'Screens booked' : 'Screens in this proposal'}</h2>
-          {[...groups.entries()].map(([key, g]) => {
-            const facts = mallFacts(g.entry?.deck);
-            const hero = g.entry ? entryPhoto(g.entry, true) : null;
-            return (
-              <article key={key} className="overflow-hidden rounded-3xl bg-bg print:break-inside-avoid print:border print:border-border">
-                <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-start">
-                  {hero ? <Zoomable src={hero} title={g.title} detail={g.entry?.area} className="h-24 w-full rounded-2xl sm:w-40" /> : null}
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h3 className="text-body-lg font-semibold text-fg">{g.title}</h3>
-                      {g.entry?.area ? <span className="text-body-sm text-fg-muted">{g.entry.area}</span> : null}
-                    </div>
-                    {facts.length ? <Facts facts={facts} /> : <span className="text-body-sm text-fg-subtle">Shopper data for this mall is coming.</span>}
-                    {editable && g.entry ? (
-                      <button type="button" onClick={() => exploreMall(g.entry!.name)} className="self-start text-body-sm font-semibold text-accent hover:underline print:hidden">
-                        More screens at {g.entry.name}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <ul className="divide-y divide-border">
-                  {g.lines.map(({ item, screen: s, photo, removed: gone }, i) => {
-                    const files: SizeFiles[] = s.specId && (s.sheet || s.template) ? [{ specId: s.specId, label: s.title, sheet: s.sheet, template: s.template }] : [];
+        {/* ---- The site list: every line, numbered ---- */}
+        <section className="flex flex-col gap-4" aria-labelledby="sites-title">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="sites-title" className="text-display-sm text-fg">Site list</h2>
+            <span className="text-body-sm text-fg-muted">{lines.length} {lines.length === 1 ? 'line' : 'lines'} · {formatRange(edits.start, edits.end)}</span>
+          </div>
+          {lines.length ? (
+            <div className="overflow-x-auto rounded-3xl bg-bg print:overflow-visible print:border print:border-border">
+              <table className="w-full min-w-[720px] border-collapse text-left text-body-sm">
+                <thead>
+                  <tr className="border-b border-border text-label-md uppercase text-fg-subtle">
+                    <th scope="col" className="px-4 py-3 font-semibold">No</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">Mall</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">Site / screen</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">Site no.</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">Size</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">Flight</th>
+                    <th scope="col" className="px-4 py-3 font-semibold print:hidden"><span className="sr-only">Files</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map(({ screen: x, item }, i) => {
+                    const files: SizeFiles[] = x.specId && (x.sheet || x.template) ? [{ specId: x.specId, label: x.title, sheet: x.sheet, template: x.template }] : [];
+                    const size = x.width && x.height ? `${x.width} × ${x.height} px` : x.site?.size || 'To be confirmed';
+                    const flight = x.site?.start || x.site?.end ? formatRange(x.site.start, x.site.end) : formatRange(edits.start, edits.end);
                     return (
-                      <li key={`${item.id}-${i}`} className={`grid grid-cols-[96px_minmax(0,1fr)] gap-4 px-5 py-4 sm:grid-cols-[128px_minmax(0,1fr)_auto] ${gone ? 'opacity-50 print:hidden' : ''}`}>
-                        <Photo src={photo} w={s.width} h={s.height} className="h-16 w-24 rounded-xl sm:h-20 sm:w-32" title={`${g.title} · ${s.title}`} specId={s.specId} />
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className={`text-body-md font-semibold text-fg ${gone ? 'line-through' : ''}`}>{s.title}</span>
-                          <span className="flex items-center gap-2 text-body-sm tabular-nums text-fg-muted">
-                            <Shape w={s.width} h={s.height} size={18} />
-                            {res(s)}{s.orientation ? ` · ${s.orientation}` : ''}{s.ratio ? ` · ${s.ratio}` : ''} · × {s.qty}
-                          </span>
-                          {s.sites ? <span className="text-[12px] text-fg-subtle">Where: {s.sites}</span> : null}
-                          {s.assumed ? <span className="text-[12px] text-warning-fg">{s.assumed}</span> : null}
-                          {!gone && files.length ? <div className="print:hidden"><SizeDownloads files={files} compact /></div> : null}
-                        </div>
-                        {editable ? (
-                          <div className="col-span-2 flex justify-end sm:col-span-1 sm:items-center print:hidden">
-                            {gone ? (
-                              <button type="button" onClick={() => putBack(item)} className={`${btnSmall} border-border-strong text-fg hover:border-fg`}>Put back</button>
-                            ) : (
-                              <button type="button" onClick={() => removeItem(item.id)} className={`${btnSmall} border-border text-fg-muted hover:border-danger-fg hover:text-danger-fg`} aria-label={`Remove ${s.title}`}>
-                                Remove
-                              </button>
-                            )}
-                          </div>
-                        ) : null}
-                      </li>
+                      <tr key={`${item.id}-${i}`} className="border-b border-border align-top last:border-b-0 print:break-inside-avoid">
+                        <td className="px-4 py-3 tabular-nums text-fg-muted">{x.site?.no ?? i + 1}</td>
+                        <td className="px-3 py-3 font-semibold text-fg">{x.mallName}{x.site?.town ? <span className="block text-[12px] font-normal text-fg-subtle">{x.site.town}</span> : null}</td>
+                        <td className="px-3 py-3 text-fg">{x.title}{x.qty > 1 ? ` × ${x.qty}` : ''}</td>
+                        <td className="px-3 py-3 font-mono text-[12px] text-fg-muted">{x.site?.siteNo || (item.kind === 'package' ? item.code : '')}</td>
+                        <td className="whitespace-nowrap px-3 py-3 tabular-nums text-fg">{size}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-fg-muted">{flight}</td>
+                        <td className="px-4 py-3 print:hidden">{files.length ? <SizeDownloads files={files} compact /> : null}</td>
+                      </tr>
                     );
                   })}
-                </ul>
-              </article>
-            );
-          })}
-          {!groups.size ? <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No screens yet. Add some from the malls below.</p> : null}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No sites yet.</p>
+          )}
         </section>
+
+        {/* ---- The malls: pictures and who shops there ---- */}
+        {groups.size ? (
+          <section className="flex flex-col gap-4 print:hidden" aria-labelledby="malls-title">
+            <h2 id="malls-title" className="text-display-sm text-fg">The malls</h2>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {[...groups.entries()].map(([key, g]) => {
+                const facts = mallFacts(g.entry?.deck);
+                const hero = g.entry ? entryPhoto(g.entry, true) : null;
+                return (
+                  <li key={key} className="flex gap-4 rounded-3xl bg-bg p-4">
+                    {hero ? <Zoomable src={hero} title={g.title} detail={g.entry?.area} className="h-20 w-28 shrink-0 rounded-2xl" /> : null}
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <h3 className="text-body-md font-semibold text-fg">{g.title} <span className="font-normal text-fg-muted">· {g.lines.length} {g.lines.length === 1 ? 'line' : 'lines'}</span></h3>
+                      {g.entry?.area ? <span className="text-body-sm text-fg-muted">{g.entry.area}</span> : null}
+                      {facts.length ? <Facts facts={facts} max={4} /> : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
 
         {/* ---- Artwork ---- */}
         <section className="flex flex-col gap-4 print:break-inside-avoid" aria-labelledby="art-title">
@@ -514,98 +546,41 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
             </>
           ) : (
             <>
-              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? 'Happy with this?' : 'Questions about your booking?'}</h2>
+              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? 'Approve the site list' : 'Questions about your booking?'}</h2>
               <p className="text-body-md text-fg-muted">
-                {editable ? `Approve it in one step, or change the screens above and send your changes to ${first}.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
+                {editable ? `If the site list is right, approve it in one step. If anything should change, tell ${first} below.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
               </p>
               <div className="flex flex-wrap gap-2">
                 {editable ? (
                   <button type="button" onClick={() => setApproving(true)} className={btnPrimary}>
-                    Approve proposal
+                    Approve site list
                   </button>
                 ) : null}
                 <EmailButton href={mail(`Question about: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className={btnSecondary}>
                   Ask a question
                 </EmailButton>
               </div>
+              {editable && shareKey ? (
+                <div className="flex flex-col gap-2 border-t border-border pt-4">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-label-md font-semibold uppercase text-fg-muted">Ask for changes</span>
+                    <textarea rows={3} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="e.g. Please take out the Menlyn sites and add two at Canal Walk." className="w-full rounded-xl border border-border-strong bg-bg px-3 py-2.5 text-body-md text-fg outline-none focus:border-border-focus" />
+                  </label>
+                  {sendError ? <p role="alert" className="text-body-sm text-danger-fg">{sendError}</p> : null}
+                  <button type="button" disabled={sending || !changeNote.trim()} onClick={() => void askForChanges()} className={`${btnSecondary} self-start disabled:opacity-50`}>
+                    {sending ? 'Sending…' : `Send to ${first}`}
+                  </button>
+                </div>
+              ) : null}
             </>
           )}
-        </section>
-
-        {/* ---- Other malls ---- */}
-        <section ref={exploreRef} className="flex scroll-mt-6 flex-col gap-4 print:hidden" aria-labelledby="explore-title">
-          <div>
-            <h2 id="explore-title" className="text-display-sm text-fg">Explore more screens</h2>
-            <p className="text-body-md text-fg-muted">
-              Every mall we offer, with its screens and who shops there.{editable ? ' Add any screen to this proposal.' : ''}
-            </p>
-          </div>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Find any of ${entries.length} malls or a screen`}
-            aria-label="Find a mall or screen"
-            className="h-11 w-full rounded-xl border border-border-strong bg-bg px-4 text-body-md text-fg outline-none focus:border-border-focus"
-          />
-          <ul className="flex flex-col gap-3">
-            {shownExplore.map((e) => {
-              const rows = rowsOf(e);
-              const hero = entryPhoto(e, true);
-              return (
-                <li key={e.key} className="flex flex-col gap-3 rounded-3xl bg-bg p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                    {hero ? <Zoomable src={hero} title={e.name} detail={e.area} className="h-20 w-full rounded-2xl sm:w-32" /> : null}
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h3 className="text-body-lg font-semibold text-fg">{e.name}</h3>
-                        {e.area ? <span className="text-body-sm text-fg-muted">{e.area}</span> : null}
-                      </div>
-                      <Facts facts={mallFacts(e.deck)} max={4} />
-                    </div>
-                  </div>
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {rows.map((r) => {
-                      const inIt = has(r.key);
-                      return (
-                        <li key={r.key} className={`flex items-center gap-3 rounded-2xl border p-2 pr-3 ${inIt ? 'border-accent bg-accent-subtle' : 'border-border'}`}>
-                          <Photo src={r.photo} w={r.width} h={r.height} className="h-14 w-20 shrink-0 rounded-xl" title={`${e.name} · ${r.title}`} specId={r.specId} note={r.photoNote} />
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-body-sm font-semibold text-fg">{r.title}</span>
-                            <span className="font-mono text-[12px] tabular-nums text-fg-muted">
-                              {r.width && r.height ? `${r.width}×${r.height}` : 'Size to confirm'}{r.qty > 1 ? ` · ${r.qty} screens` : ''}
-                            </span>
-                          </span>
-                          {editable ? (
-                            inIt ? (
-                              <button type="button" onClick={() => removeItem(r.key)} className={`${btnSmall} border-accent text-accent`} aria-label={`Remove ${r.title}`}>
-                                ✓ Added
-                              </button>
-                            ) : (
-                              <button type="button" onClick={() => addItem(r.item)} className={`${btnSmall} border-border-strong text-fg hover:border-fg`} aria-label={`Add ${r.title} at ${e.name}`}>
-                                + Add
-                              </button>
-                            )
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </li>
-              );
-            })}
-          </ul>
-          {!shownExplore.length ? <p className="text-body-md text-fg-muted">No mall or screen matches “{query}”.</p> : null}
-          {!q && exploreList.length > shownExplore.length ? (
-            <button type="button" onClick={() => setShowAll(true)} className={`${btnSecondary} self-start`}>Show all {exploreList.length} malls</button>
-          ) : null}
         </section>
 
         {editable ? (
           <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 backdrop-blur print:hidden">
             <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
               <span className="text-body-sm text-fg-muted">
-                {changed ? 'You have changes that aren’t sent yet.' : `${total} ${total === 1 ? 'screen' : 'screens'} · ${formatRange(edits.start, edits.end)}`}
+                {changed ? 'You have changes that aren’t sent yet.' : `${total} ${lines.some((l) => l.screen.site) ? (total === 1 ? 'site' : 'sites') : total === 1 ? 'screen' : 'screens'} · ${formatRange(edits.start, edits.end)}`}
               </span>
               <div className="flex flex-1 justify-end gap-2 sm:flex-none">
                 {changed ? (
@@ -618,7 +593,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                     )}
                   </>
                 ) : (
-                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Approve proposal</button>
+                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Approve site list</button>
                 )}
               </div>
             </div>

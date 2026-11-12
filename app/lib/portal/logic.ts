@@ -146,20 +146,23 @@ export function progress(c: Campaign, today = todayIso()): number {
 /* ---------- Items ---------- */
 
 export function itemKey(item: CampaignItem): string {
-  return item.kind === 'package' ? `pkg:${item.code}` : `scr:${item.specId}`;
+  return item.kind === 'package' ? `pkg:${item.code}` : item.kind === 'site' ? `site:${item.ref}` : `scr:${item.specId}`;
 }
 
 export function itemMall(item: CampaignItem): DeckMall | undefined {
-  return item.kind === 'package' ? packageByCode(item.code)?.mall : deckMallForApp(item.appMallId);
+  if (item.kind === 'package') return packageByCode(item.code)?.mall;
+  return item.appMallId ? deckMallForApp(item.appMallId) : undefined;
 }
 
 export function itemLabel(item: CampaignItem): string {
   if (item.kind === 'screen') return item.title;
+  if (item.kind === 'site') return [item.mall, item.location].filter(Boolean).join(' · ') || item.siteNo;
   return packageByCode(item.code)?.pkg.name ?? item.code;
 }
 
 export function itemDetail(item: CampaignItem): string {
   if (item.kind === 'screen') return 'Screen';
+  if (item.kind === 'site') return item.siteNo ? `Site ${item.siteNo}` : 'Site';
   const found = packageByCode(item.code);
   if (!found) return item.code;
   const { pkg } = found;

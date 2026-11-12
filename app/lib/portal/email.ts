@@ -39,14 +39,15 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   const dates = formatRange(c.start, c.end);
   const deadline = c.start ? formatDate(c.start) : null;
 
-  const subject = { proposal: `Your Primedia Malls proposal: ${c.name}`, reminder: `Reminder: ${c.name} is waiting for your approval`, booked: `Booking confirmed: ${c.name}` }[kind];
-  const heading = { proposal: 'Your proposal is ready', reminder: 'Your proposal is waiting for you', booked: 'Your booking is confirmed' }[kind];
+  const unit = (n: number) => `${n} ${n === 1 ? 'site' : 'sites'}`;
+  const subject = { proposal: `Site list for approval: ${c.name}`, reminder: `Reminder: the site list for ${c.name} is waiting for your approval`, booked: `Booking confirmed: ${c.name}` }[kind];
+  const heading = { proposal: 'Your site list is ready for approval', reminder: 'Your site list is waiting for approval', booked: 'Your booking is confirmed' }[kind];
   const opener = {
-    proposal: `Here’s the proposal for ${c.name}: ${total} ${total === 1 ? 'screen' : 'screens'} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. You can see every screen, change the plan or approve it in one step.`,
-    reminder: `A quick reminder that the proposal for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
-    booked: `${c.name} is booked: ${total} ${total === 1 ? 'screen' : 'screens'} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
+    proposal: `Here’s the site list for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please review it and approve it in one click, or tell me what to change.`,
+    reminder: `A quick reminder that the site list for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
+    booked: `${c.name} is booked: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
   }[kind];
-  const cta = kind === 'booked' ? 'View your booking' : 'View and approve your proposal';
+  const cta = kind === 'booked' ? 'View your booking' : 'Review and approve the site list';
   const hasTemplates = sizes.some((z) => z.files.some((f) => f.template));
 
   /* ---- Plain text ---- */
@@ -102,7 +103,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     ${note ? `<p style="margin:16px 0 0;padding:12px 16px;background:${C.soft};border-left:3px solid ${C.blue};font-size:15px;line-height:22px;color:${C.ink};">${esc(note).replace(/\n/g, '<br>')}</p>` : ''}
   </td></tr>
   <tr><td style="padding:16px 28px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${C.line};"><tr>
-    ${fact('Campaign', c.name)}${fact('Dates', dates)}${fact('Screens', `${total} in ${malls} ${malls === 1 ? 'mall' : 'malls'}`)}
+    ${fact('Campaign', c.name)}${fact('Dates', dates)}${fact('Sites', `${total} in ${malls} ${malls === 1 ? 'mall' : 'malls'}`)}
   </tr></table></td></tr>
   <tr><td align="left" style="padding:24px 28px 4px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${C.blue};border-radius:24px;">

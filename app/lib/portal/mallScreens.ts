@@ -51,7 +51,7 @@ export interface ScreenRow {
 
 export const pkgKey = (code: string) => `pkg:${code}`;
 export const scrKey = (specId: string) => `scr:${specId}`;
-export const itemKey = (i: CampaignItem | NewCampaignItem) => (i.kind === 'package' ? pkgKey(i.code) : scrKey(i.specId));
+export const itemKey = (i: CampaignItem | NewCampaignItem) => (i.kind === 'package' ? pkgKey(i.code) : i.kind === 'site' ? `site:${i.ref}` : scrKey(i.specId));
 
 function placeArea(appMallId: string): { area: string; province: string; name: string | null } {
   const place = mallPlace(appMallId);
@@ -81,6 +81,13 @@ export function mallEntries(catalogue: Catalogue, audience: AudienceTarget = ANY
 /** The mall a campaign item belongs to, as an entry key. */
 export function entryKeyFor(item: CampaignItem | NewCampaignItem, entries: readonly MallEntry[]): string | undefined {
   if (item.kind === 'package') return entries.find((e) => e.packages.some((p) => p.code === item.code))?.key;
+  if (item.kind === 'site') {
+    const name = item.mall.toLowerCase();
+    return (
+      (item.appMallId ? entries.find((e) => e.appMall?.id === item.appMallId)?.key : undefined) ??
+      entries.find((e) => name && (e.name.toLowerCase().includes(name) || name.includes(e.name.toLowerCase().split(' ')[0])))?.key
+    );
+  }
   return entries.find((e) => e.screens.some((s) => s.id === item.specId))?.key ?? entries.find((e) => e.appMall?.id === item.appMallId)?.key;
 }
 

@@ -530,13 +530,22 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
 }
 
 function cleanItems(raw: unknown): unknown[] {
-  if (!Array.isArray(raw) || raw.length > 300) throw new HttpError(400, 'Send the screens as a list (at most 300).');
+  if (!Array.isArray(raw) || raw.length > 1000) throw new HttpError(400, 'Send the screens as a list (at most 1000).');
   const str = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
   return raw.map((i) => {
     const x = i as Record<string, unknown>;
     if (x?.kind === 'package' && str(x.code, 40)) return { kind: 'package', code: x.code };
     if (x?.kind === 'screen' && str(x.specId, 100) && typeof x.appMallId === 'string' && x.appMallId.length <= 64 && str(x.title, 200)) {
       return { kind: 'screen', specId: x.specId, appMallId: x.appMallId, title: x.title };
+    }
+    if (x?.kind === 'site' && str(x.ref, 120)) {
+      const t = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+      const d = (v: unknown) => (typeof v === 'string' && DATE_PATTERN.test(v) ? v : null);
+      return {
+        kind: 'site', ref: x.ref, no: Number.isInteger(x.no) ? x.no : null, siteNo: t(x.siteNo, 120), town: t(x.town, 120), mall: t(x.mall, 200),
+        location: t(x.location, 400), size: t(x.size, 80), start: d(x.start), end: d(x.end),
+        specId: typeof x.specId === 'string' && x.specId.length <= 100 ? x.specId : null, appMallId: t(x.appMallId, 64),
+      };
     }
     throw new HttpError(400, 'One of the screens isn’t recognised.');
   });
@@ -546,7 +555,8 @@ async function postProposalChanges(request: Request, url: URL, env: Env, id: str
   const { row, c } = await sharedCampaign(env, id, url.searchParams.get('k') ?? '');
   if (['approved', 'booked', 'declined'].includes(c.status)) throw new HttpError(409, 'This proposal can’t be changed any more. Contact your account manager.');
   const body = await readJson<{ items?: unknown; start?: unknown; end?: unknown; note?: unknown; name?: unknown }>(request);
-  const items = cleanItems(body.items);
+  // The client can send just a note (the whole site list stays as it is), or a changed list.
+  const items = body.items === undefined ? c.items : cleanItems(body.items);
   const date = (v: unknown) => (v === null || v === undefined || v === '' ? null : typeof v === 'string' && DATE_PATTERN.test(v) ? v : (() => { throw new HttpError(400, 'Dates must be YYYY-MM-DD.'); })());
   const start = date(body.start);
   const end = date(body.end);
