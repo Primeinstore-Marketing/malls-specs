@@ -1,5 +1,6 @@
 'use client';
 
+import { PictureDrop } from './PictureDrop';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { asBlockId, asMetadataFieldId, asTagId, emptyBlock, emptyMetadataField, slugify } from '@data-model';
@@ -126,6 +127,7 @@ function AssetRow({
   const [caption, setCaption] = useState(asset.caption);
   const [alt, setAlt] = useState(asset.alt);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<'' | 'saving' | 'saved'>('');
   const isPicture = asset.role === 'media';
   const match = isPicture ? matchesScreen(spec, asset.image?.width ?? null, asset.image?.height ?? null) : null;
 
@@ -133,10 +135,13 @@ function AssetRow({
     // Only save what actually changed.
     if ('caption' in changes && changes.caption === asset.caption) return;
     if ('alt' in changes && changes.alt === asset.alt) return;
+    setNote('saving');
     try {
       await api.updateAsset(asset.id, changes);
+      setNote('saved');
       onChanged();
     } catch (error) {
+      setNote('');
       onError(error instanceof Error ? error.message : 'Couldn’t save the caption.');
     }
   };
@@ -175,11 +180,8 @@ function AssetRow({
               {formatFileSize(asset.sizeBytes)}
               {asset.image?.width ? ` · ${asset.image.width}×${asset.image.height}` : ''}
             </span>
-            {match === true ? (
-              <span className="ml-2 text-[11px] font-semibold text-success-fg">✓ Matches screen size</span>
-            ) : match === false ? (
-              <span className="ml-2 text-[11px] font-semibold text-warning-fg">Not the screen size — fine for a site photo</span>
-            ) : null}
+            {match === true ? <span className="ml-2 text-[11px] text-fg-subtle">Artwork size</span> : match === false ? <span className="ml-2 text-[11px] text-fg-subtle">Site photo</span> : null}
+            <span className="ml-2 text-[11px] font-semibold text-success-fg">✓ Saved{isPicture ? ' on this screen' : ''}</span>
           </div>
           <button type="button" onClick={remove} disabled={busy} className="shrink-0 text-body-sm text-danger-fg hover:underline disabled:opacity-50">
             Delete
@@ -189,6 +191,7 @@ function AssetRow({
           value={caption}
           onChange={(event) => setCaption(event.target.value)}
           onBlur={() => void save({ caption })}
+          onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }}
           placeholder={isPicture ? 'Caption, e.g. “Screen in situ, view from the escalator”' : 'Label, e.g. “Artwork template (PSD)”'}
           className={input}
           maxLength={500}
@@ -198,11 +201,13 @@ function AssetRow({
             value={alt}
             onChange={(event) => setAlt(event.target.value)}
             onBlur={() => void save({ alt })}
+            onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }}
             placeholder="Describe the image for screen readers"
             className={input}
             maxLength={300}
           />
         ) : null}
+        {note ? <span className="text-[12px] text-fg-muted" aria-live="polite">{note === 'saving' ? 'Saving the caption…' : '✓ Caption saved'}</span> : null}
       </div>
     </li>
   );
@@ -216,6 +221,7 @@ function AssetList({
   assets,
   spec,
   onError,
+  drop = false,
 }: {
   title: string;
   hint: string;
@@ -224,6 +230,8 @@ function AssetList({
   assets: readonly Asset[];
   spec: Specification;
   onError: (message: string) => void;
+  /** Pictures: the drop zone (drag, paste, phone photos made ready) instead of a plain upload button. */
+  drop?: boolean;
 }) {
   const [uploading, setUploading] = useState<string[]>([]);
 
@@ -252,16 +260,19 @@ function AssetList({
           <h3 className="text-body-md font-semibold text-fg">{title}</h3>
           <p className="text-body-sm text-fg-muted">{hint}</p>
         </div>
-        <UploadButton accept={accept} multiple onFiles={(files) => void upload(files)}>
-          Upload…
-        </UploadButton>
+        {drop ? null : (
+          <UploadButton accept={accept} multiple onFiles={(files) => void upload(files)}>
+            Upload…
+          </UploadButton>
+        )}
       </div>
+      {drop ? <PictureDrop specId={spec.id} compact={assets.length > 0} /> : null}
       {uploading.map((name) => (
         <p key={name} className="rounded-md bg-bg-subtle px-3 py-2 text-body-sm text-fg-muted">
           Uploading {name}…
         </p>
       ))}
-      {assets.length === 0 && uploading.length === 0 ? (
+      {drop && assets.length === 0 ? null : assets.length === 0 && uploading.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border-strong px-3 py-6 text-center text-body-sm text-fg-subtle">
           Nothing here yet.
         </p>
@@ -688,14 +699,13 @@ export function SpecEditor({ spec, tags, assets, isAdded, mallId, onClose }: Spe
             {tab === 'pictures' ? (
               <AssetList
                 title="Pictures"
-                hint={`Photos of the screen in place, or example artwork. JPG, PNG, WebP, GIF, SVG or MP4, up to 25 MB.${
-                  size ? ` Artwork previews should be ${size.width}×${size.height} px.` : ''
-                } Uploads save straight away.`}
+                hint={`Photos of the screen in place, or example artwork${size ? ` (artwork at ${size.width}×${size.height} px)` : ''}. They save as soon as they’re added. The first one is the main picture; change the order on the spec page.`}
                 role="media"
                 accept="image/*,video/mp4,video/webm"
                 assets={media}
                 spec={spec}
                 onError={setError}
+                drop
               />
             ) : null}
 
@@ -733,14 +743,21 @@ export function SpecEditor({ spec, tags, assets, isAdded, mallId, onClose }: Spe
           ) : null}
 
           <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
-            <span className="text-body-sm text-fg-subtle">{dirty ? 'Unsaved changes' : 'Pictures and files save as you upload'}</span>
+            <span className={`text-body-sm ${dirty ? 'font-semibold text-warning-fg' : 'text-success-fg'}`}>
+              {dirty ? 'Unsaved text changes' : '✓ Everything is saved. Pictures and files save the moment they’re added.'}
+            </span>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={requestClose}>
-                {dirty ? 'Cancel' : 'Close'}
-              </Button>
-              <Button type="button" variant="primary" onClick={() => void save()} disabled={saving || !dirty}>
-                {saving ? 'Saving…' : 'Save changes'}
-              </Button>
+              {dirty ? (
+                <>
+                  <Button type="button" variant="ghost" onClick={requestClose}>Cancel</Button>
+                  <Button type="button" variant="primary" onClick={() => void save()} disabled={saving}>
+                    {saving ? 'Saving…' : 'Save changes'}
+                  </Button>
+                </>
+              ) : (
+                // Nothing left to save: one clear way out, instead of a greyed-out Save.
+                <Button type="button" variant="primary" onClick={requestClose}>Done</Button>
+              )}
             </div>
           </div>
         </div>

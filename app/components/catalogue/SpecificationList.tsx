@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { getMalls } from '@/lib/malls';
+import { AdminEditLink } from './AdminEditLink';
 
 const COLUMNS = ['Specification', 'Code', 'Category', 'Status', 'Updated'] as const;
 
@@ -67,12 +68,12 @@ export function SpecificationList({
         ) : (
           <ul>
             {items.map((spec) => (
-              <li key={spec.id} className="border-t border-border first:border-t-0">
+              <li key={spec.id} className="flex items-center border-t border-border pr-2 first:border-t-0">
                 {/* Phones and tablets: name, with network and date beneath and the status
                     on the right. From md up: the full five-column table. */}
                 <Link
                   href={hrefFor(spec.id)}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-body-sm text-fg transition-colors duration-fast ease-standard hover:bg-bg-subtle md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:gap-4"
+                  className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-body-sm text-fg transition-colors duration-fast ease-standard hover:bg-bg-subtle md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:gap-4"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{spec.title || 'Untitled specification'}</span>
@@ -92,6 +93,7 @@ export function SpecificationList({
                   <StatusBadge status={spec.status} />
                   <span className="hidden truncate text-fg-subtle md:block">{formatDate(spec.updatedAt) ?? '—'}</span>
                 </Link>
+                <AdminEditLink href={hrefFor(spec.id)} title={spec.title || 'this spec'} />
               </li>
             ))}
           </ul>

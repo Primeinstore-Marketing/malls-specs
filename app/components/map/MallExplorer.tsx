@@ -16,6 +16,7 @@ import { GridCanvas } from './GridCanvas';
 import { ScreenPanel } from './ScreenPanel';
 import type { AdminControls, SaveState } from './ScreenPanel';
 import { ScreenEditor } from './ScreenEditor';
+import { SpecEditor } from '@/components/spec/SpecEditor';
 
 /**
  * Home page: the mall index, or — with `?mall=` — that mall's map.
@@ -239,7 +240,17 @@ export function MallExplorer() {
         />
       </aside>
 
-      {editor && admin && (editor.mode === 'add' || editorSpec) ? (
+      {editor && admin && editor.mode === 'edit' && editorSpec ? (
+        <SpecEditor
+          spec={editorSpec}
+          tags={Object.values(catalogue.tags)}
+          assets={catalogue.assets}
+          isAdded={live.addedSpecIds.has(editorSpec.id)}
+          mallId={mall.id}
+          onClose={() => setEditor(null)}
+        />
+      ) : null}
+      {editor && admin && editor.mode === 'add' ? (
         <ScreenEditor
           mode={editor.mode}
           mall={mall}

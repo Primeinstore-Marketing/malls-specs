@@ -6,6 +6,18 @@ const nextConfig = {
   experimental: {
     externalDir: true,
   },
+  // pptxgenjs (the proposal PowerPoint) names Node modules ("node:fs", "node:https")
+  // it only uses on a server. In the browser they're left out: strip the "node:"
+  // prefix webpack can't read, then let its browser settings skip them.
+  webpack(config, { isServer, webpack }) {
+    if (!isServer) {
+      config.plugins.push(new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+        resource.request = resource.request.replace(/^node:/, '');
+      }));
+      config.resolve.fallback = { ...config.resolve.fallback, fs: false, https: false, http: false, path: false, os: false };
+    }
+    return config;
+  },
   ...(isGithubPages
     ? {
         output: 'export',

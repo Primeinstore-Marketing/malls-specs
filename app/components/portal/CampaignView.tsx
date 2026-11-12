@@ -206,6 +206,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
             <button type="button" disabled className={btn.primary}>Email {w.noun} to client</button>
           )}
           {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>{w.approve} for the client</button> : null}
+          {ready && docKind(c) === 'proposal' ? <DeckButton c={c} user={user} variant="secondary" /> : null}
           {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>{c.status === 'proposed' ? 'Decline request' : 'Decline'}</button> : null}
         </div>
       </>
@@ -605,6 +606,32 @@ function PdfButton({ c, user }: { c: Campaign; user: PortalUser }) {
   );
 }
 
+/** A PowerPoint of the proposal in Primedia Malls branding; each one is laid out differently. */
+function DeckButton({ c, user, variant = 'quiet' }: { c: Campaign; user: PortalUser; variant?: 'quiet' | 'secondary' }) {
+  const { catalogue } = useLiveData();
+  const [state, setState] = useState<'idle' | 'making' | string>('idle');
+  return (
+    <>
+      <button
+        type="button"
+        className={variant === 'secondary' ? btn.secondary : btn.quiet}
+        disabled={state === 'making' || !c.items.length}
+        title={c.items.length ? 'A PowerPoint of this proposal, laid out afresh each time' : 'Add screens first'}
+        onClick={() => {
+          setState('making');
+          import('@/lib/portal/deck')
+            .then(({ downloadDeck }) => downloadDeck(c, user, catalogue))
+            .then(() => setState('idle'))
+            .catch((e) => setState(e instanceof Error ? e.message : 'Couldn’t make the PowerPoint.'));
+        }}
+      >
+        {state === 'making' ? 'Making the PowerPoint…' : 'Download PowerPoint'}
+      </button>
+      {state !== 'idle' && state !== 'making' ? <span role="alert" className="text-body-sm text-danger-fg">{state}</span> : null}
+    </>
+  );
+}
+
 function View({ id, user }: { id: string; user: PortalUser }) {
   const router = useRouter();
   const { campaigns, active } = usePortalState();
@@ -656,6 +683,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
               <Link href="/explorer" onClick={() => { if (!isActive) portal.setActive(c.id); }} className={btn.secondary}>+ Add screens</Link>
             ) : null}
             <PdfButton c={c} user={user} />
+            <DeckButton c={c} user={user} />
             <ShareButton c={c} user={user} />
             {user.role === 'sales' ? (
               <button type="button" className={btn.quiet} onClick={() => router.push(`/portal/campaign?id=${portal.duplicate(c.id)}`)} title="A new draft with the same client, screens and audience; set new dates">

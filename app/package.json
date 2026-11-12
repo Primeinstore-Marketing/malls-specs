@@ -11,8 +11,10 @@
     "snapshot": "node scripts/snapshot-live.mjs"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "maplibre-gl": "^4.7.1",
     "next": "^15.1.0",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

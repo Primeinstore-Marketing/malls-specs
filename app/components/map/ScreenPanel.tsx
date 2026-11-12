@@ -113,8 +113,8 @@ function ScreenDetail({
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-display-sm text-fg">{spec.title}</h2>
           {admin ? (
-            <button type="button" onClick={() => admin.editSpec(spec.id)} className={`${SMALL_BUTTON} shrink-0`}>
-              Edit
+            <button type="button" onClick={() => admin.editSpec(spec.id)} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
+              <PencilIcon /> Edit spec
             </button>
           ) : null}
         </div>
@@ -313,11 +313,11 @@ function MallOverview({
           {specs.map((spec, index) => {
             const size = getScreenSize(spec);
             return (
-              <li key={spec.id}>
+              <li key={spec.id} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => onSelect(spec.id)}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-standard hover:bg-bg-subtle"
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-standard hover:bg-bg-subtle"
                 >
                   <span className="w-6 shrink-0 font-mono text-mono-md text-fg-subtle">
                     {String(index + 1).padStart(2, '0')}
@@ -328,6 +328,17 @@ function MallOverview({
                   </span>
                   {admin && mall.location ? <PinStatusDot pin={pins[spec.id]} className="text-fg-subtle" /> : null}
                 </button>
+                {admin ? (
+                  <button
+                    type="button"
+                    onClick={() => admin.editSpec(spec.id)}
+                    aria-label={`Edit ${spec.title}`}
+                    title="Edit this spec"
+                    className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-body-sm font-semibold text-accent-fg hover:bg-bg-subtle"
+                  >
+                    <PencilIcon /> Edit
+                  </button>
+                ) : null}
               </li>
             );
           })}
@@ -454,5 +465,14 @@ export function ScreenPanel({ mall, malls, specs, pins, focusedId, onFocus, onMa
         )}
       </div>
     </div>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   );
 }

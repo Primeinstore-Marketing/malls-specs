@@ -1,5 +1,6 @@
 'use client';
 
+import { PictureDrop } from './PictureDrop';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { useRef, useState } from 'react';
 import type { Asset, Specification } from '@data-model';
@@ -56,7 +57,6 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
   const { isAdmin, sessionExpired } = useAdminSession();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
   const candidates = media.length ? [] : candidatesFor(spec, mallId, catalogue);
   const anyMatch = candidates.some((c) => c.match);
 
@@ -75,13 +75,6 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
     }
   }
 
-  const upload = (files: FileList | null) => {
-    if (!files?.length) return;
-    void run('Uploading…', async () => {
-      for (const f of Array.from(files)) await api.uploadFile(spec.id, 'media', f);
-    });
-  };
-
   if (!media.length && !candidates.length && !isAdmin) return null;
 
   return (
@@ -95,20 +88,8 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
             </p>
           ) : null}
         </div>
-        {isAdmin ? (
-          <div className="flex items-center gap-2">
-            <input ref={input} type="file" accept="image/*,video/mp4" multiple className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
-            <button
-              type="button"
-              disabled={Boolean(busy)}
-              onClick={() => input.current?.click()}
-              className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
-            >
-              {busy ?? 'Upload pictures'}
-            </button>
-          </div>
-        ) : null}
       </div>
+      {isAdmin ? <PictureDrop specId={spec.id} onSessionExpired={sessionExpired} compact={media.length > 0} /> : null}
       {error ? <p className="rounded-xl bg-danger-bg px-4 py-2 text-body-sm text-danger-fg">{error}</p> : null}
 
       {media.length ? (
@@ -160,7 +141,7 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
         </ul>
       ) : (
         <p className="rounded-2xl border border-dashed border-border-strong px-4 py-8 text-center text-body-sm text-fg-muted">
-          No pictures yet. Upload a photo of this screen in place.
+          No pictures yet.
         </p>
       )}
     </section>
