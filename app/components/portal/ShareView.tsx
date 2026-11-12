@@ -50,7 +50,7 @@ function statusLine(p: SharedProposal): { text: string; tone: string } {
   if (p.status === 'booked') return { text: 'Booked', tone: 'bg-success-bg text-success-fg' };
   if (p.status === 'approved') return { text: 'Approved — confirming', tone: 'bg-accent-subtle text-accent' };
   if (p.status === 'changes') return { text: 'Changes sent to Primedia', tone: 'bg-accent-subtle text-accent' };
-  return { text: 'Proposal — waiting for your approval', tone: 'bg-warning-bg text-warning-fg' };
+  return { text: `${docWords(p).Noun} — waiting for your approval`, tone: 'bg-warning-bg text-warning-fg' };
 }
 
 /* ---------- The client's edits, kept in this browser until sent ---------- */
@@ -353,7 +353,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
 
       {ownCampaign && p.status === 'changes' ? (
         <div className="border-b border-border bg-accent-subtle print:hidden">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
             <p className="text-body-sm text-fg">{applied ? 'Applied. The campaign now matches what the client sent.' : `The client sent changes to “${ownCampaign.name}”.`}</p>
             {applied ? (
               <a href={withBasePath(`/portal/campaign?id=${ownCampaign.id}`)} className="text-body-sm font-semibold text-accent hover:underline">Open the proposal →</a>
@@ -414,7 +414,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <dl className="mt-2 grid grid-cols-3 gap-6 border-t border-border pt-5 sm:max-w-xl">
             <div><dt className="text-body-sm text-fg-muted">Malls</dt><dd className="text-display-md text-fg">{[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}</dd></div>
             <div><dt className="text-body-sm text-fg-muted">{lines.some((l) => l.screen.site) ? 'Sites' : 'Screens'}</dt><dd className="text-display-md text-fg">{total}</dd></div>
-            <div><dt className="text-body-sm text-fg-muted">Creatives to supply</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
+            <div><dt className="text-body-sm text-fg-muted">Creatives</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
           </dl>
           {editable ? (
             <p className="text-body-sm text-fg-muted print:hidden">
@@ -526,11 +526,11 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
 
         {editable ? (
           <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 backdrop-blur print:hidden">
-            <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
-              <span className="text-body-sm text-fg-muted">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
+              <span className="min-w-0 flex-1 truncate text-body-sm text-fg-muted sm:flex-none">
                 {changed ? 'You have changes that aren’t sent yet.' : `${total} ${lines.some((l) => l.screen.site) ? (total === 1 ? 'site' : 'sites') : total === 1 ? 'screen' : 'screens'} · ${formatRange(edits.start, edits.end)}`}
               </span>
-              <div className="flex flex-1 justify-end gap-2 sm:flex-none">
+              <div className="flex shrink-0 justify-end gap-2">
                 {changed ? (
                   <>
                     <button type="button" onClick={resetEdits} className={`${btnSecondary} hidden sm:inline-flex`}>Undo</button>
@@ -541,7 +541,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                     )}
                   </>
                 ) : (
-                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>{w.approve}</button>
+                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} justify-center whitespace-nowrap`}>{w.approve}</button>
                 )}
               </div>
             </div>

@@ -4,6 +4,7 @@
  * with no screens at all yet, or the mall isn't on the site. Worked out from
  * the site's own malls (not the AI), so it's the same every time.
  */
+import type { Catalogue } from '@data-model';
 import type { Mall } from '@/lib/malls';
 import type { SiteItem } from './types';
 
@@ -72,4 +73,19 @@ export function unmatchedSummary(lines: readonly SiteItem[], malls: readonly Mal
     if (status.kind === 'no-screens-yet') return `${label}: on the site, but no screens set up there yet: ${sites(n)}${where}. Ask an admin to add the screens in Site admin → Malls.`;
     return `${label}: not on the site: ${sites(n)}${where}. Ask an admin to add the mall, or leave ${n === 1 ? 'it' : 'them'} for Primedia to confirm the size.`;
   });
+}
+
+/**
+ * A site-list line whose site code names a format (e.g. "MEN/MAPP/001/02":
+ * MAPP sites are Digi Engage screens) matches that mall's screen of the
+ * format, without relying on the AI. Null when the mall has no such screen.
+ */
+export function formatScreen(line: Pick<SiteItem, 'siteNo' | 'mall'>, malls: readonly Mall[], catalogue: Catalogue): { specId: string; appMallId: string } | null {
+  const kind = line.siteNo.toUpperCase().split(/[/\s-]+/)[1] ?? '';
+  if (kind !== 'MAPP') return null;
+  const mall = findMall(line.mall, malls);
+  if (!mall) return null;
+  const specId = mall.specIds.find((id) => /(^|-)MAPP$/i.test(catalogue.specifications[id]?.code ?? ''))
+    ?? mall.specIds.find((id) => /digi engage/i.test(catalogue.specifications[id]?.title ?? ''));
+  return specId ? { specId, appMallId: mall.id } : null;
 }

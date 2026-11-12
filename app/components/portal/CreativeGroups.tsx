@@ -27,7 +27,9 @@ export function creativeSummary(groups: readonly CreativeGroup[], unit: 'site' |
     const rest = `${plural(tbcCount, unit)} (${plural(tbc.length, 'group')})`;
     parts.push(audience === 'client' ? `${known.length ? 'and ' : ''}Primedia will confirm the size for ${rest}` : `${known.length ? 'and ' : ''}the size still needs confirming for ${rest}`);
   }
-  return parts.length ? `${parts.join(', ')}.` : '';
+  if (!parts.length) return '';
+  const line = `${parts.join(', ')}.`;
+  return line[0].toUpperCase() + line.slice(1);
 }
 
 /**

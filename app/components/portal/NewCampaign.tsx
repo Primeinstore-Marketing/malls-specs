@@ -21,7 +21,7 @@ import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
 import { BriefDrop } from './BriefDrop';
 import { SiteMatch } from './SiteMatch';
-import { siteStatus, statusText, unmatchedSummary } from '@/lib/portal/siteStatus';
+import { formatScreen, siteStatus, statusText, unmatchedSummary } from '@/lib/portal/siteStatus';
 import { getMalls } from '@/lib/malls';
 import type { SiteItem } from '@/lib/portal/types';
 import type { BriefDraft } from '@/lib/api';
@@ -158,6 +158,11 @@ function Form({ user }: { user: PortalUser }) {
           id: `site:${ref}`, kind: 'site' as const, ref, no: r.no, siteNo: r.siteNo, town: r.town, mall: r.mall, location: r.location, size: r.size,
           start: r.start, end: r.end, specId: row?.specId ?? null, appMallId: screen?.appMallId ?? '',
         };
+      }).map((line) => {
+        // The AI left it unmatched, but its site code names the format (MAPP = Digi Engage): match it to that mall's screen.
+        if (line.specId) return line;
+        const f = formatScreen(line, allMalls, catalogue);
+        return f ? { ...line, ...f } : line;
       }),
     );
     setReasons(new Map(chosen.map((i) => [i.key, i.reason] as const)));

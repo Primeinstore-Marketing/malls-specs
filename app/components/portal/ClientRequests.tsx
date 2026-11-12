@@ -65,6 +65,7 @@ export function ClientRequests({ user }: { user: PortalUser }) {
       await api.updateRequest(r.id, { action: 'take', campaignId: id });
       portal.create({
         id,
+        kind: 'proposal',
         name: r.name,
         prospect: { company: r.contact.company, name: r.contact.name, email: r.contact.email },
         objective: objectiveFrom(r),

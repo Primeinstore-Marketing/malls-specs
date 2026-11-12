@@ -68,7 +68,7 @@ function Steps({ c, role }: { c: Campaign; role: PortalUser['role'] }) {
   const at = stepIndex(c.status);
   return (
     <ol className="grid grid-cols-2 gap-2" aria-label="Progress">
-      {STEP_LABELS[role].map((name, i) => (
+      {(role === 'sales' && docKind(c) === 'sitelist' ? ['Site list', 'Site list sent'] : STEP_LABELS[role]).map((name, i) => (
         <li key={name} className="flex min-w-0 flex-col gap-2" aria-current={i === at ? 'step' : undefined}>
           <span className={`h-1 rounded-full ${i <= at ? 'bg-accent' : 'bg-bg-muted'}`} />
           <span className={`truncate text-body-sm ${i === at ? 'font-semibold text-fg' : i < at ? 'text-fg-muted' : 'text-fg-subtle'}`}>{name}</span>
@@ -349,7 +349,7 @@ function Numbers({ c }: { c: Campaign }) {
                 <span className="ml-2"><SizeDownloads files={z.files} compact /></span>
               </li>
             ))}
-            {unknown ? <li className="flex items-center rounded-2xl border border-dashed border-border-strong px-4 py-3 text-body-sm text-fg-muted">{unknown} screens: size to confirm</li> : null}
+            {unknown ? <li className="flex items-center rounded-2xl border border-dashed border-border-strong px-4 py-3 text-body-sm text-fg-muted">{unknown} {unknown === 1 ? 'screen' : 'screens'}: size to confirm</li> : null}
           </ul>
         </section>
       ) : null}
@@ -652,11 +652,8 @@ function View({ id, user }: { id: string; user: PortalUser }) {
           </div>
           <div className="flex flex-wrap items-center gap-1 print:hidden">
             {editable ? (
-              isActive ? (
-                <Link href="/explorer" className={btn.secondary}>+ Add screens</Link>
-              ) : (
-                <button type="button" className={btn.secondary} onClick={() => portal.setActive(c.id)}>+ Add media</button>
-              )
+              // Makes this the proposal "Add to proposal" fills, then opens the Media Explorer.
+              <Link href="/explorer" onClick={() => { if (!isActive) portal.setActive(c.id); }} className={btn.secondary}>+ Add screens</Link>
             ) : null}
             <PdfButton c={c} user={user} />
             <ShareButton c={c} user={user} />

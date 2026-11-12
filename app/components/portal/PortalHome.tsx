@@ -113,10 +113,11 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
           <h1 className="text-display-xl text-fg">{greeting(user)}</h1>
           <p className="text-body-lg text-fg-muted">{screensLive ? `${screensLive} screens live for ${live.length} ${live.length === 1 ? 'campaign' : 'campaigns'}` : 'Nothing live right now'} · {by('sent').length} with clients</p>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <Link href="/portal/clients" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
-          <Link href="/portal/new?kind=sitelist" className="inline-flex h-11 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">Site list from PIMS</Link>
+        {/* The two jobs first, then contacts. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/portal/new" className={primary}>New proposal</Link>
+          <Link href="/portal/new?kind=sitelist" className="inline-flex h-11 items-center rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">Site list from PIMS</Link>
+          <Link href="/portal/clients" className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">Client contacts</Link>
         </div>
       </header>
 

@@ -3,6 +3,7 @@ import type { SpecificationSummary } from '@data-model';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { getMalls } from '@/lib/malls';
 
 const COLUMNS = ['Specification', 'Code', 'Category', 'Status', 'Updated'] as const;
 
@@ -30,6 +31,8 @@ export function SpecificationList({
   filtersApplied?: boolean;
   categoryNames?: Readonly<Record<string, string>>;
 }) {
+  // Many malls have a "Food Court": show which mall each screen is at.
+  const mallOf = new Map(getMalls().flatMap((m) => m.specIds.map((id) => [id, m.name] as const)));
   return (
     <div
       id="specifications"
@@ -77,14 +80,14 @@ export function SpecificationList({
                       <span className="hidden truncate text-body-sm text-fg-subtle md:block">{spec.description}</span>
                     ) : null}
                     <span className="block truncate text-body-sm text-fg-subtle md:hidden">
-                      {[(spec.categoryId && categoryNames?.[spec.categoryId]) || null, formatDate(spec.updatedAt)]
+                      {[mallOf.get(spec.id) ?? null, (spec.categoryId && categoryNames?.[spec.categoryId]) || null, formatDate(spec.updatedAt)]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
                   </span>
                   <span className="hidden truncate text-mono-md text-fg-subtle md:block">{spec.code || '—'}</span>
                   <span className="hidden truncate text-fg-subtle md:block">
-                    {(spec.categoryId && categoryNames?.[spec.categoryId]) ?? '—'}
+                    {[mallOf.get(spec.id), spec.categoryId && categoryNames?.[spec.categoryId]].filter(Boolean).join(' · ') || '—'}
                   </span>
                   <StatusBadge status={spec.status} />
                   <span className="hidden truncate text-fg-subtle md:block">{formatDate(spec.updatedAt) ?? '—'}</span>

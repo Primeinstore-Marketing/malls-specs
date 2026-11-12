@@ -55,7 +55,7 @@ function List() {
           + Add a mall
         </Link>
       </div>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.map(({ site, mall }) => {
           const deck = deckMallForApp(site.id);
           const photo = deck ? mallPhoto(deck.id) : null;
@@ -66,7 +66,7 @@ function List() {
             site.group === 'hyprop' ? ['Hyprop', 'bg-bg-muted text-fg-muted'] : site.group === 'formats' ? ['Generic specs', 'bg-bg-muted text-fg-muted'] : null,
           ].filter(Boolean) as [string, string][];
           return (
-            <li key={site.id}>
+            <li key={site.id} className="min-w-0">
               <Link href={`/admin/malls/edit?id=${site.id}`} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-3 hover:border-accent">
                 {photo ? <img src={photo.src} alt="" loading="lazy" className="h-14 w-20 shrink-0 rounded-xl object-cover" /> : <span className="h-14 w-20 shrink-0 rounded-xl bg-bg-subtle" />}
                 <span className="flex min-w-0 flex-1 flex-col">
