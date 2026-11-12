@@ -45,7 +45,8 @@ import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
 import { Shape } from './ShareView';
-import { countdown } from './CampaignCard';
+import { canDeleteDraft, countdown, DeleteDraftButton } from './CampaignCard';
+import { useAdminSession } from '@/components/auth/AdminSession';
 
 /**
  * One campaign, for whichever side is looking. Top to bottom: what it is,
@@ -642,6 +643,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
   const ph = phase(c);
   const editable = canEdit(c, user);
   const isActive = active[user.id] === c.id;
+  const { isAdmin } = useAdminSession();
   const messages = c.events.filter((e) => e.kind === 'message').length;
 
   return (
@@ -684,6 +686,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             ) : null}
             <PdfButton c={c} user={user} />
             <DeckButton c={c} user={user} />
+            {canDeleteDraft(c, user, isAdmin) ? <DeleteDraftButton c={c} className="h-11 rounded-full px-4 hover:bg-danger-bg hover:no-underline" onDeleted={() => router.push('/portal')} /> : null}
             <ShareButton c={c} user={user} />
             {user.role === 'sales' ? (
               <button type="button" className={btn.quiet} onClick={() => router.push(`/portal/campaign?id=${portal.duplicate(c.id)}`)} title="A new draft with the same client, screens and audience; set new dates">

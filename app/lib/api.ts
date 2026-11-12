@@ -277,6 +277,8 @@ export const api = {
       { method: 'PUT', body: JSON.stringify({ campaign, rev }) },
       true,
     ),
+  /** Deletes a draft (yours, or anyone's for admins). */
+  deleteCampaign: (id: string) => request<{ ok: true; deleted: boolean }>(`/campaigns/${encodeURIComponent(id)}`, { method: 'DELETE' }, true),
   createAccount: (fields: { email: string; name: string; title: string; role: AccountRole; password: string }) =>
     request<{ ok: true }>('/accounts', { method: 'POST', body: JSON.stringify(fields) }, true),
   updateAccount: (id: number, fields: Partial<{ name: string; title: string; role: AccountRole; disabled: boolean; password: string; approve: boolean }>) =>

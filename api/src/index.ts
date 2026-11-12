@@ -20,7 +20,7 @@
  *          POST  /auth/forgot    { email }                         (asks admins for a reset)
  *          Accounts are admins or sales. Sales may also edit client:* content.
  * Requests: GET /requests (signed in) · PATCH /requests/:id { action: take, campaignId } | { action: dismiss | reopen }
- * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev }
+ * Campaigns: GET /campaigns (yours; admins: everyone's) · PUT /campaigns/:id { campaign, rev } · DELETE /campaigns/:id (a draft: owner or admin)
  *          (rev = the revision you edited; 409 with the latest if someone saved since)
  * AI:      POST /ai/brief { filename, text? | file?: { name, mediaType, data }, inventory, today } -> { draft, truncated }  (signed in; Workers AI)
  * Accounts (admins): GET /accounts · POST /accounts { email, name, title, role, password }
@@ -802,6 +802,27 @@ async function listCampaigns(request: Request, env: Env): Promise<Response> {
   });
 }
 
+/**
+ * Deletes a draft: its owner or an admin, while it's still a draft (nothing
+ * has gone to a client). Sent, approved and booked campaigns stay.
+ */
+async function deleteCampaign(request: Request, env: Env, id: string): Promise<Response> {
+  const me = await requireAccount(request, env);
+  if (!CAMPAIGN_ID_PATTERN.test(id)) throw new HttpError(400, 'Invalid campaign id.');
+  const row = await env.DB.prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`).bind(id).first<CampaignRow>();
+  // Never saved (or already gone): nothing to do.
+  if (!row) return json({ ok: true, deleted: false });
+  if (row.owner_id !== me.id && me.role !== 'admin') throw new HttpError(403, 'Only whoever made this draft, or an admin, can delete it.');
+  const status = (JSON.parse(row.data) as { status?: string }).status;
+  if (status !== 'draft') throw new HttpError(409, 'Only drafts can be deleted. This one has gone to the client.');
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM campaigns WHERE id = ?').bind(id),
+    env.DB.prepare('UPDATE requests SET campaign_id = NULL WHERE campaign_id = ?').bind(id),
+  ]);
+  await audit(env, me, 'campaign.delete', id, { name: (JSON.parse(row.data) as { name?: string }).name });
+  return json({ ok: true, deleted: true });
+}
+
 async function putCampaign(request: Request, env: Env, id: string): Promise<Response> {
   const me = await requireAccount(request, env);
   if (!CAMPAIGN_ID_PATTERN.test(id)) throw new HttpError(400, 'Invalid campaign id.');
@@ -1307,6 +1328,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (resource === 'campaigns') {
     if (!id && method === 'GET') return listCampaigns(request, env);
     if (id && method === 'PUT') return putCampaign(request, env, id);
+    if (id && method === 'DELETE') return deleteCampaign(request, env, id);
   }
 
   if (resource === 'accounts') {

@@ -424,6 +424,25 @@ export const portal = {
     }
   },
 
+  /**
+   * Deletes a draft for good: waits for any save under way, removes it on the
+   * server, then here. Throws (with the server's reason) if it can't be deleted.
+   */
+  async deleteDraft(id: string): Promise<void> {
+    const c = state.campaigns.find((x) => x.id === id);
+    if (!c) return;
+    if (c.status !== 'draft') throw new Error('Only drafts can be deleted. This one has gone to the client.');
+    dirty.delete(id);
+    await (chains.get(id) ?? Promise.resolve()).catch(() => undefined);
+    await api.deleteCampaign(id);
+    dirty.delete(id);
+    revs.delete(id);
+    owners.delete(id);
+    chains.delete(id);
+    const active = Object.fromEntries(Object.entries(state.active).filter(([, v]) => v !== id));
+    save({ ...state, campaigns: state.campaigns.filter((x) => x.id !== id), active });
+  },
+
   duplicate(id: string): string {
     const { s } = current();
     const c = s.campaigns.find((x) => x.id === id);

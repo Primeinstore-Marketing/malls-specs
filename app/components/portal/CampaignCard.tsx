@@ -5,6 +5,45 @@ import { compact } from '@/lib/insights';
 import { campaignClientName, clientName, days, docWords, formatRange, phase, reach, todayIso } from '@/lib/portal/logic';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
 import { StatusPill } from './ui';
+import { useState } from 'react';
+import { useAdminSession } from '@/components/auth/AdminSession';
+import { portal } from '@/lib/portal/store';
+import { ui } from '@/lib/portal/ui-state';
+
+/** Whoever made a draft, or an admin, may delete it (the server checks too). */
+export function canDeleteDraft(c: Campaign, user: PortalUser, isAdmin: boolean): boolean {
+  return c.status === 'draft' && (c.createdBy === user.id || isAdmin);
+}
+
+/** "Delete" for a draft: asks first, then removes it everywhere. */
+export function DeleteDraftButton({ c, className = '', onDeleted }: { c: Campaign; className?: string; onDeleted?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      className={`text-body-sm font-semibold text-danger-fg hover:underline disabled:opacity-50 ${className}`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.confirm(`Delete the draft “${c.name}”? This can’t be undone.`)) return;
+        setBusy(true);
+        portal
+          .deleteDraft(c.id)
+          .then(() => {
+            ui.toast({ text: `Deleted the draft “${c.name}”` });
+            onDeleted?.();
+          })
+          .catch((err) => {
+            setBusy(false);
+            window.alert(err instanceof Error ? err.message : 'Couldn’t delete this draft.');
+          });
+      }}
+    >
+      {busy ? 'Deleting…' : 'Delete'}
+    </button>
+  );
+}
 
 export function countdown(c: Campaign): string | null {
   const ph = phase(c);
@@ -24,7 +63,8 @@ export function countdown(c: Campaign): string | null {
 export function CampaignCard({ c, user, highlight }: { c: Campaign; user: PortalUser; highlight?: string }) {
   const r = reach(c);
   const ph = phase(c);
-  return (
+  const { isAdmin } = useAdminSession();
+  const card = (
     <Link
       href={`/portal/campaign?id=${c.id}`}
       className="group flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg p-4 transition-[border-color,box-shadow] duration-fast ease-standard hover:border-accent-border hover:shadow-2"
@@ -45,5 +85,13 @@ export function CampaignCard({ c, user, highlight }: { c: Campaign; user: Portal
       </span>
       {highlight ? <span className="text-body-sm font-semibold text-accent">{highlight} →</span> : null}
     </Link>
+  );
+  if (!canDeleteDraft(c, user, isAdmin)) return card;
+  // The button sits on the card but outside its link.
+  return (
+    <div className="relative">
+      {card}
+      <DeleteDraftButton c={c} className="absolute bottom-4 right-4 rounded-md px-2 py-1 hover:bg-danger-bg" />
+    </div>
   );
 }
