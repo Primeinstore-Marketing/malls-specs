@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
 import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
-import { days, docWords, formatDate, formatRange, phase } from '@/lib/portal/logic';
+import { days, DOC_WORDS, formatDate, formatRange, phase } from '@/lib/portal/logic';
 import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
@@ -50,7 +50,7 @@ function statusLine(p: SharedProposal): { text: string; tone: string } {
   if (p.status === 'booked') return { text: 'Booked', tone: 'bg-success-bg text-success-fg' };
   if (p.status === 'approved') return { text: 'Approved — confirming', tone: 'bg-accent-subtle text-accent' };
   if (p.status === 'changes') return { text: 'Changes sent to Primedia', tone: 'bg-accent-subtle text-accent' };
-  return { text: `${docWords(p).Noun} — waiting for your approval`, tone: 'bg-warning-bg text-warning-fg' };
+  return { text: 'Site list — waiting for your approval', tone: 'bg-warning-bg text-warning-fg' };
 }
 
 /* ---------- The client's edits, kept in this browser until sent ---------- */
@@ -216,7 +216,8 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const status = approved ? { text: 'Approved — Primedia is confirming', tone: 'bg-success-bg text-success-fg' } : statusLine(p);
   const first = p.from?.name.split(' ')[0] ?? 'your account manager';
   // Proposal (screens we suggest) or site list (from PIMS, once booked).
-  const w = docWords(p);
+  // What the client approves here is always the site list: the screens and the files to supply. (The proposal is the presentation.)
+  const w = DOC_WORDS.sitelist;
 
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
