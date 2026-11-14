@@ -270,10 +270,11 @@ function Form({ user }: { user: PortalUser }) {
             </details>
           </section>
 
-          <details id="who" className="rounded-2xl bg-bg-subtle p-4" open={!sales}>
-            <summary className="cursor-pointer text-body-sm font-semibold text-fg">Who do they want to reach? <span className="font-normal text-fg-muted">Optional: ranks the malls below by fit</span></summary>
-            <div className="mt-4"><AudiencePicker value={audience} onChange={setAudience} /></div>
-          </details>
+          {/* Always open: who they want to reach ranks the malls below. */}
+          <section id="who" className="flex flex-col gap-3 rounded-2xl bg-bg-subtle p-4" aria-labelledby="who-title">
+            <h2 id="who-title" className="text-body-sm font-semibold text-fg">Who do they want to reach? <span className="font-normal text-fg-muted">Optional: ranks the malls below by fit</span></h2>
+            <AudiencePicker value={audience} onChange={setAudience} />
+          </section>
 
           <Section title={kind === 'sitelist' && siteLines.length ? 'Add more screens' : 'Add screens'} id="fit">
             <p className="-mt-2 text-body-sm text-fg-muted">
@@ -480,7 +481,7 @@ function Form({ user }: { user: PortalUser }) {
 
 export function NewCampaign() {
   const params = useSearchParams();
-  // Switching between "New proposal" and "Site list from PIMS" in the menu starts a fresh form.
+  // Switching between "New proposal" and "New site list" in the menu starts a fresh form.
   const key = `${params.get('kind') ?? ''}:${params.get('from') ?? ''}`;
   return <RequireSignIn what="campaign planning">{(user) => <Form key={key} user={user} />}</RequireSignIn>;
 }

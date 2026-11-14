@@ -47,7 +47,9 @@ import { campaignContact, shareUrl } from '@/lib/portal/share';
 import { Shape } from './ShareView';
 import { canDeleteDraft, countdown, DeleteDraftButton } from './CampaignCard';
 import { useAdminSession } from '@/components/auth/AdminSession';
+import { withBasePath } from '@/lib/basePath';
 import { RateCardEditor } from './RateCardEditor';
+import { DownloadsDialog } from './DownloadsDialog';
 
 /**
  * One campaign, for whichever side is looking. Top to bottom: what it is,
@@ -166,7 +168,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   const w = docWords(c);
   const pimsNext =
     docKind(c) === 'proposal' ? (
-      <Link href={`/portal/new?kind=sitelist&from=${c.id}`} className={btn.secondary}>Next: site list from PIMS</Link>
+      <Link href={`/portal/new?kind=sitelist&from=${c.id}`} className={btn.secondary}>Next: make the site list</Link>
     ) : null;
 
   /** The account manager approves the proposal or site list for the client (who agreed by email, phone or in a meeting). */
@@ -208,7 +210,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
             <button type="button" disabled className={btn.primary}>Email {w.noun} to client</button>
           )}
           {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>{w.approve} for the client</button> : null}
-          {ready && docKind(c) === 'proposal' ? <DeckButton c={c} user={user} variant="secondary" /> : null}
+          {ready ? <PreviewButton c={c} user={user} variant="secondary" /> : null}
           {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>{c.status === 'proposed' ? 'Decline request' : 'Decline'}</button> : null}
         </div>
       </>
@@ -600,36 +602,16 @@ function ShareButton({ c, user }: { c: Campaign; user: PortalUser }) {
   );
 }
 
-function PdfButton({ c, user }: { c: Campaign; user: PortalUser }) {
-  return (
-    <a className={btn.quiet} href={shareUrl(c, user.id, true)} target="_blank" rel="noreferrer">
-      Download PDF
-    </a>
-  );
-}
 
-/** A PowerPoint of the proposal in Primedia Malls branding; each one is laid out differently. */
-function DeckButton({ c, user, variant = 'quiet' }: { c: Campaign; user: PortalUser; variant?: 'quiet' | 'secondary' }) {
-  const { catalogue } = useLiveData();
-  const [state, setState] = useState<'idle' | 'making' | string>('idle');
+/** One button for everything sales send: the PDF, the presentation and the rate card, each previewed first. */
+function PreviewButton({ c, user, variant = 'quiet' }: { c: Campaign; user: PortalUser; variant?: 'quiet' | 'secondary' }) {
+  const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        className={variant === 'secondary' ? btn.secondary : btn.quiet}
-        disabled={state === 'making' || !c.items.length}
-        title={c.items.length ? 'A PowerPoint of this proposal, laid out afresh each time' : 'Add screens first'}
-        onClick={() => {
-          setState('making');
-          import('@/lib/portal/deck')
-            .then(({ downloadDeck }) => downloadDeck(c, user, catalogue))
-            .then(() => setState('idle'))
-            .catch((e) => setState(e instanceof Error ? e.message : 'Couldn’t make the PowerPoint.'));
-        }}
-      >
-        {state === 'making' ? 'Making the PowerPoint…' : 'Download PowerPoint'}
+      <button type="button" className={variant === 'secondary' ? btn.secondary : btn.quiet} disabled={!c.items.length} title={c.items.length ? '' : 'Add screens first'} onClick={() => setOpen(true)}>
+        Preview &amp; download
       </button>
-      {state !== 'idle' && state !== 'making' ? <span role="alert" className="text-body-sm text-danger-fg">{state}</span> : null}
+      {open ? <DownloadsDialog c={c} user={user} onClose={() => setOpen(false)} /> : null}
     </>
   );
 }
@@ -660,8 +642,12 @@ function View({ id, user }: { id: string; user: PortalUser }) {
   return (
     <Page>
       {/* Print-only letterhead: the PDF a client forwards. */}
-      <div className="hidden items-baseline justify-between border-b border-border pb-4 print:flex">
-        <strong className="text-body-lg">Primedia Malls · {docKind(c) === 'sitelist' ? 'Site list' : 'Campaign proposal'}</strong>
+      <div className="hidden items-center justify-between border-b border-border pb-4 print:flex">
+        <span className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={withBasePath('/brand/logo-navy.svg')} alt="Primedia Malls" className="h-[26px] w-auto" />
+          <strong className="text-body-lg">{docKind(c) === 'sitelist' ? 'Site list' : 'Campaign proposal'}</strong>
+        </span>
         <span className="text-body-sm text-fg-muted">{new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       </div>
 
@@ -669,7 +655,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
             <Link href={backHref} className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
-            <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docKind(c) === 'sitelist' ? 'Site list · from PIMS' : 'Proposal'}</span>
+            <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docKind(c) === 'sitelist' ? 'Site list' : 'Proposal'}</span>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
             {campaignOwner(c.id) && c.createdBy !== user.id ? <p className="text-body-sm text-fg-subtle print:hidden">Sales: {campaignOwner(c.id)}</p> : null}
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-md text-fg-muted">
@@ -695,8 +681,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
               // Makes this the proposal "Add to proposal" fills, then opens the Media Explorer.
               <Link href="/explorer" onClick={() => { if (!isActive) portal.setActive(c.id); }} className={btn.secondary}>+ Add screens</Link>
             ) : null}
-            <PdfButton c={c} user={user} />
-            <DeckButton c={c} user={user} />
+            <PreviewButton c={c} user={user} />
             {canDeleteDraft(c, user, isAdmin) ? <DeleteDraftButton c={c} className="h-11 rounded-full px-4 hover:bg-danger-bg hover:no-underline" onDeleted={() => router.push('/portal')} /> : null}
             <ShareButton c={c} user={user} />
             {user.role === 'sales' ? (

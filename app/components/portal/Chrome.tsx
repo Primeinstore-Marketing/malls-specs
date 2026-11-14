@@ -322,7 +322,7 @@ export function PortalAccount() {
   const links: [string, string][] = [
     ['/portal', 'Sales workspace'],
     ['/portal/new', 'New proposal'],
-    ['/portal/new?kind=sitelist', 'Site list from PIMS'],
+    ['/portal/new?kind=sitelist', 'New site list'],
     ['/portal/clients', 'Client contacts'],
     ['/insights', 'Audience insights'],
     ['/portal/photos', 'Photo rights'],
@@ -409,7 +409,7 @@ export function PortalDrawer() {
   const sales = user?.role === 'sales';
   const groups: [string, [string, string, string][]][] = user
     ? [
-        ...(sales ? ([['Create', [['/portal/new', 'New proposal', 'plus'], ['/portal/new?kind=sitelist', 'Site list from PIMS', 'list']]]] as [string, [string, string, string][]][]) : []),
+        ...(sales ? ([['Create', [['/portal/new', 'New proposal', 'plus'], ['/portal/new?kind=sitelist', 'New site list', 'list']]]] as [string, [string, string, string][]][]) : []),
         ['Work', [['/portal', sales ? 'Workspace' : 'My campaigns', 'home'], ...(sales ? ([['/portal/clients', 'Client contacts', 'users']] as [string, string, string][]) : [])]],
         ['Explore', [['/explorer', 'Media Explorer', 'screen'], ['/insights', 'Insights', 'chart'], ['/', 'Screen specs and map', 'map']]],
         ['Manage', [['/portal/photos', 'Photo rights', 'photo'], ...(isAdmin ? ([['/admin/malls', 'Site admin', 'gear']] as [string, string, string][]) : []), ['/account', 'Your account', 'person']]],

@@ -25,7 +25,8 @@ function mallOf(item: CampaignItem): string {
   return item.kind === 'site' ? item.mall : '';
 }
 
-export async function downloadRateCard(c: Campaign, user: PortalUser): Promise<string> {
+/** Builds the Excel rate card without saving it. */
+export async function buildRateCard(c: Campaign, user: PortalUser): Promise<{ blob: Blob; fileName: string }> {
   const { default: ExcelJS } = await import('exceljs');
   const wb = new ExcelJS.Workbook();
   wb.creator = user.name;
@@ -147,12 +148,12 @@ export async function downloadRateCard(c: Campaign, user: PortalUser): Promise<s
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const fileName = `${c.name.replace(/[\\/:*?"<>|]+/g, '').trim() || 'Proposal'} — Primedia Malls rate card.xlsx`;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  return { blob, fileName };
+}
+
+export async function downloadRateCard(c: Campaign, user: PortalUser): Promise<string> {
+  const { blob, fileName } = await buildRateCard(c, user);
+  const { saveBlob } = await import('./deck');
+  saveBlob(blob, fileName);
   return fileName;
 }

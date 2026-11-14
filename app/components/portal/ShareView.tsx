@@ -187,7 +187,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const ph = phase({ status: p.status, start: p.start, end: p.end } as Campaign);
   const [approved, rememberApproval] = useApproval(p);
   const [approving, setApproving] = useState(false);
-  const editable = !approved && !['approved', 'booked', 'declined'].includes(p.status) && ph !== 'live' && ph !== 'completed';
+  // ?preview=1: sales previewing what the client sees (in "Preview & download"); nothing can be approved or sent from it.
+  const previewOnly = params.get('preview') === '1';
+  const editable = !previewOnly && !approved && !['approved', 'booked', 'declined'].includes(p.status) && ph !== 'live' && ph !== 'completed';
   const [edits, setEdits, resetEdits] = useEdits(p);
   const items: CampaignItem[] = edits.items.map((i) => ({ ...i, id: itemKey(i) }) as CampaignItem);
   const current = new Set(items.map((i) => i.id));
@@ -339,11 +341,13 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
 
   return (
     <div className="min-h-screen bg-bg-subtle print:bg-bg">
-      <header className="bg-brand-surface text-brand-on-surface">
+      {/* On paper (the PDF) the header is white with the navy logo, so it shows even when the browser leaves out background colours. */}
+      <header className="bg-brand-surface text-brand-on-surface print:border-b print:border-border print:bg-white print:text-fg">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-8">
-          <Image src={withBasePath('/brand/logo-white.svg')} alt="Primedia Malls" width={140} height={29} className="h-[26px] w-auto" priority />
+          <Image src={withBasePath('/brand/logo-white.svg')} alt="Primedia Malls" width={140} height={29} className="h-[26px] w-auto print:hidden" priority />
+          <Image src={withBasePath('/brand/logo-navy.svg')} alt="" aria-hidden="true" width={140} height={29} className="hidden h-[26px] w-auto print:block" />
           <div className="flex items-center gap-3">
-            <span className="text-body-sm text-brand-on-surface-muted">Sent {formatDate(p.at.slice(0, 10))}</span>
+            <span className="text-body-sm text-brand-on-surface-muted print:text-fg-muted">Sent {formatDate(p.at.slice(0, 10))}</span>
             <button type="button" onClick={() => window.print()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">
               Download PDF
             </button>

@@ -152,7 +152,7 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
       <div className="grid gap-3 sm:grid-cols-2">
         {([
           ['/portal/new', 'New proposal', 'Suggest malls and screens for a client, or drop their brief and let the AI draft it.', true],
-          ['/portal/new?kind=sitelist', 'Site list from PIMS', 'A booked campaign: drop the PIMS export, check the sites and send it for approval.', false],
+          ['/portal/new?kind=sitelist', 'New site list', 'A booked campaign: drop the site list export, check the sites and send it for approval.', false],
         ] as const).map(([href, title, note, lead]) => (
           <Link
             key={href}

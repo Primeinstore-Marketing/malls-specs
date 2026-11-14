@@ -255,7 +255,68 @@ function hbars(pptx: Pptx, slide: Slide, o: { x: number; y: number; w: number; r
 
 /* ---------- The deck ---------- */
 
-export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<string> {
+/* ---------- A preview of the same slides ---------- */
+
+/** One piece of a slide, in inches, as the preview draws it. */
+export type PreviewPiece =
+  | { kind: 'box'; x: number; y: number; w: number; h: number; fill: string | null; alpha: number; line: string | null; dash: boolean }
+  | { kind: 'text'; x: number; y: number; w: number; h: number; runs: { text: string; bold: boolean; italic: boolean; underline: boolean; color: string; size: number }[]; align: string; valign: string; fill: string | null }
+  | { kind: 'image'; x: number; y: number; w: number; h: number; src: string }
+  | { kind: 'table'; x: number; y: number; w: number; colW: number[]; size: number; rows: { text: string; bold: boolean; color: string; fill: string | null; align: string }[][] };
+export interface PreviewSlide {
+  readonly background: string;
+  readonly pieces: PreviewPiece[];
+}
+
+const EMU = 914400;
+const inch = (v: unknown) => {
+  const n = Number(v ?? 0);
+  return n > 1000 ? n / EMU : n;
+};
+
+/** Reads pptxgenjs's slides (positions, text, fills, pictures, tables) so the preview shows exactly what the file holds. */
+function snapshotSlides(pptx: Pptx): PreviewSlide[] {
+  type Obj = { _type: string; shape?: string; text?: unknown; options: Record<string, any>; imageRid?: number; arrTabRows?: any[][] };
+  const slides = (pptx as unknown as { _slides: { _slideObjects: Obj[]; background?: { color?: string }; _relsMedia?: { rId: number; data?: string }[] }[] })._slides;
+  return slides.map((sl) => {
+    const pieces: PreviewPiece[] = [];
+    for (const o of sl._slideObjects) {
+      const op = o.options ?? {};
+      const x = inch(op.x), y = inch(op.y), w = inch(op.w), h = inch(op.h);
+      if (o._type === 'image') {
+        const rel = sl._relsMedia?.find((r) => r.rId === o.imageRid);
+        if (rel?.data) pieces.push({ kind: 'image', x, y, w, h, src: rel.data.startsWith('data:') ? rel.data : `data:${rel.data}` });
+      } else if (o._type === 'table') {
+        const colW = (op.colW as number[] | undefined)?.map(inch) ?? [];
+        pieces.push({
+          kind: 'table', x, y, w, colW, size: Number(op.fontSize ?? 12),
+          rows: (o.arrTabRows ?? []).map((row) => row.map((cell: any) => ({
+            text: String(cell.text ?? ''), bold: Boolean(cell.options?.bold), color: cell.options?.color ?? op.color ?? BRAND.ink,
+            fill: cell.options?.fill?.color ?? null, align: cell.options?.align ?? 'left',
+          }))),
+        });
+      } else if (o._type === 'text') {
+        const runs = Array.isArray(o.text) ? (o.text as { text: string; options?: Record<string, any> }[]) : [];
+        const fill = op.fill?.color ?? null;
+        if (!runs.length || runs.every((r) => !r.text)) {
+          pieces.push({ kind: 'box', x, y, w, h, fill, alpha: 1 - Number(op.fill?.transparency ?? 0) / 100, line: op.line?.color ?? null, dash: op.line?.dashType === 'dash' });
+          continue;
+        }
+        pieces.push({
+          kind: 'text', x, y, w, h, fill, align: op.align ?? 'left', valign: op.valign ?? 'top',
+          runs: runs.map((r) => ({
+            text: r.text, bold: Boolean(r.options?.bold ?? op.bold), italic: Boolean(r.options?.italic ?? op.italic), underline: Boolean(r.options?.underline ?? op.underline),
+            color: r.options?.color ?? op.color ?? BRAND.ink, size: Number(r.options?.fontSize ?? op.fontSize ?? 14),
+          })),
+        });
+      }
+    }
+    return { background: sl.background?.color ?? BRAND.white, pieces };
+  });
+}
+
+/** Builds a deck (a fresh random layout each time) without saving it: for the preview, then the download. */
+export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<{ blob: Blob; fileName: string; slides: PreviewSlide[] }> {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
@@ -676,6 +737,11 @@ export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Cat
     if (!entry.dir) zip.file(name, await entry.async('uint8array'), { createFolders: false });
   }
   const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
+  return { blob, fileName, slides: snapshotSlides(pptx) };
+}
+
+/** Saves a file built in the browser. */
+export function saveBlob(blob: Blob, fileName: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = fileName;
@@ -683,5 +749,10 @@ export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Cat
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<string> {
+  const { blob, fileName } = await buildDeck(c, user, catalogue);
+  saveBlob(blob, fileName);
   return fileName;
 }
