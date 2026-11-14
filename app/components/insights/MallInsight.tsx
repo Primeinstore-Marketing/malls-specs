@@ -1,5 +1,6 @@
 'use client';
 
+import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { useSearchParams } from 'next/navigation';
@@ -11,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 function Mall({ id }: { id: string }) {
   const m = deckMall(id);
+  useDocumentTitle(m ? `${mallName(m)} · Who shops here` : null);
   if (!m) return <Page><EmptyState title="We don’t have insights for that mall." description="Pick one from the list of malls." /></Page>;
   const p = m.profile;
   const visits = annualVisits(m);

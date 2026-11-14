@@ -1,5 +1,6 @@
 'use client';
 
+import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -51,6 +52,7 @@ function Form({ user }: { user: PortalUser }) {
   const { catalogue } = useLiveData();
   // Two jobs: a proposal (screens we suggest), or the site list from PIMS once it's booked.
   const [kind, setKind] = useState<DocKind>(params.get('kind') === 'sitelist' ? 'sitelist' : 'proposal');
+  useDocumentTitle(kind === 'sitelist' ? 'New site list' : 'New proposal');
   // A site list made from a proposal starts with its name, client and dates.
   const { campaigns } = usePortalState();
   const [from] = useState(() => campaigns.find((x) => x.id === params.get('from')) ?? null);

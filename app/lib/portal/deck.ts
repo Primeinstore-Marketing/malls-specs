@@ -19,7 +19,7 @@ import type { Catalogue } from '@data-model';
 import { getAssets } from '@/lib/catalogue';
 import { withBasePath } from '@/lib/basePath';
 import { fileUrl } from '@/lib/api';
-import { annualVisits, compact, isCleared, mallArea, mallName, mallPhoto, networkStats, screenPhotos } from '@/lib/insights';
+import { annualVisits, compact, isCleared, mallArea, mallName, mallPhoto, networkStats, packagePhotos, screenPhotos } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
 import { docWords, formatDate, formatRange, itemMall, days, reach, campaignClientName } from './logic';
 import { mallFacts } from './mallScreens';
@@ -159,6 +159,24 @@ function mallsOf(c: Campaign, screens: readonly BookedScreen[], catalogue: Catal
   });
 }
 
+/**
+ * A screen's own photo, cleared for clients: an uploaded picture of the
+ * screen, else a cleared deck photo of it, else (for a package) its
+ * package photo. Never the mall's photo: that's on the mall panel.
+ */
+function shotFor(c: Campaign, s: BookedScreen, catalogue: Catalogue): string | null {
+  const item = c.items.find((x) => x.id === s.itemId);
+  if (item?.kind === 'package') {
+    const p = packagePhotos(item.code).find((x) => isCleared(x));
+    return p?.src ?? null;
+  }
+  if (!s.specId) return null;
+  const spec = catalogue.specifications[s.specId];
+  const own = spec ? getAssets(spec.mediaIds, catalogue).find((a) => a.kind === 'image') : undefined;
+  if (own) return fileUrl(own.storageKey);
+  return screenPhotos(s.specId).find((x) => isCleared(x))?.src ?? null;
+}
+
 /* ---------- Building blocks ---------- */
 
 type Pptx = InstanceType<typeof import('pptxgenjs').default>;
@@ -177,11 +195,14 @@ function box(pptx: Pptx, slide: Slide, look: Look, o: { x: number; y: number; w:
   } as never);
 }
 
-function footer(slide: Slide, dark: boolean, label: string, logos: { white: string | null; navy: string | null }, n: number) {
-  const l = dark ? logos.white : logos.navy;
+/** `edges` overrides dark/light for the logo (left corner) and page number (right corner), for slides with a dark side panel. */
+function footer(slide: Slide, dark: boolean, label: string, logos: { white: string | null; navy: string | null }, n: number, edges?: { left: boolean; right: boolean }) {
+  const leftDark = edges ? edges.left : dark;
+  const rightDark = edges ? edges.right : dark;
+  const l = leftDark ? logos.white : logos.navy;
   if (l) slide.addImage({ data: l, x: 0.55, y: H - 0.52, w: 0.24 * LOGO_RATIO, h: 0.24 });
   text(slide, label, { x: 2.4, y: H - 0.5, w: 8.5, h: 0.25, fontSize: 9, color: dark ? 'C9D3EA' : BRAND.muted, align: 'center' });
-  text(slide, String(n), { x: W - 1.1, y: H - 0.5, w: 0.55, h: 0.25, fontSize: 9, color: dark ? 'C9D3EA' : BRAND.muted, align: 'right' });
+  text(slide, String(n), { x: W - 1.1, y: H - 0.5, w: 0.55, h: 0.25, fontSize: 9, color: rightDark ? 'C9D3EA' : BRAND.muted, align: 'right' });
 }
 
 function stat(slide: Slide, x: number, y: number, w: number, value: string, label: string, color: string, sub: string) {
@@ -531,85 +552,66 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
     footer(slide, dark, label, logos, n);
   }
 
-  /* One slide per mall */
+  /* One slide per mall: the mall on one side, its screens as photo cards on the other */
+  const soft = look.paper === BRAND.white ? BRAND.soft : BRAND.white;
   for (const [i, m] of malls.entries()) {
     n += 1;
     const slide = pptx.addSlide();
     slide.background = { color: look.paper };
-    const variant = (i + look.mallOffset) % 3;
-    const rows = m.screens.map((s) => [
-      { text: s.title + (s.qty > 1 ? ` × ${s.qty}` : ''), options: { bold: true, color: BRAND.ink } },
-      { text: s.width && s.height ? `${s.width} × ${s.height} px` : 'Size to confirm', options: { color: BRAND.muted } },
-      { text: s.orientation ?? '', options: { color: BRAND.muted } },
-    ]);
-    const table = (x: number, y: number, wd: number) =>
-      slide.addTable(rows.slice(0, 9) as never, {
-        x, y, w: wd, colW: [wd * 0.5, wd * 0.3, wd * 0.2], fontFace: FONT, fontSize: 12, color: BRAND.ink, margin: 0.06,
-        border: { type: 'solid', pt: 0.75, color: BRAND.line }, rowH: 0.36,
-      } as never);
-    const facts = m.facts.slice(0, 4);
-    const heading = (x: number, y: number, wd: number, color: string = BRAND.ink) => {
-      text(slide, m.name, { x, y, w: wd, h: 0.7, fontSize: 30, bold: true, color, fit: 'shrink' });
-      if (m.area) text(slide, m.area, { x, y: y + 0.72, w: wd, h: 0.4, fontSize: 14, color: color === BRAND.white ? 'C9D3EA' : BRAND.muted });
-    };
-    const factChips = (x: number, y: number, wd: number) =>
-      facts.forEach((f, k) => {
-        const cx = x + (k % 2) * (wd / 2);
-        const cy = y + Math.floor(k / 2) * 0.62;
-        box(pptx, slide, look, { x: cx, y: cy, w: wd / 2 - 0.15, h: 0.5, fill: BRAND.soft === look.paper ? BRAND.white : BRAND.soft });
-        text(slide, f, { x: cx + 0.15, y: cy + 0.12, w: wd / 2 - 0.45, h: 0.3, fontSize: 11, color: BRAND.ink, fit: 'shrink' });
-      });
-    // Only lay a slide out around a photo that actually loads.
-    const mallSize: Record<number, [number, number]> = { 0: [5.6, H], 1: [5.4, 4.6], 2: [W, 2.9] };
-    const pic = m.photoUrls.length ? await firstPicture(m.photoUrls, ...mallSize[variant]) : null;
-    const photo = Boolean(pic);
-    if (photo && variant === 0) {
-      if (pic) slide.addImage({ data: pic.data, x: 0, y: 0, w: 5.6, h: H });
-      heading(6.2, 0.6, 6.4);
-      factChips(6.2, 1.85, 6.4);
-      table(6.2, facts.length ? 3.25 : 1.9, 6.4);
-    } else if (photo && variant === 1) {
-      heading(0.8, 0.6, 6.2);
-      factChips(0.8, 1.85, 6.2);
-      table(0.8, facts.length ? 3.25 : 1.9, 6.2);
-      box(pptx, slide, look, { x: 7.35, y: 0.6, w: 5.4, h: 5.8, fill: look.lead });
-      if (pic) slide.addImage({ data: pic.data, x: 7.35, y: 0.6, w: 5.4, h: 4.6 });
-      const count = m.screens.reduce((s, x) => s + x.qty, 0);
-      text(slide, `${count} ${count === 1 ? w.unit : `${w.unit}s`} in this ${w.noun}`, { x: 7.65, y: 5.4, w: 4.8, h: 0.6, fontSize: 16, bold: true, color: BRAND.white });
-    } else if (photo) {
-      if (pic) slide.addImage({ data: pic.data, x: 0, y: 0, w: W, h: 2.9 });
-      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 2.9, w: W, h: 0.08, fill: { color: look.lead }, line: { type: 'none' } } as never);
-      heading(0.8, 3.25, 5.8);
-      factChips(0.8, 4.5, 5.8);
-      table(7.0, 3.3, 5.6);
-    } else {
-      // No cleared photo: a brand panel carries the mall's name (left or right, deck to deck),
-      // and the screens are drawn to scale beside it.
-      const left = (i + look.mallOffset) % 2 === 0;
-      const px = left ? 0.6 : W - 0.6 - 4.6;
-      const cx = left ? 5.8 : 0.8;
-      box(pptx, slide, look, { x: px, y: 0.6, w: 4.6, h: 6.0, fill: look.lead });
-      heading(px + 0.35, 1.0, 4.0, BRAND.white);
-      facts.forEach((f, k) => text(slide, f, { x: px + 0.35, y: 2.5 + k * 0.55, w: 4.0, h: 0.45, fontSize: 13, color: BRAND.white }));
-      text(slide, `${w.Noun === 'Site list' ? 'Sites' : 'Screens'} here`, { x: cx, y: 0.6, w: 6.9, h: 0.45, fontSize: 18, bold: true, color: BRAND.ink });
-      table(cx, 1.2, 6.9);
-      const drawn = m.screens.filter((x) => x.width && x.height).slice(0, 4);
-      const top = 1.2 + Math.min(rows.length, 9) * 0.36 + 0.5;
-      const slot = 6.9 / Math.max(drawn.length, 1);
-      const room = Math.min(1.9, H - 1.0 - top - 0.5);
-      if (room > 0.8) {
-        drawn.forEach((x, k) => {
-          const sc = Math.min((slot - 0.3) / x.width!, room / x.height!);
-          const sw = x.width! * sc;
-          const sh = x.height! * sc;
-          const sx = cx + k * slot;
-          slide.addShape(pptx.ShapeType.rect, { x: sx, y: top + (room - sh), w: sw, h: sh, fill: { color: k % 2 ? look.accent : look.lead }, line: { type: 'none' } } as never);
-          text(slide, `${x.title}`, { x: sx, y: top + room + 0.08, w: slot - 0.2, h: 0.3, fontSize: 10, bold: true, color: BRAND.ink, fit: 'shrink' });
-          text(slide, `${x.width} × ${x.height}`, { x: sx, y: top + room + 0.36, w: slot - 0.2, h: 0.25, fontSize: 9, color: BRAND.muted });
-        });
+    const left = (i + look.mallOffset) % 2 === 0;
+    const PW = 4.4;
+    const px = left ? 0 : W - PW;
+    const gx = left ? PW + 0.6 : 0.6;
+    const GW = W - PW - 1.2;
+    // The mall panel: its photo on top when one may be shown, then name, place and shoppers.
+    slide.addShape(pptx.ShapeType.rect, { x: px, y: 0, w: PW, h: H, fill: { color: look.lead }, line: { type: 'none' } } as never);
+    const hero = m.deck ? mallPhoto(m.deck.id) : null;
+    const heroPic = hero && isCleared(hero) ? await picture(hero.src, PW, 2.7) : null;
+    if (heroPic) slide.addImage({ data: heroPic.data, x: px, y: 0, w: PW, h: 2.7 });
+    const ty = heroPic ? 3.0 : 0.8;
+    text(slide, m.name, { x: px + 0.4, y: ty, w: PW - 0.8, h: 0.7, fontSize: 26, bold: true, color: BRAND.white, fit: 'shrink' });
+    if (m.area) text(slide, m.area, { x: px + 0.4, y: ty + 0.7, w: PW - 0.8, h: 0.4, fontSize: 12, color: 'C9D3EA' });
+    m.facts.slice(0, heroPic ? 4 : 6).forEach((f, k) => {
+      const fy = ty + 1.3 + k * 0.5;
+      slide.addShape(pptx.ShapeType.rect, { x: px + 0.4, y: fy + 0.12, w: 0.08, h: 0.2, fill: { color: BRAND.sky }, line: { type: 'none' } } as never);
+      text(slide, f, { x: px + 0.6, y: fy + 0.05, w: PW - 1.0, h: 0.35, fontSize: 12, color: BRAND.white, fit: 'shrink' });
+    });
+
+    // The screens: a card each, with the screen's own photo (never the mall's), name and size.
+    const count = m.screens.reduce((t, x) => t + x.qty, 0);
+    text(slide, `${count} ${count === 1 ? w.unit : `${w.unit}s`} here`, { x: gx, y: 0.55, w: GW, h: 0.5, fontSize: 20, bold: true, color: BRAND.ink });
+    const shown = m.screens.slice(0, 4);
+    const cols = shown.length <= 1 ? 1 : 2;
+    const rowsN = shown.length <= 2 ? 1 : 2;
+    const gap = 0.3;
+    const cw = (GW - gap * (cols - 1)) / cols;
+    const top = 1.25;
+    const more = m.screens.length > shown.length;
+    const areaH = H - top - (more ? 1.25 : 0.85);
+    const ch = (areaH - gap * (rowsN - 1)) / rowsN;
+    const ih = ch - 0.75;
+    for (const [k, sc] of shown.entries()) {
+      const cx = gx + (k % cols) * (cw + gap);
+      const cy = top + Math.floor(k / cols) * (ch + gap);
+      box(pptx, slide, look, { x: cx, y: cy, w: cw, h: ch, fill: soft, line: BRAND.line });
+      const shot = shotFor(c, sc, catalogue);
+      const pic = shot ? await picture(shot, cw, ih) : null;
+      if (pic) {
+        slide.addImage({ data: pic.data, x: cx, y: cy, w: cw, h: ih });
+      } else if (sc.width && sc.height) {
+        // No photo yet: the screen's shape, to scale.
+        const k2 = Math.min((cw - 1.0) / sc.width, (ih - 0.6) / sc.height);
+        const sw = sc.width * k2;
+        const sh = sc.height * k2;
+        slide.addShape(pptx.ShapeType.rect, { x: cx + (cw - sw) / 2, y: cy + (ih - sh) / 2, w: sw, h: sh, fill: { color: k % 2 ? look.accent : look.lead }, line: { type: 'none' } } as never);
       }
+      text(slide, sc.title + (sc.qty > 1 ? ` × ${sc.qty}` : ''), { x: cx + 0.2, y: cy + ih + 0.1, w: cw - 0.4, h: 0.32, fontSize: 13, bold: true, color: BRAND.ink, fit: 'shrink' });
+      text(slide, [sc.width && sc.height ? `${sc.width} × ${sc.height} px` : 'Size to confirm', sc.orientation].filter(Boolean).join(' · '), { x: cx + 0.2, y: cy + ih + 0.4, w: cw - 0.4, h: 0.28, fontSize: 10, color: BRAND.muted });
     }
-    footer(slide, false, label, logos, n);
+    if (more) {
+      text(slide, `+ ${m.screens.length - shown.length} more ${w.unit}s at ${m.name}, listed in the site list`, { x: gx, y: H - 0.95, w: GW, h: 0.3, fontSize: 11, italic: true, color: BRAND.muted });
+    }
+    footer(slide, false, label, logos, n, { left, right: !left });
   }
 
   /* The creatives to supply */

@@ -39,6 +39,9 @@ export function Zoomable({
   children?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  // A photo that won't load shows the fallback (e.g. the shape) instead of a broken-image icon.
+  const [broken, setBroken] = useState<string | null>(null);
+  const show = src && broken !== src ? src : null;
   return (
     <>
       <button
@@ -52,9 +55,9 @@ export function Zoomable({
         title={specId || packageCode ? 'View large, with spec and template' : 'View large'}
         className={`group relative shrink-0 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
       >
-        {src ? (
+        {show ? (
           // eslint-disable-next-line @next/next/no-img-element -- deck photo or API file
-          <img src={src} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105" />
+          <img src={show} alt="" loading="lazy" onError={() => setBroken(show)} className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105" />
         ) : (
           children
         )}

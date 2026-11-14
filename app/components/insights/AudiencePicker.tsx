@@ -11,7 +11,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`inline-flex h-11 items-center rounded-full border px-4 text-body-sm font-semibold md:h-9 md:px-3.5 transition-colors duration-fast ease-standard ${
+      className={`inline-flex h-11 shrink-0 items-center rounded-full border px-4 text-body-sm font-semibold md:h-9 md:px-3.5 transition-colors duration-fast ease-standard ${
         on ? 'border-fg bg-fg text-bg' : 'border-border-strong bg-bg text-fg hover:border-fg'
       }`}
     >
@@ -22,15 +22,22 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 
 const toggle = (list: readonly string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
-export function AudiencePicker({ value, onChange }: { value: AudienceTarget; onChange: (v: AudienceTarget) => void }) {
-  const row = (legend: string, children: React.ReactNode) => (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-label-md font-semibold uppercase text-fg">{legend}</legend>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </fieldset>
-  );
+export function AudiencePicker({ value, onChange, rows = false }: { value: AudienceTarget; onChange: (v: AudienceTarget) => void; rows?: boolean }) {
+  // `rows`: label on the left and its chips on the right, one line each (wide panels).
+  const row = (legend: string, children: React.ReactNode) =>
+    rows ? (
+      <div role="group" aria-labelledby={`aud-${legend.split(' ')[0].toLowerCase()}`} className="grid gap-2 border-t border-border py-3 first:border-t-0 first:pt-0 md:grid-cols-[150px_minmax(0,1fr)] md:items-center">
+        <span id={`aud-${legend.split(' ')[0].toLowerCase()}`} className="text-label-md font-semibold uppercase text-fg-muted">{legend}</span>
+        <div className="flex flex-wrap gap-2">{children}</div>
+      </div>
+    ) : (
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-label-md font-semibold uppercase text-fg">{legend}</legend>
+        <div className="flex flex-wrap gap-2">{children}</div>
+      </fieldset>
+    );
   return (
-    <div className="flex flex-col gap-5">
+    <div className={rows ? 'flex flex-col' : 'flex flex-col gap-5'}>
       {row(
         'Shoppers',
         (['any', 'female', 'male'] as const).map((g) => (
@@ -72,7 +79,7 @@ export function MatchRow({ m, rank, action }: { m: MallMatch; rank: number; acti
   return (
     <li className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3 rounded-2xl border border-border bg-bg p-3 sm:grid-cols-[96px_minmax(0,1fr)_auto_auto] sm:items-center">
       <span className="relative">
-        {photo ? <Zoomable src={photo.src} title={mallName(m.mall)} detail={m.mall.province} className="h-16 w-full rounded-xl" /> : <span className="block h-16 rounded-xl bg-bg-subtle" />}
+        {photo ? <Zoomable src={photo.src} title={mallName(m.mall)} detail={m.mall.province} className="h-16 w-full rounded-xl bg-bg-subtle" /> : <span className="block h-16 rounded-xl bg-bg-subtle" />}
         <span className="pointer-events-none absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-fg text-[11px] font-bold text-bg">{rank}</span>
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
@@ -132,4 +139,15 @@ export function readAudience(params: URLSearchParams): AudienceTarget {
     lsm: lsm === 'A' || lsm === 'B' || lsm === 'C' ? lsm : 'any',
     provinces: list('provinces'),
   };
+}
+
+/** The audience in a few words, e.g. "Mostly women · 25–34, 35–44 · Gauteng". */
+export function audienceSummary(a: AudienceTarget): string {
+  const parts = [
+    a.gender === 'female' ? 'Mostly women' : a.gender === 'male' ? 'Mostly men' : 'Everyone',
+    a.ages.length ? a.ages.map((b) => b.replace('-', '–')).join(', ') : 'all ages',
+    a.lsm !== 'any' ? `LSM ${a.lsm}` : null,
+    a.provinces.length ? a.provinces.join(', ') : 'all provinces',
+  ];
+  return parts.filter(Boolean).join(' · ');
 }

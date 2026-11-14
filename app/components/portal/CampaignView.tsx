@@ -1,5 +1,6 @@
 'use client';
 
+import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -640,12 +641,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
   const router = useRouter();
   const { campaigns, active } = usePortalState();
   const c = campaigns.find((x) => x.id === id);
-  if (!c || !visibleTo(c, user)) {
-    return <Page><EmptyState title="We can’t find that campaign." description="It may have been removed, or belong to another account." /></Page>;
-  }
-  const ph = phase(c);
-  const editable = canEdit(c, user);
-  const isActive = active[user.id] === c.id;
+  // Hooks before any early return, so a campaign that disappears can't break the page.
   const { isAdmin } = useAdminSession();
   // Back to the workspace tab you came from.
   const [backHref, setBackHref] = useState('/portal');
@@ -657,6 +653,13 @@ function View({ id, user }: { id: string; user: PortalUser }) {
       /* ignore */
     }
   }, []);
+  useDocumentTitle(c && visibleTo(c, user) ? c.name : null);
+  if (!c || !visibleTo(c, user)) {
+    return <Page><EmptyState title="We can’t find that campaign." description="It may have been removed, or belong to another account." /></Page>;
+  }
+  const ph = phase(c);
+  const editable = canEdit(c, user);
+  const isActive = active[user.id] === c.id;
   const messages = c.events.filter((e) => e.kind === 'message').length;
 
   return (
