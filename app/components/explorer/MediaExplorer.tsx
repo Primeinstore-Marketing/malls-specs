@@ -322,7 +322,7 @@ function MallCard({ mall, screens, all, onPick }: { mall: Mall; screens: readonl
         <Cover src={cover} />
         <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[rgba(6,12,28,0.85)] via-[rgba(6,12,28,0.15)] to-transparent" />
         {visits ? (
-          <span className="absolute left-3 top-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-fg shadow-1">
+          <span className="absolute left-3 top-3 rounded-full bg-[rgba(6,12,28,0.72)] px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
             {compact(visits)} visits a year
           </span>
         ) : null}

@@ -21,12 +21,23 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
   const { catalogue } = useLiveData();
   const w = docWords(c);
   const priced = hasRates(c);
-  const [tab, setTab] = useState<Tab>(start === 'xlsx' && !priced ? 'pdf' : start);
-  const tabs: { id: Tab; label: string; disabled?: string }[] = [
+  const [tab, setTab] = useState<Tab>(start);
+  // Every tab always opens: the rate card explains itself when it has no prices yet.
+  const tabs: { id: Tab; label: string }[] = [
     { id: 'pdf', label: 'Site list (PDF)' },
     { id: 'pptx', label: 'Presentation (PowerPoint)' },
-    { id: 'xlsx', label: 'Rate card (Excel)', disabled: priced ? undefined : 'Add rates in the Rate card section first' },
+    { id: 'xlsx', label: 'Rate card (Excel)' },
   ];
+
+  /** Close and take the person to the price fields on the campaign page. */
+  function goToRates() {
+    onClose();
+    window.setTimeout(() => {
+      const section = document.getElementById('rates');
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section?.querySelector<HTMLInputElement>('input[aria-label^="Rate card for"]')?.focus({ preventScroll: true });
+    }, 60);
+  }
 
   // The PowerPoint: built once per open (or shuffle), previewed, and that same file downloaded.
   const [deck, setDeck] = useState<{ blob: Blob; fileName: string; slides: PreviewSlide[] } | null>(null);
@@ -90,10 +101,8 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
               type="button"
               role="tab"
               aria-selected={tab === x.id}
-              disabled={Boolean(x.disabled)}
-              title={x.disabled}
               onClick={() => setTab(x.id)}
-              className={`h-10 shrink-0 rounded-full px-4 text-body-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${tab === x.id ? 'bg-fg text-bg' : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'}`}
+              className={`h-10 shrink-0 rounded-full px-4 text-body-sm font-semibold transition-colors ${tab === x.id ? 'bg-fg text-bg' : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'}`}
             >
               {x.label}
             </button>
@@ -111,7 +120,19 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
               {deck && deckState !== 'building' ? <DeckPreview slides={deck.slides} /> : null}
             </div>
           ) : null}
-          {tab === 'xlsx' && card ? (
+          {tab === 'xlsx' && !priced ? (
+            <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
+              <h3 className="text-display-sm text-fg">No prices yet</h3>
+              <p className="max-w-md text-body-md text-fg-muted">
+                The rate card is made from the prices on this proposal. Add a rate to at least one line and it’s ready to download, with discounts, totals and VAT worked out.
+              </p>
+              <button type="button" onClick={goToRates} className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
+                Add prices
+              </button>
+              <p className="text-body-sm text-fg-subtle">Prices go in the PowerPoint and the Excel only, never on the client’s link.</p>
+            </div>
+          ) : null}
+          {tab === 'xlsx' && priced && card ? (
             <div className="p-4 sm:p-6">
               <div className="overflow-hidden rounded-2xl border border-border bg-bg">
                 <div className="bg-brand-surface px-5 py-3 text-body-sm font-semibold uppercase tracking-wide text-brand-on-surface">Rate card · {c.name}</div>
@@ -148,7 +169,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
           <p className="text-body-sm text-fg-muted">
-            {tab === 'pdf' ? 'Opens your browser’s print window: choose “Save as PDF”.' : tab === 'pptx' ? 'Each presentation gets its own layout. Not keen on this one? Shuffle it.' : 'Totals are live formulas in Excel.'}
+            {tab === 'pdf' ? 'Opens your browser’s print window: choose “Save as PDF”.' : tab === 'pptx' ? 'Each presentation gets its own layout. Not keen on this one? Shuffle it.' : priced ? 'Totals are live formulas in Excel.' : 'Add a price to download the rate card.'}
           </p>
           <div className="flex gap-2">
             {tab === 'pptx' ? (
@@ -158,7 +179,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
             ) : null}
             <button
               type="button"
-              disabled={saving || (tab === 'pptx' && !deck)}
+              disabled={saving || (tab === 'pptx' && !deck) || (tab === 'xlsx' && !priced)}
               onClick={() => void download()}
               className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >

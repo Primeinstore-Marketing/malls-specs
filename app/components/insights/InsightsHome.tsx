@@ -118,7 +118,7 @@ function TopCard({ m, rank }: { m: MallMatch; rank: number }) {
       <Link href={`/insights/mall?id=${m.mall.id}`} className="group relative block aspect-[16/10] overflow-hidden bg-brand-surface">
         <CoverPhoto src={photo?.src ?? null} />
         <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[rgba(6,12,28,0.85)] via-transparent to-transparent" />
-        <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-body-sm font-bold text-fg shadow-1">{rank}</span>
+        <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(6,12,28,0.72)] text-body-sm font-bold text-white ring-1 ring-white/40 backdrop-blur">{rank}</span>
         <span className={`absolute right-3 top-3 rounded-full px-3 py-1 text-body-sm font-bold tabular-nums shadow-1 ${fitTone(m.score)}`} aria-label={`Fit ${m.score} out of 100`}>
           {m.score}<span className="font-semibold opacity-70">/100 fit</span>
         </span>
