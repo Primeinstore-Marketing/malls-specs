@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { BriefDraft } from '@/lib/api';
 import { BRIEF_ACCEPT, MAX_BRIEF_MB, readBrief } from '@/lib/portal/briefReader';
@@ -11,7 +11,7 @@ type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } |
  * "Start from the client's brief": drop or choose a PDF, Word, PowerPoint,
  * Excel or image file, and the AI drafts the whole proposal from it.
  */
-export function BriefDrop({ inventory, onDraft, pims = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean }) {
+export function BriefDrop({ inventory, onDraft, pims = false, compact = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean; /** A slim bar, and a file dropped anywhere on the page is read. */ compact?: boolean }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -34,6 +34,93 @@ export function BriefDrop({ inventory, onDraft, pims = false }: { inventory: () 
     } catch (e) {
       setState({ step: 'error', text: e instanceof Error ? e.message : 'That didn’t work. Try again.' });
     }
+  }
+
+  // Compact: the whole page takes a dropped file, with an overlay while a file is dragged over it.
+  const [pageOver, setPageOver] = useState(false);
+  const handleRef = useRef(handle);
+  handleRef.current = handle;
+  useEffect(() => {
+    if (!compact) return;
+    let depth = 0;
+    const hasFile = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+    const enter = (e: DragEvent) => {
+      if (!hasFile(e)) return;
+      depth += 1;
+      setPageOver(true);
+    };
+    const leave = () => {
+      depth = Math.max(0, depth - 1);
+      if (!depth) setPageOver(false);
+    };
+    const over = (e: DragEvent) => {
+      if (hasFile(e)) e.preventDefault();
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFile(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setPageOver(false);
+      void handleRef.current(e.dataTransfer?.files?.[0]);
+    };
+    window.addEventListener('dragenter', enter);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragenter', enter);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+    };
+  }, [compact]);
+
+  if (compact) {
+    const status =
+      state.step === 'reading' ? `Opening ${state.file}…` : state.step === 'drafting' ? `The AI is reading ${state.file}: about half a minute…` : null;
+    return (
+      <section aria-labelledby="brief-title" className="flex flex-col gap-1.5">
+        {pageOver ? (
+          <div className="pointer-events-none fixed inset-0 z-modal flex items-center justify-center bg-[rgba(6,12,28,0.55)] p-6 backdrop-blur-sm">
+            <div className="rounded-3xl border-2 border-dashed border-white bg-accent px-10 py-8 text-center text-fg-on-accent shadow-4">
+              <div className="text-display-sm">Drop it here</div>
+              <div className="text-body-md">A brief, booking sheet or PIMS site list fills in the proposal.</div>
+            </div>
+          </div>
+        ) : null}
+        <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-dashed px-4 py-3 ${busy ? 'border-accent bg-accent-subtle' : 'border-border-strong bg-bg-subtle'}`}>
+          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-body-md text-fg-on-accent">✦</span>
+          <p id="brief-title" className="min-w-0 flex-1 text-body-sm text-fg" role="status">
+            {status ?? (
+              <>
+                <strong>Have the client’s brief, booking sheet or PIMS site list?</strong>{' '}
+                <span className="text-fg-muted">Drop it anywhere on this page and the AI fills everything in. PDF, Word, PowerPoint, Excel or image, up to {MAX_BRIEF_MB} MB.</span>
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+            className="inline-flex h-10 shrink-0 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg disabled:opacity-60"
+          >
+            {busy ? <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true" /> : null}
+            {busy ? 'Working…' : 'Choose a file'}
+          </button>
+          <input
+            ref={input}
+            type="file"
+            accept={BRIEF_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              void handle(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </div>
+        {state.step === 'error' ? <p role="alert" className="text-body-sm text-danger-fg">{state.text}</p> : null}
+      </section>
+    );
   }
 
   return (

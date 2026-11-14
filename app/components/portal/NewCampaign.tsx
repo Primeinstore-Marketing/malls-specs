@@ -36,13 +36,6 @@ function Form({ user }: { user: PortalUser }) {
   const { catalogue } = useLiveData();
   // Two jobs: a proposal (screens we suggest), or the site list from PIMS once it's booked.
   const [kind, setKind] = useState<DocKind>(params.get('kind') === 'sitelist' ? 'sitelist' : 'proposal');
-  // Which step (sales): from ?step=, so a refresh or the browser's Back button keeps your place.
-  const [step, setStep] = useState(() => Math.max(0, Math.min(3, Number(params.get('step') ?? '1') - 1 || 0)));
-  useEffect(() => {
-    const onPop = () => setStep(Math.max(0, Math.min(3, Number(new URLSearchParams(window.location.search).get('step') ?? '1') - 1 || 0)));
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
   // A site list made from a proposal starts with its name, client and dates.
   const { campaigns } = usePortalState();
   const [from] = useState(() => campaigns.find((x) => x.id === params.get('from')) ?? null);
@@ -206,557 +199,21 @@ function Form({ user }: { user: PortalUser }) {
     ? [...aiDraft.draft.missing.filter((m) => !/aren’t (matched to a screen|screens) on the site/.test(m)), ...unmatchedSummary(siteLines, allMalls)]
     : [];
 
-  /* ---------- Steps (sales): start, campaign, screens or sites, review ---------- */
-  const STEP_NAMES = kind === 'sitelist' ? (['Upload', 'Campaign', 'Check sites', 'Review'] as const) : (['Start', 'Campaign', 'Screens', 'Review'] as const);
-  const canCreate = Boolean(start && end);
-  const stepDone = [Boolean(aiDraft) || hasLines || Boolean(name.trim()), Boolean(name.trim() && start && end), hasLines, false];
-  const goTo = (n: number) => {
-    const next = Math.max(0, Math.min(STEP_NAMES.length - 1, n));
-    setStep(next);
-    // Each step is a browser history entry, so the browser's Back button goes to the previous step.
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('step', String(next + 1));
-      window.history.pushState({ step: next }, '', url);
-    } catch {
-      /* ignore */
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const stepBar = (
-    <nav aria-label="Steps" className="sticky top-[calc(var(--topbar-height-sm)+0px)] z-[5] -mx-4 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur md:top-[var(--topbar-height-md)] lg:top-[var(--topbar-height)]">
-      <ol className="flex items-center gap-1 overflow-x-auto sm:gap-2">
-        {STEP_NAMES.map((label, i) => {
-          const current = i === step;
-          const done = i < step || stepDone[i];
-          return (
-            <li key={label} className="flex shrink-0 items-center gap-1 sm:gap-2">
-              {i > 0 ? <span aria-hidden="true" className={`h-px w-4 sm:w-10 ${i <= step ? 'bg-accent' : 'bg-border-strong'}`} /> : null}
-              <button
-                type="button"
-                onClick={() => goTo(i)}
-                aria-current={current ? 'step' : undefined}
-                className={`flex h-10 items-center gap-2 rounded-full pl-1.5 pr-3 text-body-sm font-semibold transition-colors ${current ? 'bg-accent-subtle text-fg' : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'}`}
-              >
-                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${current ? 'bg-accent text-fg-on-accent' : done ? 'bg-success-bg text-success-fg' : 'border border-border-strong text-fg-muted'}`}>
-                  {done && !current ? '✓' : i + 1}
-                </span>
-                {label}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-
-  const stepNav = (
-    <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-      {step > 0 ? (
-        <button type="button" onClick={() => goTo(step - 1)} className="inline-flex h-11 items-center gap-2 rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
-          ← Back: {STEP_NAMES[step - 1]}
-        </button>
-      ) : <span />}
-      {step < STEP_NAMES.length - 1 ? (
-        <button type="button" onClick={() => goTo(step + 1)} className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
-          Next: {STEP_NAMES[step + 1]} →
-        </button>
-      ) : (
-        // The last step finishes here too, not only in the plan panel.
-        <button
-          type="button"
-          disabled={!canCreate}
-          onClick={() => (recipient?.email && hasLines ? createAndEmail() : save(false))}
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
-        >
-          {!canCreate ? 'Choose the dates first' : recipient?.email && hasLines ? `Create and email to ${recipient.name.split(' ')[0] || 'the client'}` : kind === 'sitelist' ? 'Create site list' : 'Create proposal'} ✓
-        </button>
-      )}
-    </div>
-  );
-
-  const review = (
-    <Section title="Review and create" id="review">
-      <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-bg">
-        {([
-          ['What', kind === 'sitelist' ? 'Site list from PIMS' : 'Proposal', 0],
-          ['Name', name.trim() || 'Not named yet', 1],
-          ['Client', recipient ? `${recipient.name}${recipient.email ? ` · ${recipient.email}` : ''}` : client.prospect?.company || 'No client yet', 1],
-          ['Dates', start && end ? `${formatRange(start, end)} · ${flight} days` : 'Choose the dates', 1],
-          ['Objective', objective.trim() || '—', 1],
-          [kind === 'sitelist' ? 'Sites' : 'Screens', `${total} ${total === 1 ? 'screen' : 'screens'} in ${mallCount} ${mallCount === 1 ? 'mall' : 'malls'}${siteLines.length ? ` · ${siteLines.length} sites (${siteLines.filter((x) => !x.specId).length} to check)` : ''}`, 2],
-        ] as const).map(([k, v, target]) => (
-          <div key={k} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-label-md font-semibold uppercase text-fg-subtle">{k}</span>
-              <span className={`text-body-md ${v === 'Choose the dates' || v === 'Not named yet' ? 'font-semibold text-warning-fg' : 'text-fg'}`}>{v}</span>
-            </div>
-            {k !== 'What' ? (
-              <button type="button" onClick={() => goTo(target)} className="h-9 shrink-0 rounded-full px-3 text-body-sm font-semibold text-accent hover:bg-accent-subtle">Change</button>
-            ) : null}
-          </div>
-        ))}
-      </div>
-      {checks.length ? (
-        <div className="flex flex-col gap-1 rounded-xl bg-warning-bg p-4">
-          <span className="text-body-sm font-semibold text-warning-fg">Check before sending</span>
-          <ul className="list-disc pl-5 text-body-sm text-fg">{checks.map((m) => <li key={m}>{m}</li>)}</ul>
-        </div>
-      ) : null}
-      <p className="text-body-sm text-fg-muted">{canCreate ? 'Create it now; you can still change everything on its page, add a rate card and download the PowerPoint.' : 'Choose the dates in the Campaign step to create it.'}</p>
-    </Section>
-  );
-
-  if (sales) {
-    return (
-      <Page>
-      <header className="flex flex-col gap-3">
-        <span className="text-label-md font-semibold uppercase text-accent">{!sales ? 'Propose a campaign' : kind === 'sitelist' ? 'New site list' : 'New proposal'}</span>
-        <h1 className="text-display-xl text-fg">{!sales ? 'Tell us about your campaign' : kind === 'sitelist' ? 'Site list from PIMS' : 'Build a proposal'}</h1>
-        <p className="max-w-prose text-body-lg text-fg-muted">
-          {!sales
-            ? 'Who you want to reach and when. We’ll suggest malls as you go, and your account manager will turn it into a proposal.'
-            : kind === 'sitelist'
-              ? 'For a booked campaign. Drop the PIMS site list export: the client approves the screens, and everyone sees how many files to make, at what size, with which spec sheet and template.'
-              : 'Suggest malls and screens for the client’s campaign, then email it to them to approve. Once it’s booked in PIMS, make the site list from the PIMS export.'}
-        </p>
-        {from ? <p className="text-body-sm text-fg-muted">Starting from the proposal “{from.name}”: its client and dates are filled in.</p> : null}
-      </header>
-
-        {stepBar}
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="flex min-w-0 flex-col gap-8">
-            {step === 0 ? (
-              <>
-        {sales ? (
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="What are you making?">
-            {([['proposal', 'Proposal', 'Screens we suggest'], ['sitelist', 'Site list from PIMS', 'A booked campaign']] as const).map(([k, label, note]) => (
-              <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={`flex flex-col items-start rounded-2xl border px-4 py-2 text-left ${kind === k ? 'border-accent bg-accent-subtle' : 'border-border-strong hover:border-fg'}`}>
-                <span className="text-body-sm font-semibold text-fg">{label}</span>
-                <span className="text-[12px] text-fg-muted">{note}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      {sales ? <BriefDrop pims={kind === 'sitelist'} inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
-      {aiDraft ? (
-        <section role="status" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <strong className="text-body-lg text-fg">Drafted from {aiDraft.file}</strong>
-              <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
-              <p className="text-body-sm text-fg-muted">
-                {aiDraft.draft.sites?.length
-                  ? `All ${aiDraft.draft.sites.length} sites from the document are in the site list: ${aiDraft.draft.sites.filter((x) => x.match).length} matched to screens on the site, ${aiDraft.draft.sites.filter((x) => !x.match).length} marked “check”.`
-                  : `${aiDraft.kept} ${aiDraft.kept === 1 ? 'screen' : 'screens'} chosen${aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}.`}{' '}
-                Go through the steps to check it, then create and email it.
-              </p>
-            </div>
-            <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
-          </div>
-          {aiDraft.truncated ? <p className="text-body-sm font-semibold text-warning-fg">The file was very long, so the AI read only the first part. Check the dates and screens against the rest of the brief.</p> : null}
-          {aiDraft.draft.noteForClient ? <p className="text-body-sm text-fg-muted">A note for the client is ready in the email: “{aiDraft.draft.noteForClient}”</p> : null}
-        </section>
-      ) : null}
-
-                {!aiDraft ? <p className="text-body-sm text-fg-muted">No file? Go to the next step and fill it in by hand.</p> : null}
-              </>
-            ) : null}
-            {step === 1 ? (
-            <Section title="The campaign" id="basics">
-            <div className="grid gap-4 rounded-2xl border border-border bg-bg p-5 sm:grid-cols-2">
-              <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className={fieldLabel}>Name</span>
-                <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter soup range launch" />
-              </label>
-              {sales ? <ClientField key={clientKey} clientId={client.clientId} prospect={client.prospect} onChange={setClient} input={input} label={fieldLabel} /> : null}
-              <label className="flex flex-col gap-1.5">
-                <span className={fieldLabel}>Starts</span>
-                <input type="date" className={input} value={start} min={todayIso()} onChange={(e) => setStart(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className={fieldLabel}>Ends</span>
-                <input type="date" className={input} value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className={fieldLabel}>Objective</span>
-                <textarea rows={3} className={`${input} h-auto py-2`} value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Launch, awareness, drive store visits, a promotion…" />
-              </label>
-            </div>
-          </Section>
-            ) : null}
-            {step === 2 ? (
-              <>
-                {kind === 'sitelist' ? (
-                  siteLines.length ? (
-                    <Section title="Check the sites" id="sites">
-                      <div className="flex flex-col gap-3">
-          {checks.length ? (
-            <div className="flex flex-col gap-1 rounded-xl bg-bg p-3">
-              <span className="text-body-sm font-semibold text-warning-fg">Check before sending</span>
-              <ul className="list-disc pl-5 text-body-sm text-fg">
-                {checks.map((m) => <li key={m}>{m}</li>)}
-              </ul>
-            </div>
-          ) : siteLines.length ? <p className="text-body-sm font-semibold text-success-fg">Every site is matched to a screen on the site.</p> : null}
-          {siteLines.some((x) => !x.specId) ? (
-            <SiteMatch
-              lines={siteLines}
-              onMatch={(ids, specId, appMallId) => setSiteLines((cur) => cur.map((x) => (ids.includes(x.id) ? { ...x, specId, appMallId } : x)))}
-            />
-          ) : null}
-                      </div>
-                    </Section>
-                  ) : (
-                    <div className="flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border-strong p-6">
-                      <p className="text-body-md text-fg">No site list yet. Drop the PIMS export in the first step.</p>
-                      <button type="button" onClick={() => goTo(0)} className="h-10 rounded-full border border-border-strong px-4 text-body-sm font-semibold text-fg hover:border-fg">← Back to upload</button>
-                    </div>
-                  )
-                ) : null}
-                {kind === 'sitelist' ? (
-                  <details className="rounded-2xl border border-border p-4">
-                    <summary className="cursor-pointer text-body-sm font-semibold text-fg">Add screens by hand</summary>
-                    <div className="mt-4 flex flex-col gap-8">
-          <Section title="Who you want to reach" id="who">
-            <div className="rounded-2xl bg-bg-subtle p-5">
-              <AudiencePicker value={audience} onChange={setAudience} />
-            </div>
-          </Section>
-
-          <Section title="Choose screens" id="fit">
-            <p className="-mt-2 text-body-sm text-fg-muted">
-              Best fit for your audience first{audience.provinces.length ? ', then other provinces' : ''}. Tick the screens you’d like.
-            </p>
-            <input
-              type="search"
-              className={input}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Find any of ${entries.length} malls, a screen, a province or a package code`}
-              aria-label="Find a mall"
-            />
-            <ul className="flex flex-col gap-2">
-              {visible.map((e, i) => {
-                const rows = rowsFor(e);
-                return (
-                  <li key={e.key} className="flex flex-col gap-2">
-                    {i === firstOutside ? <h3 className="mt-4 text-label-md font-semibold uppercase text-fg-muted">Other provinces</h3> : null}
-                    <div className={`flex flex-col gap-3 rounded-xl border bg-bg p-4 ${hasPick(e) ? 'border-accent' : 'border-border'}`}>
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <div className="flex min-w-0 flex-col">
-                          <strong className="text-body-md font-semibold text-fg">{e.name}</strong>
-                          {e.area ? <span className="text-body-sm text-fg-muted">{e.area}</span> : null}
-                        </div>
-                        {e.score !== null ? (
-                          <span className="text-body-md font-bold tabular-nums text-accent">{e.score}<span className="text-body-sm font-medium text-fg-muted">/100 fit</span></span>
-                        ) : (
-                          <span className="text-body-sm text-fg-subtle">No audience data</span>
-                        )}
-                      </div>
-                      {e.reasons.length ? <span className="text-body-sm text-fg-muted">{e.reasons.slice(0, 3).join(' · ')}</span> : null}
-
-                      <ul className="grid gap-2 sm:grid-cols-2">
-                        {rows.map((row) => {
-                          const on = picked.has(row.key);
-                          return (
-                            <li key={row.key}>
-                              <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-2 pr-3 ${on ? 'border-accent bg-accent-subtle' : 'border-border hover:border-border-strong'}`}>
-                                <input type="checkbox" className="ml-1 accent-[var(--color-accent)]" checked={on} onChange={() => toggle(row.key, row.item)} aria-label={`${e.name}: ${row.title}`} />
-                                <span className="relative shrink-0">
-                                  <Zoomable src={row.photo} title={`${e.name} · ${row.title}`} specId={row.specId} note={row.photoNote} detail={row.width && row.height ? `${row.width} × ${row.height} px${row.qty > 1 ? ` · ${row.qty} screens` : ''}` : undefined} className="h-12 w-16 rounded-lg">
-                                    <span className="flex h-full w-full items-center justify-center bg-bg-subtle" aria-hidden>
-                                      {row.width && row.height ? (
-                                        <span
-                                          className="rounded-sm bg-gradient-to-br from-accent to-[#1e2761]"
-                                          style={row.width >= row.height ? { width: 40, height: Math.max(6, Math.round((40 * row.height) / row.width)) } : { height: 36, width: Math.max(6, Math.round((36 * row.width) / row.height)) }}
-                                        />
-                                      ) : null}
-                                    </span>
-                                  </Zoomable>
-                                  {row.photo && row.photoNote ? <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-[rgba(6,12,28,0.7)] px-1 text-[9px] font-semibold leading-3 text-white" title={row.photoNote}>Deck</span> : null}
-                                </span>
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                  <span className={`truncate text-body-sm font-semibold ${on ? 'text-accent' : 'text-fg'}`}>{row.title}</span>
-                                  <span className="font-mono text-[12px] tabular-nums text-fg-muted">
-                                    {row.width && row.height ? `${row.width}×${row.height}` : 'Size to confirm'}
-                                    {row.qty > 1 ? ` · ${row.qty} screens` : ''}
-                                  </span>
-                                </span>
-                                {row.specId ? (
-                                  <Link href={`/spec/${row.specId}`} target="_blank" className="shrink-0 text-[12px] font-semibold text-fg-muted hover:text-accent" onClick={(ev) => ev.stopPropagation()}>
-                                    Spec ↗
-                                  </Link>
-                                ) : null}
-                              </label>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            {!visible.length ? <p className="rounded-xl border border-dashed border-border-strong px-4 py-6 text-center text-body-sm text-fg-muted">No mall matches “{query}”.</p> : null}
-            {!q && ordered.length > visible.length ? (
-              <button type="button" onClick={() => setShowAll(true)} className="self-start rounded-full border border-border-strong px-4 py-2 text-body-sm font-semibold text-fg hover:bg-bg-subtle">
-                Show all {ordered.length} malls
-              </button>
-            ) : null}
-            {!q && showAll && ordered.length > SHORT ? (
-              <button type="button" onClick={() => setShowAll(false)} className="self-start text-body-sm font-semibold text-accent hover:underline">
-                Show fewer
-              </button>
-            ) : null}
-          </Section>
-                    </div>
-                  </details>
-                ) : (
-                  <>
-          <Section title="Who you want to reach" id="who">
-            <div className="rounded-2xl bg-bg-subtle p-5">
-              <AudiencePicker value={audience} onChange={setAudience} />
-            </div>
-          </Section>
-
-          <Section title="Choose screens" id="fit">
-            <p className="-mt-2 text-body-sm text-fg-muted">
-              Best fit for your audience first{audience.provinces.length ? ', then other provinces' : ''}. Tick the screens you’d like.
-            </p>
-            <input
-              type="search"
-              className={input}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Find any of ${entries.length} malls, a screen, a province or a package code`}
-              aria-label="Find a mall"
-            />
-            <ul className="flex flex-col gap-2">
-              {visible.map((e, i) => {
-                const rows = rowsFor(e);
-                return (
-                  <li key={e.key} className="flex flex-col gap-2">
-                    {i === firstOutside ? <h3 className="mt-4 text-label-md font-semibold uppercase text-fg-muted">Other provinces</h3> : null}
-                    <div className={`flex flex-col gap-3 rounded-xl border bg-bg p-4 ${hasPick(e) ? 'border-accent' : 'border-border'}`}>
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <div className="flex min-w-0 flex-col">
-                          <strong className="text-body-md font-semibold text-fg">{e.name}</strong>
-                          {e.area ? <span className="text-body-sm text-fg-muted">{e.area}</span> : null}
-                        </div>
-                        {e.score !== null ? (
-                          <span className="text-body-md font-bold tabular-nums text-accent">{e.score}<span className="text-body-sm font-medium text-fg-muted">/100 fit</span></span>
-                        ) : (
-                          <span className="text-body-sm text-fg-subtle">No audience data</span>
-                        )}
-                      </div>
-                      {e.reasons.length ? <span className="text-body-sm text-fg-muted">{e.reasons.slice(0, 3).join(' · ')}</span> : null}
-
-                      <ul className="grid gap-2 sm:grid-cols-2">
-                        {rows.map((row) => {
-                          const on = picked.has(row.key);
-                          return (
-                            <li key={row.key}>
-                              <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-2 pr-3 ${on ? 'border-accent bg-accent-subtle' : 'border-border hover:border-border-strong'}`}>
-                                <input type="checkbox" className="ml-1 accent-[var(--color-accent)]" checked={on} onChange={() => toggle(row.key, row.item)} aria-label={`${e.name}: ${row.title}`} />
-                                <span className="relative shrink-0">
-                                  <Zoomable src={row.photo} title={`${e.name} · ${row.title}`} specId={row.specId} note={row.photoNote} detail={row.width && row.height ? `${row.width} × ${row.height} px${row.qty > 1 ? ` · ${row.qty} screens` : ''}` : undefined} className="h-12 w-16 rounded-lg">
-                                    <span className="flex h-full w-full items-center justify-center bg-bg-subtle" aria-hidden>
-                                      {row.width && row.height ? (
-                                        <span
-                                          className="rounded-sm bg-gradient-to-br from-accent to-[#1e2761]"
-                                          style={row.width >= row.height ? { width: 40, height: Math.max(6, Math.round((40 * row.height) / row.width)) } : { height: 36, width: Math.max(6, Math.round((36 * row.width) / row.height)) }}
-                                        />
-                                      ) : null}
-                                    </span>
-                                  </Zoomable>
-                                  {row.photo && row.photoNote ? <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-[rgba(6,12,28,0.7)] px-1 text-[9px] font-semibold leading-3 text-white" title={row.photoNote}>Deck</span> : null}
-                                </span>
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                  <span className={`truncate text-body-sm font-semibold ${on ? 'text-accent' : 'text-fg'}`}>{row.title}</span>
-                                  <span className="font-mono text-[12px] tabular-nums text-fg-muted">
-                                    {row.width && row.height ? `${row.width}×${row.height}` : 'Size to confirm'}
-                                    {row.qty > 1 ? ` · ${row.qty} screens` : ''}
-                                  </span>
-                                </span>
-                                {row.specId ? (
-                                  <Link href={`/spec/${row.specId}`} target="_blank" className="shrink-0 text-[12px] font-semibold text-fg-muted hover:text-accent" onClick={(ev) => ev.stopPropagation()}>
-                                    Spec ↗
-                                  </Link>
-                                ) : null}
-                              </label>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            {!visible.length ? <p className="rounded-xl border border-dashed border-border-strong px-4 py-6 text-center text-body-sm text-fg-muted">No mall matches “{query}”.</p> : null}
-            {!q && ordered.length > visible.length ? (
-              <button type="button" onClick={() => setShowAll(true)} className="self-start rounded-full border border-border-strong px-4 py-2 text-body-sm font-semibold text-fg hover:bg-bg-subtle">
-                Show all {ordered.length} malls
-              </button>
-            ) : null}
-            {!q && showAll && ordered.length > SHORT ? (
-              <button type="button" onClick={() => setShowAll(false)} className="self-start text-body-sm font-semibold text-accent hover:underline">
-                Show fewer
-              </button>
-            ) : null}
-          </Section>
-                  </>
-                )}
-              </>
-            ) : null}
-            {step === 3 ? review : null}
-            {stepNav}
-          </div>
-
-        {/* The plan stays in view; its list scrolls inside it so the buttons are always on screen. */}
-        <aside id="plan" className="h-fit scroll-mt-24 lg:sticky lg:top-[calc(var(--topbar-height)+88px)] lg:flex lg:max-h-[calc(100dvh-var(--topbar-height)-112px)] lg:flex-col">
-          <div className="flex min-h-0 flex-col gap-4 rounded-2xl bg-brand-surface p-5 text-brand-on-surface">
-            <span className="text-label-md font-semibold uppercase text-brand-on-surface-muted">Your plan so far</span>
-            <div className="flex flex-col gap-1">
-              <div className="text-display-lg">{total} {total === 1 ? 'screen' : 'screens'}</div>
-              <div className="text-body-sm text-brand-on-surface-muted">
-                in {mallCount} {mallCount === 1 ? 'mall' : 'malls'} over {flight || '—'} days{r.visits ? ` · ~${compact(r.visits)} visits` : ''}
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col gap-2">
-              {sales && recipient?.email && hasLines ? (
-                start && end ? (
-                  <button type="button" onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
-                    Create and email to {recipient.name.split(' ')[0] || 'the client'}
-                  </button>
-                ) : null
-              ) : null}
-              <button
-                type="button"
-                disabled={!start || !end}
-                onClick={() => save(!sales)}
-                className={
-                  sales && recipient?.email && hasLines
-                    ? 'inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-50'
-                    : 'inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50'
-                }
-              >
-                {sales ? (recipient?.email && hasLines ? 'Create without sending' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief to Primedia'}
-              </button>
-              {!sales ? (
-                <button type="button" onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
-                  Save as draft
-                </button>
-              ) : null}
-              {!start || !end ? <span className="text-body-sm text-brand-on-surface-muted">Choose the dates to continue.</span> : null}
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
-            {siteLines.length ? (
-              <div className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <strong>Site list · {siteLines.length} {siteLines.length === 1 ? 'site' : 'sites'}</strong>
-                  <button type="button" onClick={() => setSiteLines([])} className="text-[12px] text-brand-on-surface-muted underline hover:text-brand-on-surface">Remove list</button>
-                </div>
-                <span className="text-[12px] text-brand-on-surface-muted">{siteLines.filter((x) => x.specId).length} matched to screens on the site · {siteLines.filter((x) => !x.specId).length} to check</span>
-                <ol className="flex flex-col gap-0.5">
-                  {siteLines.slice(0, 200).map((x) => (
-                    <li key={x.id} className="flex gap-2 text-[12px]">
-                      <span className="w-6 shrink-0 tabular-nums text-brand-on-surface-muted">{x.no ?? ''}</span>
-                      <span className="min-w-0 truncate" title={`${x.siteNo} · ${x.mall} · ${x.location}`}>{x.mall}{x.location ? ` · ${x.location}` : ''}</span>
-                      {x.specId ? null : <span className="ml-auto shrink-0 text-warning-fg" title={statusText(siteStatus(x, allMalls))}>{siteStatus(x, allMalls).kind === 'no-mall' ? 'no mall' : 'no screen'}</span>}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
-            {picked.size ? (
-              <ul className="flex flex-col gap-1.5 border-t border-white/10 pt-4 text-body-sm">
-                {[...picked.keys()].map((k) => {
-                  const sc = screens.find((x) => x.itemId === k);
-                  return (
-                    <li key={k} className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate">{sc ? `${sc.mallName} · ${sc.title}${sc.qty > 1 ? ` × ${sc.qty}` : ''}` : k.slice(4)}</span>
-                        {reasons.get(k) ? <span className="truncate text-[12px] text-brand-on-surface-muted" title={reasons.get(k)}>{reasons.get(k)}</span> : null}
-                      </span>
-                      <button type="button" onClick={() => toggle(k, picked.get(k)!)} aria-label={`Remove ${sc?.title ?? k}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface">×</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">{kind === 'sitelist' ? 'Drop the PIMS site list export above.' : 'Tick screens in step 3, or drop the client’s brief above.'}</p>
-            )}
-            {sizes.length || unknown ? (
-              <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
-                <span className="text-body-sm text-brand-on-surface-muted">Artwork sizes</span>
-                <ul className="flex flex-col gap-1 text-body-sm">
-                  {sizes.map((z) => (
-                    <li key={`${z.width}x${z.height}`} className="flex justify-between gap-3">
-                      <span className="font-semibold tabular-nums">{z.width} × {z.height}</span>
-                      <span className="text-brand-on-surface-muted">{z.orientation} · {z.screens}</span>
-                    </li>
-                  ))}
-                  {unknown ? <li className="text-brand-on-surface-muted">{unknown} to confirm</li> : null}
-                </ul>
-              </div>
-            ) : null}
-            </div>
-          </div>
-        </aside>
-
-        {/* Phones: the plan's total and the create button, always at the bottom of the screen. */}
-        <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 px-4 py-3 backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-page items-center justify-between gap-3">
-            <a href="#plan" className="min-w-0 text-body-sm text-fg">
-              <strong>{total} {total === 1 ? 'screen' : 'screens'}</strong>
-              <span className="text-fg-muted"> · {mallCount} {mallCount === 1 ? 'mall' : 'malls'} · see plan</span>
-            </a>
-            <button
-              type="button"
-              disabled={!start || !end}
-              onClick={() => (sales && recipient?.email && hasLines ? createAndEmail() : save(!sales))}
-              className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
-            >
-              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief'}
-            </button>
-          </div>
-        </div>
-        <div aria-hidden="true" className="h-16 lg:hidden" />
-        </div>
-      </Page>
-    );
-  }
-
   return (
     <Page>
-      <header className="flex flex-col gap-3">
-        <span className="text-label-md font-semibold uppercase text-accent">{!sales ? 'Propose a campaign' : kind === 'sitelist' ? 'New site list' : 'New proposal'}</span>
-        <h1 className="text-display-xl text-fg">{!sales ? 'Tell us about your campaign' : kind === 'sitelist' ? 'Site list from PIMS' : 'Build a proposal'}</h1>
-        <p className="max-w-prose text-body-lg text-fg-muted">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-display-lg text-fg">{!sales ? 'Tell us about your campaign' : kind === 'sitelist' ? 'New site list' : 'New proposal'}</h1>
+        <p className="max-w-prose text-body-md text-fg-muted">
           {!sales
             ? 'Who you want to reach and when. We’ll suggest malls as you go, and your account manager will turn it into a proposal.'
             : kind === 'sitelist'
-              ? 'For a booked campaign. Drop the PIMS site list export: the client approves the screens, and everyone sees how many files to make, at what size, with which spec sheet and template.'
-              : 'Suggest malls and screens for the client’s campaign, then email it to them to approve. Once it’s booked in PIMS, make the site list from the PIMS export.'}
+              ? 'Drop the PIMS export, check the sites, create.'
+              : 'Pick the screens, add the client, create. Or drop their brief and it fills itself in.'}
         </p>
-        {sales ? (
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="What are you making?">
-            {([['proposal', 'Proposal', 'Screens we suggest'], ['sitelist', 'Site list from PIMS', 'A booked campaign']] as const).map(([k, label, note]) => (
-              <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={`flex flex-col items-start rounded-2xl border px-4 py-2 text-left ${kind === k ? 'border-accent bg-accent-subtle' : 'border-border-strong hover:border-fg'}`}>
-                <span className="text-body-sm font-semibold text-fg">{label}</span>
-                <span className="text-[12px] text-fg-muted">{note}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
         {from ? <p className="text-body-sm text-fg-muted">Starting from the proposal “{from.name}”: its client and dates are filled in.</p> : null}
       </header>
 
-      {sales ? <BriefDrop pims={kind === 'sitelist'} inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
+      {sales ? <BriefDrop compact pims={kind === 'sitelist'} inventory={() => briefInventory(catalogue)} onDraft={applyDraft} /> : null}
       {aiDraft ? (
         <section role="status" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -767,7 +224,7 @@ function Form({ user }: { user: PortalUser }) {
                 {aiDraft.draft.sites?.length
                   ? `All ${aiDraft.draft.sites.length} sites from the document are in the site list: ${aiDraft.draft.sites.filter((x) => x.match).length} matched to screens on the site, ${aiDraft.draft.sites.filter((x) => !x.match).length} marked “check”.`
                   : `${aiDraft.kept} ${aiDraft.kept === 1 ? 'screen' : 'screens'} chosen${aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}.`}{' '}
-                Check everything below, change what you like, then create and email it.
+                Check the details and screens below, then create it.
               </p>
             </div>
             <button type="button" onClick={aiDraft.undo} className="inline-flex h-10 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg">Undo</button>
@@ -793,35 +250,32 @@ function Form({ user }: { user: PortalUser }) {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-8">
-          <Section title="The campaign" id="basics">
-            <div className="grid gap-4 rounded-2xl border border-border bg-bg p-5 sm:grid-cols-2">
-              <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className={fieldLabel}>Name</span>
-                <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter soup range launch" />
-              </label>
-              {sales ? <ClientField key={clientKey} clientId={client.clientId} prospect={client.prospect} onChange={setClient} input={input} label={fieldLabel} /> : null}
-              <label className="flex flex-col gap-1.5">
-                <span className={fieldLabel}>Starts</span>
-                <input type="date" className={input} value={start} min={todayIso()} onChange={(e) => setStart(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className={fieldLabel}>Ends</span>
-                <input type="date" className={input} value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className={fieldLabel}>Objective</span>
-                <textarea rows={3} className={`${input} h-auto py-2`} value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Launch, awareness, drive store visits, a promotion…" />
-              </label>
-            </div>
-          </Section>
+          <section id="basics" className="grid gap-4 rounded-2xl border border-border bg-bg p-5 sm:grid-cols-4">
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className={fieldLabel}>Name</span>
+              <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter soup range launch" />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className={fieldLabel}>Starts</span>
+              <input type="date" className={input} value={start} min={todayIso()} onChange={(e) => setStart(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className={fieldLabel}>Ends</span>
+              <input type="date" className={input} value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
+            </label>
+            {sales ? <div className="sm:col-span-4"><ClientField key={clientKey} clientId={client.clientId} prospect={client.prospect} onChange={setClient} input={input} label={fieldLabel} /></div> : null}
+            <details className="sm:col-span-4" open={Boolean(objective)}>
+              <summary className="cursor-pointer text-body-sm font-semibold text-accent">{objective ? 'Objective' : '+ Add an objective (optional)'}</summary>
+              <textarea rows={2} className={`${input} mt-2 h-auto py-2`} value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Launch, awareness, drive store visits, a promotion…" />
+            </details>
+          </section>
 
-          <Section title="Who you want to reach" id="who">
-            <div className="rounded-2xl bg-bg-subtle p-5">
-              <AudiencePicker value={audience} onChange={setAudience} />
-            </div>
-          </Section>
+          <details id="who" className="rounded-2xl bg-bg-subtle p-4" open={!sales}>
+            <summary className="cursor-pointer text-body-sm font-semibold text-fg">Who do they want to reach? <span className="font-normal text-fg-muted">Optional: ranks the malls below by fit</span></summary>
+            <div className="mt-4"><AudiencePicker value={audience} onChange={setAudience} /></div>
+          </details>
 
-          <Section title="Choose screens" id="fit">
+          <Section title={kind === 'sitelist' && siteLines.length ? 'Add more screens' : 'Add screens'} id="fit">
             <p className="-mt-2 text-body-sm text-fg-muted">
               Best fit for your audience first{audience.provinces.length ? ', then other provinces' : ''}. Tick the screens you’d like.
             </p>
@@ -910,7 +364,7 @@ function Form({ user }: { user: PortalUser }) {
         </div>
 
         {/* The plan stays in view; its list scrolls inside it so the buttons are always on screen. */}
-        <aside id="plan" className="h-fit scroll-mt-24 lg:sticky lg:top-[calc(var(--topbar-height)+88px)] lg:flex lg:max-h-[calc(100dvh-var(--topbar-height)-112px)] lg:flex-col">
+        <aside id="plan" className="h-fit scroll-mt-24 lg:sticky lg:top-[calc(var(--topbar-height)+24px)] lg:flex lg:max-h-[calc(100dvh-var(--topbar-height)-48px)] lg:flex-col">
           <div className="flex min-h-0 flex-col gap-4 rounded-2xl bg-brand-surface p-5 text-brand-on-surface">
             <span className="text-label-md font-semibold uppercase text-brand-on-surface-muted">Your plan so far</span>
             <div className="flex flex-col gap-1">
@@ -981,7 +435,7 @@ function Form({ user }: { user: PortalUser }) {
                 })}
               </ul>
             ) : (
-              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">{kind === 'sitelist' ? 'Drop the PIMS site list export above.' : 'Tick screens in step 3, or drop the client’s brief above.'}</p>
+              siteLines.length ? null : <p className="border-t border-white/10 pt-4 text-body-sm text-brand-on-surface-muted">{kind === 'sitelist' ? 'Drop the PIMS export anywhere on this page.' : 'Tick screens on the left, or drop the client’s brief anywhere on this page.'}</p>
             )}
             {sizes.length || unknown ? (
               <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
