@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { compact } from '@/lib/insights';
+import { annualVisits, compact } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
@@ -28,6 +28,21 @@ import type { BriefDraft } from '@/lib/api';
 
 const input = 'h-10 w-full rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus';
 const fieldLabel = 'text-label-md font-semibold uppercase text-fg-muted';
+
+/** Up to four numbers that sell a mall: visits, women, the biggest age group, digital screens (or LSM). */
+function shopperStats(e: Entry): [string, string][] {
+  const d = e.deck;
+  if (!d) return [];
+  const out: [string, string][] = [];
+  const visits = annualVisits(d);
+  if (visits) out.push([compact(visits), 'Visits a year']);
+  if (d.profile?.female) out.push([`${d.profile.female}%`, 'Women']);
+  const top = d.profile?.ageBands?.length ? [...d.profile.ageBands].sort((a, b) => b.pct - a.pct)[0] : null;
+  if (top) out.push([top.band.replace('-', '–'), `Top age · ${top.pct}%`]);
+  if (d.media?.seenDigitalScreens) out.push([`${d.media.seenDigitalScreens}%`, 'See digital screens']);
+  else if (d.profile?.lsm) out.push([`LSM ${d.profile.lsm}`, 'Living standard']);
+  return out.slice(0, 4);
+}
 
 function Form({ user }: { user: PortalUser }) {
   const params = useSearchParams();
@@ -301,12 +316,24 @@ function Form({ user }: { user: PortalUser }) {
                           {e.area ? <span className="text-body-sm text-fg-muted">{e.area}</span> : null}
                         </div>
                         {e.score !== null ? (
-                          <span className="text-body-md font-bold tabular-nums text-accent">{e.score}<span className="text-body-sm font-medium text-fg-muted">/100 fit</span></span>
+                          <span className={`inline-flex items-baseline gap-1 rounded-full px-3 py-1 text-body-md font-bold tabular-nums ${e.score >= 85 ? 'bg-success-bg text-success-fg' : 'bg-accent-subtle text-accent'}`}>
+                            {e.score}<span className="text-[12px] font-semibold opacity-80">/100 fit</span>
+                          </span>
                         ) : (
                           <span className="text-body-sm text-fg-subtle">No audience data</span>
                         )}
                       </div>
-                      {e.reasons.length ? <span className="text-body-sm text-fg-muted">{e.reasons.slice(0, 3).join(' · ')}</span> : null}
+                      {/* The mall's shoppers at a glance: big numbers, small labels. */}
+                      {shopperStats(e).length ? (
+                        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {shopperStats(e).map(([value, label]) => (
+                            <div key={label} className="flex flex-col rounded-xl bg-bg-subtle px-3 py-2">
+                              <dd className="text-body-lg font-bold tabular-nums text-fg">{value}</dd>
+                              <dt className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{label}</dt>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
 
                       <ul className="grid gap-2 sm:grid-cols-2">
                         {rows.map((row) => {
