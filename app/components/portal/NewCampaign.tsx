@@ -100,10 +100,16 @@ function Form({ user }: { user: PortalUser }) {
 
   // The id the new campaign will get, so the email link can point at it before it's saved.
   const [newId] = useState(() => `c-${Math.random().toString(36).slice(2, 9)}`);
+  /** No name typed: "Coca Cola · December 2026" (client and start month), so nothing goes to a client as "Untitled". */
+  const autoName = () => {
+    const who = (client.clientId ? CLIENTS.find((x) => x.id === client.clientId)?.name : client.prospect?.company?.trim()) || (kind === 'sitelist' ? 'Site list' : 'Proposal');
+    const when = start ? new Date(`${start}T00:00:00`).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' }) : '';
+    return when ? `${who} · ${when}` : who;
+  };
   const fields = () => ({
     id: newId,
     kind,
-    name: name.trim() || 'Untitled campaign',
+    name: name.trim() || autoName(),
     clientId: client.clientId,
     prospect: client.prospect,
     objective,
@@ -268,7 +274,7 @@ function Form({ user }: { user: PortalUser }) {
           <section id="basics" className="grid gap-4 rounded-2xl border border-border bg-bg p-5 sm:grid-cols-4">
             <label className="flex flex-col gap-1.5 sm:col-span-2">
               <span className={fieldLabel}>Name</span>
-              <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter soup range launch" />
+              <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder={`e.g. Winter soup range launch (empty: “${autoName()}”)`} />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className={fieldLabel}>Starts</span>

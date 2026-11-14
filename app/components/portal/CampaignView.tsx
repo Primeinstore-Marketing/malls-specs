@@ -497,6 +497,26 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
     <>
       {summary}
       <div className="grid gap-4 sm:grid-cols-2 print:hidden">
+        {sales ? (
+          // Proposal or site list: sets the words on its page, the client's link, the email and the downloads.
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className={label}>This is a</span>
+            <div role="radiogroup" aria-label="This is a" className="flex w-fit gap-1 rounded-full bg-bg-subtle p-1">
+              {(['proposal', 'sitelist'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={docKind(c) === k}
+                  onClick={() => portal.edit(c.id, { kind: k })}
+                  className={`h-9 rounded-full px-4 text-body-sm font-semibold transition-colors ${docKind(c) === k ? 'bg-bg text-fg shadow-1' : 'text-fg-muted hover:text-fg'}`}
+                >
+                  {k === 'proposal' ? 'Proposal' : 'Site list'}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <label className="flex flex-col gap-1.5 sm:col-span-2">
           <span className={label}>Name</span>
           <input className={input} value={c.name} onChange={(e) => portal.edit(c.id, { name: e.target.value })} />
