@@ -51,9 +51,14 @@ function List() {
             {tab('deleted', 'Deleted')}
           </div>
         </div>
-        <Link href="/admin/malls/edit?new=1" className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
-          + Add a mall
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/malls/import" className="inline-flex h-11 items-center rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
+            Update from mall decks
+          </Link>
+          <Link href="/admin/malls/edit?new=1" className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
+            + Add a mall
+          </Link>
+        </div>
       </div>
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.map(({ site, mall }) => {

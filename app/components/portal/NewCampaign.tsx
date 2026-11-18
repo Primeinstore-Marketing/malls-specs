@@ -4,7 +4,7 @@ import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { annualVisits, compact } from '@/lib/insights';
+import { annualVisits, compact, semShare } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
@@ -32,7 +32,7 @@ import type { BriefDraft } from '@/lib/api';
 const input = 'h-10 w-full rounded-lg border border-border-strong bg-bg px-3 text-body-md text-fg outline-none focus:border-border-focus';
 const fieldLabel = 'text-label-md font-semibold uppercase text-fg-muted';
 
-/** Up to four numbers that sell a mall: visits, women, the biggest age group, digital screens (or LSM). */
+/** Up to four numbers that sell a mall: visits, women, the biggest age group, digital screens (or SEM 8–10). */
 function shopperStats(e: Entry): [string, string][] {
   const d = e.deck;
   if (!d) return [];
@@ -43,7 +43,7 @@ function shopperStats(e: Entry): [string, string][] {
   const top = d.profile?.ageBands?.length ? [...d.profile.ageBands].sort((a, b) => b.pct - a.pct)[0] : null;
   if (top) out.push([top.band.replace('-', '–'), `Top age · ${top.pct}%`]);
   if (d.media?.seenDigitalScreens) out.push([`${d.media.seenDigitalScreens}%`, 'See digital screens']);
-  else if (d.profile?.lsm) out.push([`LSM ${d.profile.lsm}`, 'Living standard']);
+  else if (semShare(d, 'upper') != null) out.push([`${semShare(d, 'upper')}%`, 'SEM 8–10']);
   return out.slice(0, 4);
 }
 

@@ -19,7 +19,7 @@ import type { Catalogue } from '@data-model';
 import { getAssets } from '@/lib/catalogue';
 import { withBasePath } from '@/lib/basePath';
 import { fileUrl } from '@/lib/api';
-import { annualVisits, compact, isCleared, mallArea, mallName, mallPhoto, networkStats, packagePhotos, screenPhotos } from '@/lib/insights';
+import { STANDARD_BANDS, annualVisits, bandShare, compact, earnsAtLeast, isCleared, mallArea, mallName, mallPhoto, networkStats, packagePhotos, screenPhotos, semShare } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
 import { docWords, formatDate, formatRange, itemMall, days, reach, campaignClientName } from './logic';
 import { mallFacts } from './mallScreens';
@@ -216,10 +216,12 @@ interface Audience {
   readonly malls: number;
   readonly ages: readonly [string, number][];
   readonly women: number | null;
+  /** % who earn R30 000+ a month. */
   readonly income: number | null;
-  readonly married: number | null;
+  readonly parents: number | null;
   readonly working: number | null;
-  readonly lsm: string[];
+  /** % in SEM 8–10. */
+  readonly upperSem: number | null;
   readonly notice: number | null;
   readonly digital: number | null;
 }
@@ -238,22 +240,22 @@ function audienceOf(decks: readonly DeckMall[]): Audience {
     }
     return wsum ? sum / wsum : null;
   };
-  const bands = new Map<string, { sum: number; w: number }>();
-  for (const m of decks) {
-    for (const b of m.profile?.ageBands ?? []) {
-      const cur = bands.get(b.band) ?? { sum: 0, w: 0 };
-      bands.set(b.band, { sum: cur.sum + b.pct * weight(m), w: cur.w + weight(m) });
-    }
-  }
-  const ages = [...bands.entries()].map(([band, v]) => [band, v.sum / v.w] as [string, number]).sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }));
+  // Decks print slightly different age bands (15-24 or 18-24, 45-64 or 45-54 + 55-64): put them on one scale.
+  const withAges = decks.filter((m) => m.profile?.ageBands.length);
+  const ages = withAges.length
+    ? STANDARD_BANDS.map((b) => {
+        const w = withAges.reduce((s, m) => s + weight(m), 0);
+        return [b, withAges.reduce((s, m) => s + bandShare(m, [b]) * weight(m), 0) / w] as [string, number];
+      }).filter(([, v]) => v > 0)
+    : [];
   return {
     malls: decks.length,
     ages,
     women: avg((m) => m.profile?.female),
-    income: avg((m) => m.profile?.householdIncome),
-    married: avg((m) => m.profile?.married),
+    income: avg((m) => earnsAtLeast(m)),
+    parents: avg((m) => m.profile?.parents),
     working: avg((m) => m.profile?.working),
-    lsm: [...new Set(decks.map((m) => m.profile?.lsm).filter((x): x is string => Boolean(x)))],
+    upperSem: avg((m) => semShare(m, 'upper')),
     notice: avg((m) => m.media?.noticeMallAds),
     digital: avg((m) => m.media?.seenDigitalScreens),
   };
@@ -518,8 +520,9 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
       sy += 1.8;
     }
     const tiles: [string, string][] = [
-      ...(aud.income != null ? [[`R${compact(aud.income)}`, 'average monthly household income'] as [string, string]] : []),
-      ...(aud.lsm.length ? [[`LSM ${aud.lsm.slice(0, 2).join(', ')}`, 'strongest living-standard groups'] as [string, string]] : []),
+      ...(aud.income != null ? [[`${Math.round(aud.income)}%`, 'earn R30 000 or more a month'] as [string, string]] : []),
+      ...(aud.upperSem != null ? [[`${Math.round(aud.upperSem)}%`, 'in the top living-standard groups (SEM 8–10)'] as [string, string]] : []),
+      ...(aud.parents != null ? [[`${Math.round(aud.parents)}%`, 'are parents'] as [string, string]] : []),
       ...(aud.working != null ? [[`${Math.round(aud.working)}%`, 'working'] as [string, string]] : []),
       ...(aud.digital != null ? [[`${Math.round(aud.digital)}%`, 'have seen the digital screens'] as [string, string]] : []),
     ].slice(0, 4);

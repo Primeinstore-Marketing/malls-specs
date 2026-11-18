@@ -2,7 +2,7 @@
 
 import { Zoomable } from '@/components/ui/ImageViewer';
 import Link from 'next/link';
-import { PROVINCES, STANDARD_BANDS, mallArea, mallName, mallPhoto } from '@/lib/insights';
+import { PROVINCES, SEM_GROUPS, STANDARD_BANDS, mallArea, mallName, mallPhoto } from '@/lib/insights';
 import type { AudienceTarget, MallMatch } from '@/lib/insights';
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -55,10 +55,10 @@ export function AudiencePicker({ value, onChange, rows = false }: { value: Audie
         )),
       )}
       {row(
-        'Living standard (LSM)',
-        (['any', 'A', 'B', 'C'] as const).map((l) => (
-          <Chip key={l} on={value.lsm === l} onClick={() => onChange({ ...value, lsm: l })}>
-            {l === 'any' ? 'Any' : `LSM ${l}`}
+        'Living standard (SEM)',
+        (['any', 'upper', 'middle', 'lower'] as const).map((l) => (
+          <Chip key={l} on={value.sem === l} onClick={() => onChange({ ...value, sem: l })}>
+            {l === 'any' ? 'Any' : SEM_GROUPS[l].label}
           </Chip>
         )),
       )}
@@ -111,11 +111,11 @@ export function ScoreHelp() {
       <ul className="mt-1 list-disc pl-5">
         <li>Age groups you chose — 30</li>
         <li>Share of women or men — 25</li>
-        <li>LSM affinity — 15</li>
+        <li>Shoppers in the living-standard group you chose (SEM) — 15</li>
         <li>Visitors who notice digital screens — 15</li>
         <li>Size of the audience (visits a year) — 15</li>
       </ul>
-      <p className="mt-2">Anything you leave as “Everyone” or “Any” isn’t scored. Source: TGISA 18B/19A and 15C/16C, Stats SA Community Survey — compiled April 2022.</p>
+      <p className="mt-2">Anything you leave as “Everyone” or “Any” isn’t scored. Shopper numbers: TGI South Africa 2025C and SACSC, from the 2026 mall decks. Advertising recall: TGISA, April 2022.</p>
     </details>
   );
 }
@@ -124,7 +124,7 @@ export function audienceQuery(a: AudienceTarget): string {
   const q = new URLSearchParams();
   if (a.gender !== 'any') q.set('gender', a.gender);
   if (a.ages.length) q.set('ages', a.ages.join(','));
-  if (a.lsm !== 'any') q.set('lsm', a.lsm);
+  if (a.sem !== 'any') q.set('sem', a.sem);
   if (a.provinces.length) q.set('provinces', a.provinces.join(','));
   return q.toString();
 }
@@ -132,11 +132,11 @@ export function audienceQuery(a: AudienceTarget): string {
 export function readAudience(params: URLSearchParams): AudienceTarget {
   const list = (k: string) => (params.get(k) ?? '').split(',').filter(Boolean);
   const gender = params.get('gender');
-  const lsm = params.get('lsm');
+  const sem = params.get('sem');
   return {
     gender: gender === 'female' || gender === 'male' ? gender : 'any',
     ages: list('ages'),
-    lsm: lsm === 'A' || lsm === 'B' || lsm === 'C' ? lsm : 'any',
+    sem: sem === 'upper' || sem === 'middle' || sem === 'lower' ? sem : 'any',
     provinces: list('provinces'),
   };
 }
@@ -146,7 +146,7 @@ export function audienceSummary(a: AudienceTarget): string {
   const parts = [
     a.gender === 'female' ? 'Mostly women' : a.gender === 'male' ? 'Mostly men' : 'Everyone',
     a.ages.length ? a.ages.map((b) => b.replace('-', '–')).join(', ') : 'all ages',
-    a.lsm !== 'any' ? `LSM ${a.lsm}` : null,
+    a.sem !== 'any' ? SEM_GROUPS[a.sem].label : null,
     a.provinces.length ? a.provinces.join(', ') : 'all provinces',
   ];
   return parts.filter(Boolean).join(' · ');

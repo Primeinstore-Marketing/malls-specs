@@ -21,6 +21,29 @@ export interface ShopperProfile {
   readonly affinity: string | null;
   readonly race: readonly { readonly group: string; readonly pct: number }[];
   readonly education: readonly { readonly level: string; readonly pct: number }[];
+  /* From the 2026 mall decks (TGI South Africa 2025C). Older profiles don't have these. */
+  /** % who are parents. */
+  readonly parents?: number | null;
+  /** % with a post-matric qualification. */
+  readonly postMatric?: number | null;
+  /** Work status, as worded on the slide. */
+  readonly employment?: readonly Share[];
+  /** Home language, largest first. */
+  readonly languages?: readonly Share[];
+  readonly generations?: readonly Share[];
+  /** Monthly personal income bands (PPI), as printed, e.g. "R30 000 - R79 999" or "<R6 000". */
+  readonly income?: readonly Share[];
+  /** Socio-economic measure, "SEM 1" (lowest) to "SEM 10" (highest). */
+  readonly sem?: readonly Share[];
+  /** Where the numbers come from, e.g. "TGI South Africa 2025C; SACSC". */
+  readonly source?: string;
+  /** When the profile was last replaced, "YYYY-MM". */
+  readonly updated?: string;
+}
+
+export interface Share {
+  readonly label: string;
+  readonly pct: number;
 }
 
 /** Share of mall visitors (past 3 months) who notice each kind of advertising. */

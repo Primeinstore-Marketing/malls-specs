@@ -1,7 +1,7 @@
 import type { Catalogue, Specification } from '@data-model';
 import { fileUrl } from '@/lib/api';
 import { getAssets } from '@/lib/catalogue';
-import { annualVisits, compact, deckMallForApp, mapIdOf, isCleared, mallArea, mallName, mallPhoto, matchMalls, packagePhotos, screenPhotos } from '@/lib/insights';
+import { annualVisits, compact, deckMallForApp, isCleared, mallArea, mallName, mallPhoto, mapIdOf, matchMalls, packagePhotos, screenPhotos, semShare } from '@/lib/insights';
 import type { AudienceTarget, DeckMall, MediaPackage, ShownPhoto } from '@/lib/insights';
 import { ANY_AUDIENCE } from '@/lib/insights';
 import { getMalls, getScreenSize } from '@/lib/malls';
@@ -147,7 +147,8 @@ export function mallFacts(deck: DeckMall | undefined): string[] {
   if (p?.female) out.push(`${p.female}% women`);
   const top = p?.ageBands?.length ? [...p.ageBands].sort((a, b) => b.pct - a.pct)[0] : null;
   if (top) out.push(`Most aged ${top.band} (${top.pct}%)`);
-  if (p?.lsm) out.push(`LSM ${p.lsm}`);
+  const upper = semShare(deck, 'upper');
+  if (upper != null) out.push(`${upper}% SEM 8–10`);
   return out;
 }
 

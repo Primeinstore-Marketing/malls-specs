@@ -7,7 +7,8 @@ import { useRef, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import { deckMallForApp, deckPhoto, packagePhotos } from '@/lib/insights';
 import type { MallContent, MediaPackage, UploadedPhoto } from '@/lib/insights';
-import type { ShopperProfile } from '@/lib/insights/types';
+import type { Share, ShopperProfile } from '@/lib/insights/types';
+import { readMallDeck } from '@/lib/insights/deckReader';
 import { contentUpdatedAt } from '@/lib/content';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { NETWORK_SPEC_IDS, resolvePackageSpec, sheetHref } from '@/lib/portal/screens';
@@ -144,6 +145,24 @@ function PackageScreen({ pkg, appMallId, onChange }: { pkg: MediaPackage; appMal
   );
 }
 
+/** A list of "label – %" rows (income bands, SEM, languages…), typed in or filled from the deck. */
+function ShareList({ title, rows, placeholder, onChange }: { title: string; rows: readonly Share[]; placeholder: string; onChange: (rows: Share[]) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={fieldLabel}>{title}</span>
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input className={`${field} min-w-0 flex-1`} value={r.label} placeholder={placeholder} aria-label={`${title}: name`} onChange={(e) => onChange(rows.map((x, n) => (n === i ? { ...x, label: e.target.value } : x)))} />
+          <input className={`${field} max-w-[6rem] shrink-0`} value={r.pct} inputMode="decimal" aria-label={`${title}: percent`} onChange={(e) => onChange(rows.map((x, n) => (n === i ? { ...x, pct: num(e.target.value) ?? 0 } : x)))} />
+          <span className="text-body-sm text-fg-muted">%</span>
+          <button type="button" className={quietBtn} onClick={() => onChange(rows.filter((_, n) => n !== i))}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className={`${quietBtn} self-start text-accent`} onClick={() => onChange([...rows, { label: '', pct: 0 }])}>+ Add a row</button>
+    </div>
+  );
+}
+
 const EMPTY_DECK = (id: string, name: string, province: string): MallContent => ({
   id, name, appMallId: id, province, address: null, annualFootcount: null, gla: null, profile: null, media: null, packages: [],
 });
@@ -244,6 +263,24 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
   const setProfile = (patch: Partial<ShopperProfile>) => setM((cur) => ({ ...cur, profile: { ...(cur.profile ?? EMPTY_PROFILE), ...patch } }));
   const setMedia = (key: keyof NonNullable<MallContent['media']>, v: string) => setM((cur) => ({ ...cur, media: { ...(cur.media ?? {}), [key]: num(v) ?? undefined } }));
   const setPkg = (i: number, patch: Partial<MediaPackage>) => setM((cur) => ({ ...cur, packages: cur.packages.map((x, n) => (n === i ? { ...x, ...patch } : x)) }));
+  const [deckNote, setDeckNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  /** Fills the shopper numbers from the mall's PowerPoint deck (its Shopper Profile slide). */
+  async function fillFromDeck(f: File | undefined) {
+    if (!f) return;
+    setDeckNote(null);
+    try {
+      const read = await readMallDeck(f);
+      setM((cur) => ({
+        ...cur,
+        annualFootcount: null,
+        profile: { ...read.profile, monthlyFootcount: read.profile.monthlyFootcount ?? cur.profile?.monthlyFootcount ?? null },
+      }));
+      setDeckNote({ ok: true, text: `Filled from “${read.title || f.name}”. Check the numbers, then save.${read.checks.length ? ` To check: ${read.checks.join(' ')}` : ''}` });
+    } catch (e) {
+      setDeckNote({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t read that deck.' });
+    }
+  }
 
   async function upload(owner: string, f: File, apply: (photo: UploadedPhoto) => void) {
     setUploading(owner);
@@ -402,17 +439,30 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
         />
       </Group>
 
-      <Group title="Shoppers">
+      <Group title="Shoppers" note="Quickest: fill everything from the mall’s deck (the Shopper Profile slide), then check and save. Or type the numbers in.">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className={`${primaryBtn} cursor-pointer`}>
+            Fill from the mall’s deck (.pptx)
+            <input type="file" accept=".pptx" className="sr-only" aria-label="Fill from the mall’s deck" onChange={(e) => { void fillFromDeck(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          {deckNote ? <span role="status" className={`text-body-sm ${deckNote.ok ? 'text-fg-muted' : 'text-danger-fg'}`}>{deckNote.text}</span> : null}
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Text label="Visits a year" value={m.annualFootcount} placeholder={p.monthlyFootcount ? `${(p.monthlyFootcount * 12).toLocaleString('en-ZA')} (month × 12)` : 'e.g. 12 000 000'} onChange={(v) => set({ annualFootcount: num(v) })} />
           <Text label="Visits a month" value={p.monthlyFootcount} onChange={(v) => setProfile({ monthlyFootcount: num(v) })} />
-          <Text label="Household income (R / month)" value={p.householdIncome} onChange={(v) => setProfile({ householdIncome: num(v) })} />
-          <Text label="LSM affinity" value={p.lsm} placeholder="e.g. A or C&A" onChange={(v) => setProfile({ lsm: v || null })} />
           <Text label="Women %" value={p.female} onChange={(v) => setProfile({ female: num(v) })} />
           <Text label="Men %" value={p.male} onChange={(v) => setProfile({ male: num(v) })} />
           <Text label="Working %" value={p.working} onChange={(v) => setProfile({ working: num(v) })} />
-          <Text label="Married / living together %" value={p.married} onChange={(v) => setProfile({ married: num(v) })} />
-          <Text label="Higher affinity" value={p.affinity} placeholder="e.g. White & Coloured" onChange={(v) => setProfile({ affinity: v || null })} wide />
+          <Text label="Parents %" value={p.parents ?? null} onChange={(v) => setProfile({ parents: num(v) })} />
+          <Text label="Post-matric %" value={p.postMatric ?? null} onChange={(v) => setProfile({ postMatric: num(v), education: num(v) == null ? [] : [{ level: 'Post-matric', pct: num(v) as number }] })} />
+          {p.lsm || p.householdIncome || p.married != null || p.affinity ? (
+            <>
+              <Text label="Household income (R / month)" value={p.householdIncome} onChange={(v) => setProfile({ householdIncome: num(v) })} />
+              <Text label="LSM affinity" value={p.lsm} placeholder="e.g. A or C&A" onChange={(v) => setProfile({ lsm: v || null })} />
+              <Text label="Married / living together %" value={p.married} onChange={(v) => setProfile({ married: num(v) })} />
+              <Text label="Higher affinity" value={p.affinity} placeholder="e.g. White & Coloured" onChange={(v) => setProfile({ affinity: v || null })} wide />
+            </>
+          ) : null}
         </div>
         <p className="text-body-sm text-fg-muted">
           {m.annualFootcount
@@ -433,6 +483,15 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
           ))}
           <button type="button" className={`${quietBtn} self-start text-accent`} onClick={() => setProfile({ ageBands: [...p.ageBands, { band: '25-34', pct: 0 }] })}>+ Add age group</button>
         </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ShareList title="Own income a month" placeholder="e.g. R30 000 - R79 999" rows={p.income ?? []} onChange={(income) => setProfile({ income })} />
+          <ShareList title="Living standard (SEM)" placeholder="e.g. SEM 8" rows={p.sem ?? []} onChange={(sem) => setProfile({ sem })} />
+          <ShareList title="Population group" placeholder="e.g. Black" rows={p.race.map((r) => ({ label: r.group, pct: r.pct }))} onChange={(rows) => setProfile({ race: rows.map((r) => ({ group: r.label, pct: r.pct })) })} />
+          <ShareList title="Home language" placeholder="e.g. English" rows={p.languages ?? []} onChange={(languages) => setProfile({ languages })} />
+          <ShareList title="Generation" placeholder="e.g. Millennials (1981–1996)" rows={p.generations ?? []} onChange={(generations) => setProfile({ generations })} />
+          <ShareList title="Work status" placeholder="e.g. Employed full-time" rows={p.employment ?? []} onChange={(employment) => setProfile({ employment })} />
+        </div>
+        {p.source ? <p className="text-body-sm text-fg-subtle">Source: {p.source}{p.updated ? `, updated ${p.updated}` : ''}.</p> : null}
       </Group>
 
       <Group title="Advertising recall" note="Share of recent mall visitors, %.">

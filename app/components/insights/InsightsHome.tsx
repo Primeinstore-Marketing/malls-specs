@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { ANY_AUDIENCE, DECK_MALLS, annualVisits, compact, mallArea, mallName, mallPhoto, matchMalls, networkStats, rand, thousands } from '@/lib/insights';
+import { ANY_AUDIENCE, DECK_MALLS, annualVisits, compact, earnsAtLeast, mallArea, mallName, mallPhoto, matchMalls, networkStats, semShare, thousands } from '@/lib/insights';
 import type { AudienceTarget, DeckMall, MallMatch } from '@/lib/insights';
 import { AddToProposal, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { AudiencePicker, MatchRow, ScoreHelp, audienceQuery, audienceSummary } from './AudiencePicker';
@@ -30,11 +30,12 @@ function Compare() {
   const rows: [string, (m: DeckMall) => string][] = [
     ['Province', (m) => m.province],
     ['Visits a year', (m) => (annualVisits(m) ? thousands(annualVisits(m) as number) : '—')],
-    ['Household income / month', (m) => (m.profile?.householdIncome ? rand(m.profile.householdIncome) : '—')],
+    ['Earn R30 000+ a month', (m) => (earnsAtLeast(m) != null ? `${earnsAtLeast(m)}%` : '—')],
     ['Women', (m) => (m.profile?.female != null ? `${m.profile.female}%` : '—')],
     ['Biggest age group', (m) => { const b = [...(m.profile?.ageBands ?? [])].sort((x, y) => y.pct - x.pct)[0]; return b ? `${b.band} (${b.pct}%)` : '—'; }],
     ['Working', (m) => (m.profile?.working != null ? `${m.profile.working}%` : '—')],
-    ['LSM affinity', (m) => m.profile?.lsm?.replace('&', ' & ') ?? '—'],
+    ['SEM 8–10', (m) => (semShare(m, 'upper') != null ? `${semShare(m, 'upper')}%` : '—')],
+    ['Parents', (m) => (m.profile?.parents != null ? `${m.profile.parents}%` : '—')],
     ['Notice mall ads', (m) => (m.media?.noticeMallAds != null ? `${m.media.noticeMallAds}%` : '—')],
     ['See digital screens', (m) => (m.media?.seenDigitalScreens != null ? `${m.media.seenDigitalScreens}%` : '—')],
     ['Packages', (m) => m.packages.map((p) => p.format).join(', ')],
@@ -105,7 +106,7 @@ function stats(m: DeckMall): [string, string][] {
   const top = m.profile?.ageBands?.length ? [...m.profile.ageBands].sort((a, b) => b.pct - a.pct)[0] : null;
   if (top) out.push([top.band.replace('-', '–'), `Top age · ${top.pct}%`]);
   if (m.media?.seenDigitalScreens) out.push([`${m.media.seenDigitalScreens}%`, 'See screens']);
-  else if (m.profile?.lsm) out.push([`LSM ${m.profile.lsm.replace('&', ' & ')}`, 'Living standard']);
+  else if (semShare(m, 'upper') != null) out.push([`${semShare(m, 'upper')}%`, 'SEM 8–10']);
   return out.slice(0, 4);
 }
 
@@ -182,7 +183,7 @@ function Insights() {
             <strong className="font-semibold text-fg">{matches.length} malls</strong> for {audienceSummary(target)}
           </p>
           <div className="flex flex-wrap gap-2">
-            {target.gender !== 'any' || target.ages.length || target.lsm !== 'any' || target.provinces.length ? (
+            {target.gender !== 'any' || target.ages.length || target.sem !== 'any' || target.provinces.length ? (
               <button type="button" onClick={() => setTarget(ANY_AUDIENCE)} className="inline-flex h-11 items-center rounded-full px-4 text-body-sm font-semibold text-fg-muted hover:bg-bg-subtle hover:text-fg">
                 Start over
               </button>
@@ -232,7 +233,7 @@ function Insights() {
         <div className="grid gap-4 lg:grid-cols-3">
           <Leaderboard title="Biggest audiences" note="Mall visits a year" rows={top(annualVisits).map((r) => ({ ...r, label: compact(r.value) }))} />
           <Leaderboard title="Most screen-aware" note="Notice ads on digital screens" rows={top((m) => m.media?.seenDigitalScreens).map((r) => ({ ...r, label: `${r.value}%` }))} />
-          <Leaderboard title="Highest income" note="Household, a month" rows={top((m) => m.profile?.householdIncome).map((r) => ({ ...r, label: `R${compact(r.value)}` }))} />
+          <Leaderboard title="Highest income" note="Shoppers who earn R30 000+ a month" rows={top((m) => earnsAtLeast(m)).map((r) => ({ ...r, label: `${r.value}%` }))} />
         </div>
       </Section>
 

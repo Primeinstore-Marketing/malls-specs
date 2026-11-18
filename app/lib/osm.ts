@@ -4,7 +4,8 @@
  * at a point on the map. Every mall is placed this way, so each one has the
  * same street-map outline as the rest. Uses the public Overpass API.
  */
-import type { SiteLocation } from './sites';
+import { SA_PROVINCES } from './sites';
+import type { SiteLocation, SitePlace } from './sites';
 
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
 
@@ -93,3 +94,36 @@ export async function mallAt(lat: number, lng: number): Promise<SiteLocation | n
   }
   return best?.loc ?? null;
 }
+
+export interface PlaceHit {
+  readonly name: string;
+  readonly label: string;
+  readonly lat: number;
+  readonly lng: number;
+  readonly osm: string;
+  readonly place: Partial<SitePlace>;
+}
+
+/** Finds places on OpenStreetMap (Nominatim), in South Africa. */
+export async function searchPlaces(q: string): Promise<PlaceHit[]> {
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=za&q=${encodeURIComponent(q)}`;
+  const r = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error('The map search isn’t answering. Try again, or drop the pin by clicking the map.');
+  const list = (await r.json()) as {
+    name: string; display_name: string; lat: string; lon: string; osm_type: string; osm_id: number;
+    address?: Record<string, string>;
+  }[];
+  return list.map((x) => {
+    const a = x.address ?? {};
+    const province = SA_PROVINCES.find((p) => (a.state ?? '').toLowerCase().includes(p.toLowerCase().split('-')[0])) ?? a.state ?? '';
+    return {
+      name: x.name || x.display_name.split(',')[0],
+      label: x.display_name.split(',').slice(0, 4).join(','),
+      lat: Number(x.lat),
+      lng: Number(x.lon),
+      osm: `${x.osm_type[0]?.toUpperCase() ?? ''}${x.osm_id}`,
+      place: { area: a.suburb ?? a.neighbourhood ?? a.town ?? a.village ?? '', city: a.city ?? a.town ?? a.municipality ?? '', province },
+    };
+  });
+}
+

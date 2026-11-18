@@ -17,7 +17,7 @@ import { getScreenLayout } from '@/lib/screenLayouts';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { AddToProposal, RequireSignIn } from '@/components/portal/ui';
-import { annualVisits, compact, deckMallForApp, mallPhoto, packagePhotos, screenPhotos } from '@/lib/insights';
+import { annualVisits, compact, deckMallForApp, mallPhoto, packagePhotos, screenPhotos, semShare } from '@/lib/insights';
 
 /**
  * Media Explorer — every mall screen, as a picture gallery.
@@ -184,7 +184,7 @@ function mallStats(m: Mall): [string, string][] {
   const top = d.profile?.ageBands?.length ? [...d.profile.ageBands].sort((a, b) => b.pct - a.pct)[0] : null;
   if (top) out.push([top.band.replace('-', '–'), `Top age · ${top.pct}%`]);
   if (d.media?.seenDigitalScreens) out.push([`${d.media.seenDigitalScreens}%`, 'See digital screens']);
-  else if (d.profile?.lsm) out.push([`LSM ${d.profile.lsm.replace('&', ' & ')}`, 'Living standard']);
+  else if (semShare(d, 'upper') != null) out.push([`${semShare(d, 'upper')}%`, 'SEM 8–10']);
   return out.slice(0, 4);
 }
 

@@ -161,14 +161,57 @@ export function topBand(m: DeckMall): string | null {
 
 /* ---------- Audience matcher ---------- */
 
+/* ---------- Income and living standard (2026 decks) ---------- */
+
+/** The lowest rand amount of a printed income band: "<R6 000" → 0, "R30 000 - R79 999" → 30000. */
+function bandFloor(label: string): number | null {
+  if (/^\s*</.test(label)) return 0;
+  const m = label.match(/R\s*(\d[\d\s]*)/);
+  return m ? Number(m[1].replace(/\s/g, '')) : null;
+}
+
+/** % of shoppers whose own income is at least `floor` rand a month. Null when the mall has no income bands. */
+export function earnsAtLeast(m: DeckMall, floor = 30000): number | null {
+  const bands = m.profile?.income;
+  if (!bands?.length) return null;
+  const n = bands.reduce((s, b) => ((bandFloor(b.label) ?? -1) >= floor ? s + b.pct : s), 0);
+  return Math.round(n);
+}
+
+/** The income bands from lowest to highest. */
+export const incomeBands = (m: DeckMall) => [...(m.profile?.income ?? [])].sort((a, b) => (bandFloor(a.label) ?? 0) - (bandFloor(b.label) ?? 0));
+
+export type SemGroup = 'upper' | 'middle' | 'lower';
+export const SEM_GROUPS: Readonly<Record<SemGroup, { readonly label: string; readonly range: readonly [number, number] }>> = {
+  upper: { label: 'SEM 8–10', range: [8, 10] },
+  middle: { label: 'SEM 5–7', range: [5, 7] },
+  lower: { label: 'SEM 1–4', range: [1, 4] },
+};
+
+/** % of shoppers in a group of socio-economic measure (SEM) levels. Null when the mall has no SEM data. */
+export function semShare(m: DeckMall, group: SemGroup): number | null {
+  const sem = m.profile?.sem;
+  if (!sem?.length) return null;
+  const [lo, hi] = SEM_GROUPS[group].range;
+  const n = sem.reduce((s, b) => {
+    const level = Number(b.label.match(/\d+/)?.[0]);
+    return level >= lo && level <= hi ? s + b.pct : s;
+  }, 0);
+  return Math.round(n);
+}
+
+/** Where a mall's shopper numbers come from, in words. */
+export const profileSource = (m: DeckMall): string =>
+  m.profile?.source ? `${m.profile.source}${m.profile.updated ? ` (updated ${m.profile.updated})` : ''}` : 'Rialtofoods media proposal, April 2022';
+
 export interface AudienceTarget {
   readonly gender: 'any' | 'female' | 'male';
   readonly ages: readonly string[];
-  readonly lsm: 'any' | 'A' | 'B' | 'C';
+  readonly sem: 'any' | SemGroup;
   readonly provinces: readonly string[];
 }
 
-export const ANY_AUDIENCE: AudienceTarget = { gender: 'any', ages: [], lsm: 'any', provinces: [] };
+export const ANY_AUDIENCE: AudienceTarget = { gender: 'any', ages: [], sem: 'any', provinces: [] };
 
 export interface MallMatch {
   readonly mall: DeckMall;
@@ -183,7 +226,7 @@ const clamp = (n: number) => Math.max(0, Math.min(1, n));
 /**
  * How well each mall's shoppers fit a target audience. The weights are a
  * starting point for a conversation, not a media model: gender 25, age 30,
- * LSM 15, attention to digital screens 15, size of audience 15.
+ * living standard (SEM) 15, attention to digital screens 15, size of audience 15.
  */
 export function matchMalls(target: AudienceTarget, malls: readonly DeckMall[] = DECK_MALLS): MallMatch[] {
   return malls
@@ -199,9 +242,9 @@ export function matchMalls(target: AudienceTarget, malls: readonly DeckMall[] = 
         const share = bandShare(m, target.ages);
         parts.push({ weight: 30, value: clamp(share / 70), reason: `${share}% aged ${target.ages.join(', ')}` });
       }
-      if (target.lsm !== 'any') {
-        const has = Boolean(p?.lsm?.includes(target.lsm));
-        parts.push({ weight: 15, value: has ? 1 : 0.2, reason: has ? `High affinity, LSM ${target.lsm}` : undefined });
+      if (target.sem !== 'any') {
+        const share = semShare(m, target.sem);
+        parts.push({ weight: 15, value: clamp((share ?? 20) / 60), reason: share != null ? `${share}% ${SEM_GROUPS[target.sem].label}` : undefined });
       }
       const digital = m.media?.seenDigitalScreens;
       parts.push({ weight: 15, value: clamp((digital ?? 40) / 70), reason: digital ? `${digital}% see digital screens` : undefined });

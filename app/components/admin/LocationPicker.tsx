@@ -3,46 +3,15 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
-import { pointLocation, SA_PROVINCES } from '@/lib/sites';
-import { mallAt, outlineById } from '@/lib/osm';
+import { pointLocation } from '@/lib/sites';
+import { mallAt, outlineById, searchPlaces as search } from '@/lib/osm';
+import type { PlaceHit as Hit } from '@/lib/osm';
 import type { SiteLocation, SitePlace } from '@/lib/sites';
 import { field, quietBtn } from './AdminGate';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 /** South Africa, for a mall not placed yet. */
 const SA_BOUNDS: [[number, number], [number, number]] = [[16.3, -35.0], [33.0, -22.0]];
-
-interface Hit {
-  readonly name: string;
-  readonly label: string;
-  readonly lat: number;
-  readonly lng: number;
-  readonly osm: string;
-  readonly place: Partial<SitePlace>;
-}
-
-/** Finds places on OpenStreetMap (Nominatim), in South Africa. */
-async function search(q: string): Promise<Hit[]> {
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=za&q=${encodeURIComponent(q)}`;
-  const r = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!r.ok) throw new Error('The map search isn’t answering. Try again, or drop the pin by clicking the map.');
-  const list = (await r.json()) as {
-    name: string; display_name: string; lat: string; lon: string; osm_type: string; osm_id: number;
-    address?: Record<string, string>;
-  }[];
-  return list.map((x) => {
-    const a = x.address ?? {};
-    const province = SA_PROVINCES.find((p) => (a.state ?? '').toLowerCase().includes(p.toLowerCase().split('-')[0])) ?? a.state ?? '';
-    return {
-      name: x.name || x.display_name.split(',')[0],
-      label: x.display_name.split(',').slice(0, 4).join(','),
-      lat: Number(x.lat),
-      lng: Number(x.lon),
-      osm: `${x.osm_type[0]?.toUpperCase() ?? ''}${x.osm_id}`,
-      place: { area: a.suburb ?? a.neighbourhood ?? a.town ?? a.village ?? '', city: a.city ?? a.town ?? a.municipality ?? '', province },
-    };
-  });
-}
 
 /**
  * Where a mall is: search OpenStreetMap by name or address, pick the right

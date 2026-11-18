@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { useSearchParams } from 'next/navigation';
 import { getMall } from '@/lib/malls';
-import { DECK_MALLS, annualVisits, compact, deckMall, isCleared, mallArea, mallName, mallPhoto, packagePhotos, thousands, mapIdOf } from '@/lib/insights';
+import { DECK_MALLS, annualVisits, compact, deckMall, earnsAtLeast, incomeBands, isCleared, mallArea, mallName, mallPhoto, packagePhotos, profileSource, semShare, thousands, mapIdOf } from '@/lib/insights';
 import { mallPlace } from '@/lib/sites';
 import { AddToProposal, Bar, Page, RequireSignIn, Section } from '@/components/portal/ui';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -50,8 +50,16 @@ function Mall({ id }: { id: string }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <dl className="grid grid-cols-3 gap-6 sm:gap-10">
           <div><dt className="text-body-sm text-fg-muted">Visits a year</dt><dd className="text-display-md text-fg">{visits ? compact(visits) : '—'}</dd></div>
-          <div><dt className="text-body-sm text-fg-muted">Household income</dt><dd className="text-display-md text-fg">{p?.householdIncome ? `R${compact(p.householdIncome)}` : '—'}</dd></div>
-          <div><dt className="text-body-sm text-fg-muted">LSM affinity</dt><dd className="text-display-md text-fg">{p?.lsm?.replace('&', ' & ') ?? '—'}</dd></div>
+          {earnsAtLeast(m) != null ? (
+            <div><dt className="text-body-sm text-fg-muted">Earn R30k+ a month</dt><dd className="text-display-md text-fg">{earnsAtLeast(m)}%</dd></div>
+          ) : (
+            <div><dt className="text-body-sm text-fg-muted">Household income</dt><dd className="text-display-md text-fg">{p?.householdIncome ? `R${compact(p.householdIncome)}` : '—'}</dd></div>
+          )}
+          {semShare(m, 'upper') != null ? (
+            <div><dt className="text-body-sm text-fg-muted">SEM 8–10</dt><dd className="text-display-md text-fg">{semShare(m, 'upper')}%</dd></div>
+          ) : (
+            <div><dt className="text-body-sm text-fg-muted">LSM affinity</dt><dd className="text-display-md text-fg">{p?.lsm?.replace('&', ' & ') ?? '—'}</dd></div>
+          )}
         </dl>
         {getMall(mapIdOf(m)) ? (
           <Link href={`/explorer?mall=${mapIdOf(m)}`} className="inline-flex h-11 items-center justify-center rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
@@ -82,19 +90,66 @@ function Mall({ id }: { id: string }) {
             {p?.affinity ? <p className="text-body-sm text-fg-muted">Higher affinity: <span className="font-semibold text-fg">{p.affinity}</span></p> : null}
             <div className="grid grid-cols-2 gap-3 text-body-sm">
               {p?.married != null ? <div><div className="text-display-sm text-fg">{p.married}%</div><div className="text-fg-muted">Married or living together</div></div> : null}
-              {p?.working != null ? <div><div className="text-display-sm text-fg">{p.working}%</div><div className="text-fg-muted">Working</div></div> : null}
-              {p?.race.map((r) => <div key={r.group}><div className="text-display-sm text-fg">{r.pct}%</div><div className="text-fg-muted">{r.group}</div></div>)}
+              {p?.parents != null ? <div><div className="text-display-sm text-fg">{p.parents}%</div><div className="text-fg-muted">Parents</div></div> : null}
+              {p?.working != null ? <div><div className="text-display-sm text-fg">{p.working}%</div><div className="text-fg-muted">Working (full or part time)</div></div> : null}
               {p?.education.map((r) => <div key={r.level}><div className="text-display-sm text-fg">{r.pct}%</div><div className="text-fg-muted">{r.level} education</div></div>)}
             </div>
+            {p?.race.length ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-label-md font-semibold uppercase text-fg-muted">Population group</span>
+                {[...p.race].sort((a, b) => b.pct - a.pct).map((r) => <Bar key={r.group} label={r.group} pct={r.pct} />)}
+              </div>
+            ) : null}
+            {p?.generations?.length ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-label-md font-semibold uppercase text-fg-muted">Generation</span>
+                {p.generations.map((g) => <Bar key={g.label} label={g.label} pct={Math.round(g.pct)} max={60} />)}
+              </div>
+            ) : null}
           </div>
         </Section>
 
-        <Section title="Advertising recall" id="recall">
-          <div className="flex flex-col gap-3 rounded-3xl bg-bg-subtle p-5 sm:p-6">
-            <p className="text-body-sm text-fg-muted">People who visited a mall in the past 3 months.</p>
-            {m.media ? media.map(([label, v]) => (v != null ? <Bar key={label} label={label} pct={v} /> : null)) : <p className="text-body-sm text-fg-muted">Not in the proposal for this mall.</p>}
-          </div>
-        </Section>
+        <div className="flex flex-col gap-4">
+          {p?.income?.length || p?.sem?.length ? (
+            <Section title="Income and living standard" id="income">
+              <div className="flex flex-col gap-5 rounded-3xl bg-bg-subtle p-5 sm:p-6">
+                {p?.income?.length ? (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-label-md font-semibold uppercase text-fg-muted">Own income a month</span>
+                    {incomeBands(m).map((b) => <Bar key={b.label} label={b.label.replace(/ - /g, '–')} pct={Math.round(b.pct)} max={70} />)}
+                  </div>
+                ) : null}
+                {p?.sem?.length ? (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-label-md font-semibold uppercase text-fg-muted">Socio-economic measure (SEM)</span>
+                    <div className="flex h-24 items-end gap-1" role="img" aria-label={p.sem.map((b) => `${b.label} ${Math.round(b.pct)}%`).join(', ')}>
+                      {p.sem.map((b) => (
+                        <span key={b.label} className="flex flex-1 flex-col items-center justify-end gap-1 self-stretch">
+                          <span className="w-full rounded-t-[4px] bg-accent" style={{ height: `${Math.max(2, (b.pct / Math.max(...p.sem!.map((x) => x.pct))) * 100)}%` }} />
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-1 text-[11px] text-fg-muted">{p.sem.map((b) => <span key={b.label} className="flex-1 text-center">{b.label.replace('SEM ', '')}</span>)}</div>
+                    <p className="text-body-sm text-fg-muted">1 is the lowest living standard, 10 the highest. {semShare(m, 'upper')}% of shoppers are in SEM 8–10.</p>
+                  </div>
+                ) : null}
+              </div>
+            </Section>
+          ) : null}
+          {p?.languages?.length ? (
+            <Section title="Home language" id="language">
+              <div className="flex flex-col gap-2 rounded-3xl bg-bg-subtle p-5 sm:p-6">
+                {p.languages.filter((l) => l.pct >= 1).slice(0, 5).map((l) => <Bar key={l.label} label={l.label} pct={Math.round(l.pct)} />)}
+              </div>
+            </Section>
+          ) : null}
+          <Section title="Advertising recall" id="recall">
+            <div className="flex flex-col gap-3 rounded-3xl bg-bg-subtle p-5 sm:p-6">
+              <p className="text-body-sm text-fg-muted">People who visited a mall in the past 3 months (TGISA, April 2022).</p>
+              {m.media ? media.map(([label, v]) => (v != null ? <Bar key={label} label={label} pct={v} /> : null)) : <p className="text-body-sm text-fg-muted">No recall figures for this mall.</p>}
+            </div>
+          </Section>
+        </div>
       </div>
 
       <Section title="Media packages" id="packages">
@@ -134,7 +189,7 @@ function Mall({ id }: { id: string }) {
           </div>
         </Section>
       ) : null}
-      <p className="text-body-sm text-fg-subtle">Source: Rialtofoods media proposal, April 2022 — TGISA 18B/19A and 15C/16C; Stats SA Community Survey, 5km catchment.</p>
+      <p className="text-body-sm text-fg-subtle">Shoppers: {profileSource(m)}.{m.media ? ' Advertising recall: TGISA 18B/19A and 15C/16C, April 2022.' : ''}</p>
     </Page>
   );
 }
