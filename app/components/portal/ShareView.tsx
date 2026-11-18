@@ -43,6 +43,13 @@ export function Shape({ w, h, size = 56 }: { w: number | null; h: number | null;
 
 const res = (s: { width: number | null; height: number | null }) => (s.width && s.height ? `${s.width} × ${s.height} px` : 'Size to be confirmed');
 
+/** Quick reasons a client can tap when declining. */
+const DECLINE_REASONS = ['Budget', 'Timing', 'Different malls or screens', 'Not going ahead', 'Other'] as const;
+
+/** What sales sees when a client declines: starts with "Declined", so the campaign page can tell it apart from changes. */
+export const DECLINED_PREFIX = 'Declined by the client';
+const declineNote = (reason: string, more: string) => `${DECLINED_PREFIX}. Reason: ${reason}.${more ? ` ${more}` : ''}`;
+
 function statusLine(p: SharedProposal): { text: string; tone: string } {
   const ph = phase({ status: p.status, start: p.start, end: p.end } as Campaign);
   if (ph === 'live') return { text: '● Live now', tone: 'bg-success-bg text-success-fg' };
@@ -298,14 +305,40 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentChanges, setSentChanges] = useState(false);
+  /** Which answer the client is giving at the end of the page: changes or decline (approve opens its own dialog). */
+  const [choice, setChoice] = useState<'changes' | 'decline' | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  // Remembered in this browser: the page reloads after sending, and the server only knows "changes sent".
+  const declinedKey = `malls-specs:declined:${p.id}`;
+  const [declined, setDeclinedState] = useState(() => {
+    try {
+      return p.status === 'changes' && sessionStorage.getItem(declinedKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setDeclined = (v: boolean) => {
+    setDeclinedState(v);
+    try {
+      if (v) sessionStorage.setItem(declinedKey, '1');
+      else sessionStorage.removeItem(declinedKey);
+    } catch {
+      /* private window: the banner just says the message was sent */
+    }
+  };
   /** The whole list stays as it is; the note goes to the salesperson, who updates the proposal. */
-  async function askForChanges() {
-    if (!shareKey || !changeNote.trim()) return;
+  async function askForChanges(decline = false) {
+    if (!shareKey) return;
+    if (!decline && !changeNote.trim()) return;
+    if (decline && !declineReason) return;
     setSending(true);
     setSendError(null);
     try {
-      await api.sendProposalChanges(p.id, shareKey, { start: p.start, end: p.end, note: changeNote.trim(), name: '' });
+      const note = decline ? declineNote(declineReason, changeNote.trim()) : changeNote.trim();
+      await api.sendProposalChanges(p.id, shareKey, { start: p.start, end: p.end, note, name: '' });
       setSentChanges(true);
+      setDeclined(decline);
+      setChoice(null);
       setChangeNote('');
       reload?.();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -382,7 +415,11 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         <div className="border-b border-border bg-accent-subtle print:hidden" role="status">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
             <p className="text-body-md text-fg">
-              <strong>Your message is with {first}.</strong> {sentChanges ? `They’ve been told and will update the ${w.noun}; this page always shows the latest version.` : `They’ll update the ${w.noun}; this page always shows the latest version.`}
+              {declined ? (
+                <><strong>You declined this {w.noun}.</strong> {first} has been told. If you change your mind, reply to {first} or approve it below.</>
+              ) : (
+                <><strong>Your message is with {first}.</strong> {sentChanges ? `They’ve been told and will update the ${w.noun}; this page always shows the latest version.` : `They’ll update the ${w.noun}; this page always shows the latest version.`}</>
+              )}
             </p>
             <EmailButton href={mail(`Changes to: ${p.name}`, `Hi ${first},\n\nI've sent some changes to ${p.name} from the booking page:\n${link}\n\nThanks`)} className={btnSmall + ' border-border-strong bg-bg text-fg'} align="right">
               Also email {first}
@@ -410,9 +447,6 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <div className="flex flex-wrap items-center gap-3 text-body-lg text-fg-muted">
             <span>{formatRange(edits.start, edits.end)}{flight ? ` · ${flight} days` : ''}</span>
             <span className={`rounded-full px-3 py-1 text-body-sm font-semibold ${status.tone}`}>{status.text}</span>
-            {editable ? (
-              <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} print:hidden`}>{w.approve}</button>
-            ) : null}
           </div>
           {editingLines ? <DatesEditor start={edits.start} end={edits.end} onChange={(start, end) => setEdits((e) => ({ ...e, start, end }))} /> : null}
           {p.objective ? <p className="max-w-prose text-body-md text-fg">{p.objective}</p> : null}
@@ -499,32 +533,77 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
             </>
           ) : (
             <>
-              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? `Approve the ${w.noun}` : 'Questions about your booking?'}</h2>
+              <h2 id="decide-title" className="text-body-lg font-semibold text-fg">{editable ? `Your decision on the ${w.noun}` : 'Questions about your booking?'}</h2>
               <p className="text-body-md text-fg-muted">
-                {editable ? `If the ${w.noun} is right, approve it in one step. If anything should change, tell ${first} below.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
+                {editable ? `Approve it as it stands, ask ${first} for changes, or decline it.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
               </p>
-              <div className="flex flex-wrap gap-2">
-                {editable ? (
-                  <button type="button" onClick={() => setApproving(true)} className={btnPrimary}>
-                    {w.approve}
+              {editable ? (
+                <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Your decision">
+                  <button type="button" onClick={() => setApproving(true)} className="flex flex-col items-start gap-0.5 rounded-2xl bg-accent px-5 py-4 text-left text-fg-on-accent hover:bg-accent-hover">
+                    <span className="text-body-md font-semibold">✓ {w.approve}</span>
+                    <span className="text-body-sm opacity-80">Everything is right</span>
                   </button>
-                ) : null}
-                <EmailButton href={mail(`Question about: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className={btnSecondary}>
-                  Ask a question
-                </EmailButton>
-              </div>
-              {editable && shareKey ? (
-                <div className="flex flex-col gap-2 border-t border-border pt-4">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-label-md font-semibold uppercase text-fg-muted">Ask for changes</span>
-                    <textarea rows={3} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="e.g. Please take out the Menlyn sites and add two at Canal Walk." className="w-full rounded-xl border border-border-strong bg-bg px-3 py-2.5 text-body-md text-fg outline-none focus:border-border-focus" />
-                  </label>
-                  {sendError ? <p role="alert" className="text-body-sm text-danger-fg">{sendError}</p> : null}
-                  <button type="button" disabled={sending || !changeNote.trim()} onClick={() => void askForChanges()} className={`${btnSecondary} self-start disabled:opacity-50`}>
-                    {sending ? 'Sending…' : `Send to ${first}`}
+                  <button type="button" aria-expanded={choice === 'changes'} onClick={() => setChoice(choice === 'changes' ? null : 'changes')} className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 px-5 py-4 text-left ${choice === 'changes' ? 'border-accent bg-accent-subtle' : 'border-border-strong hover:border-fg'}`}>
+                    <span className="text-body-md font-semibold text-fg">✎ Ask for changes</span>
+                    <span className="text-body-sm text-fg-muted">Tell {first} what to change</span>
+                  </button>
+                  <button type="button" aria-expanded={choice === 'decline'} onClick={() => setChoice(choice === 'decline' ? null : 'decline')} className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 px-5 py-4 text-left ${choice === 'decline' ? 'border-danger-fg bg-danger-bg' : 'border-border-strong hover:border-danger-fg'}`}>
+                    <span className="text-body-md font-semibold text-fg">✕ Decline</span>
+                    <span className="text-body-sm text-fg-muted">Not going ahead</span>
                   </button>
                 </div>
               ) : null}
+              {editable && choice === 'changes' ? (
+                <div className="flex flex-col gap-2">
+                  {shareKey ? (
+                    <>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-label-md font-semibold uppercase text-fg-muted">What should change?</span>
+                        <textarea rows={3} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="e.g. Please take out the Menlyn sites and add two at Canal Walk." className="w-full rounded-xl border border-border-strong bg-bg px-3 py-2.5 text-body-md text-fg outline-none focus:border-border-focus" />
+                      </label>
+                      <p className="text-body-sm text-fg-muted">Or change the list itself above: remove lines, add screens or move the dates, then send.</p>
+                      {sendError ? <p role="alert" className="text-body-sm text-danger-fg">{sendError}</p> : null}
+                      <button type="button" disabled={sending || !changeNote.trim()} onClick={() => void askForChanges()} className={`${btnPrimary} self-start disabled:opacity-50`}>
+                        {sending ? 'Sending…' : `Send to ${first}`}
+                      </button>
+                    </>
+                  ) : (
+                    <EmailButton href={mail(`Changes to: ${p.name}`, `Hi ${first},\n\nPlease change the following on ${p.name}:\n\n\n${link}`)} className={`${btnPrimary} self-start`}>Email {first} the changes</EmailButton>
+                  )}
+                </div>
+              ) : null}
+              {editable && choice === 'decline' ? (
+                <div className="flex flex-col gap-3">
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="mb-2 text-label-md font-semibold uppercase text-fg-muted">Why are you declining?</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {DECLINE_REASONS.map((r) => (
+                        <button key={r} type="button" aria-pressed={declineReason === r} onClick={() => setDeclineReason(r)} className={`inline-flex h-10 items-center rounded-full border px-4 text-body-sm font-semibold ${declineReason === r ? 'border-fg bg-fg text-bg' : 'border-border-strong text-fg hover:border-fg'}`}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-label-md font-semibold uppercase text-fg-muted">Anything to add? <span className="normal-case tracking-normal text-fg-subtle">(optional)</span></span>
+                    <textarea rows={2} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} className="w-full rounded-xl border border-border-strong bg-bg px-3 py-2.5 text-body-md text-fg outline-none focus:border-border-focus" />
+                  </label>
+                  {sendError ? <p role="alert" className="text-body-sm text-danger-fg">{sendError}</p> : null}
+                  {shareKey ? (
+                    <button type="button" disabled={sending || !declineReason} onClick={() => void askForChanges(true)} className="inline-flex h-11 items-center self-start rounded-full bg-danger-fg px-5 text-body-sm font-semibold text-bg hover:opacity-90 disabled:opacity-50">
+                      {sending ? 'Sending…' : `Decline the ${w.noun}`}
+                    </button>
+                  ) : (
+                    <EmailButton href={mail(`Declined: ${p.name}`, `Hi ${first},\n\nWe won't go ahead with ${p.name}.\nReason: ${declineReason || '-'}\n${changeNote}\n\n${link}`)} className={`${btnPrimary} self-start`}>Email {first}</EmailButton>
+                  )}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4 text-body-sm text-fg-muted">
+                <span>Not sure yet?</span>
+                <EmailButton href={mail(`Question about: ${p.name}`, `Hi ${first},\n\n\n\n${link}`)} className="font-semibold text-accent hover:underline">
+                  Ask {first} a question
+                </EmailButton>
+              </div>
             </>
           )}
         </section>
@@ -546,7 +625,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                     )}
                   </>
                 ) : (
-                  <button type="button" onClick={() => setApproving(true)} className={`${btnPrimary} justify-center whitespace-nowrap`}>{w.approve}</button>
+                  <button type="button" onClick={() => document.getElementById('decide-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className={`${btnPrimary} justify-center whitespace-nowrap`}>Approve or decline ↓</button>
                 )}
               </div>
             </div>

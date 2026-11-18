@@ -45,7 +45,7 @@ import { Emailer } from './Emailer';
 import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
-import { Shape } from './ShareView';
+import { DECLINED_PREFIX, Shape } from './ShareView';
 import { canDeleteDraft, countdown, DeleteDraftButton } from './CampaignCard';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { withBasePath } from '@/lib/basePath';
@@ -125,6 +125,18 @@ function ClientChangesBox({ c }: { c: Campaign }) {
   const removed = c.items.filter((i) => !asked.has(key(i)));
   const dates = ch.start !== c.start || ch.end !== c.end;
   const label = (i: NewCampaignItem | CampaignItem) => itemLabel(i as CampaignItem);
+  if (ch.note?.startsWith(DECLINED_PREFIX)) {
+    return (
+      <div className="flex flex-col gap-3 rounded-2xl border border-danger-fg bg-danger-bg p-4" role="status">
+        <strong className="text-body-md text-danger-fg">{ch.name || 'The client'} declined this {docWords(c).noun} · {timeAgo(ch.at)}</strong>
+        <p className="text-body-sm text-fg">{ch.note.slice(DECLINED_PREFIX.length).replace(/^\.\s*/, '')}</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btn.quiet} onClick={() => portal.dismissClientChanges(c.id)}>Got it</button>
+        </div>
+        <p className="text-body-sm text-fg-muted">To try again, change the plan and send the updated {docWords(c).noun}; the client’s link always shows the latest version.</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-accent bg-bg p-4">
       <strong className="text-body-md text-fg">{ch.name || 'The client'} asked for these changes · {timeAgo(ch.at)}</strong>
