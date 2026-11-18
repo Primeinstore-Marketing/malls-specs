@@ -498,6 +498,7 @@ type StoredCampaign = {
   clientId?: string | null; prospect?: { company?: string; name?: string } | null; items: unknown[];
   events: { at: string; by: string; text: string; kind: string; id: string }[]; shareKey?: string; updatedAt?: string;
   clientChanges?: unknown;
+  rateCard?: unknown;
 };
 
 /** The campaign behind a booking link, if the key matches. Same answer for a wrong key and no campaign. */
@@ -547,6 +548,8 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
       items: c.items,
       from: owner ? { name: owner.name || owner.email, title: owner.title, email: owner.email } : null,
       at: sent ?? c.updatedAt ?? row.updated_at,
+      // A proposal shows its prices to the client; a site list never does.
+      rateCard: c.kind !== 'sitelist' && c.rateCard ? c.rateCard : null,
     },
     changesPending: Boolean(c.clientChanges),
     // The page uses id and key from here on (changes, approval).

@@ -170,8 +170,7 @@ function Form({ user }: { user: PortalUser }) {
   function applyDraft(draft: BriefDraft, file: string, truncated = false, docRows: readonly SiteRow[] = []) {
     const before = { name, client, objective, start, end, picked, reasons, siteLines, kind, priceRows };
     setPriceRows(docRows.some((r) => r.rate != null) ? docRows : []);
-    // A document with site lines (a PIMS export) makes a site list.
-    if (draft.sites?.length) setKind('sitelist');
+    // Site lines stay on whatever sales chose to make: a proposal can carry a site list and rate card.
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
     const chosen = draft.items.filter((i) => rows.has(i.key));
     const iso = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);

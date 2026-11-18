@@ -60,13 +60,12 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   const opener = {
     proposal:
       w.noun === 'proposal'
-        ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. The link below opens the site list: approve it in one click, or tell me what to change.`
+        ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the screens, the malls and the investment, then approve it in one click or tell me what to change.`
         : `Here’s the site list for ${c.name}, from our booking system: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please check the screens and approve it in one click, or tell me what to change. It also shows how many files to make and the template for each.`,
     reminder: `A quick reminder that the ${w.noun} for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
     booked: `${c.name} is booked: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
   }[kind];
-  // The link opens the site list (screens and files to supply), whichever document this is.
-  const cta = kind === 'booked' ? 'View your booking' : 'Review and approve the site list';
+  const cta = kind === 'booked' ? 'View your booking' : `Review and approve the ${w.noun}`;
   const hasTemplates = groups.some((z) => z.files.some((f) => f.template));
 
   /* ---- Plain text ---- */

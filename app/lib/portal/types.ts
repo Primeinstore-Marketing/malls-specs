@@ -98,7 +98,7 @@ export interface Campaign {
   readonly shareCode?: string;
   /** Changes the client asked for on their booking page, waiting for sales to apply or dismiss. */
   readonly clientChanges?: ClientChanges | null;
-  /** Sales' prices for this proposal. Goes in the PowerPoint and the Excel rate card, never on the client's link. */
+  /** Sales' prices for this proposal: in the PowerPoint, the Excel rate card and the client's proposal page (never a site list's). */
   readonly rateCard?: RateCard | null;
 }
 

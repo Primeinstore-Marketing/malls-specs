@@ -45,6 +45,7 @@ import { Emailer } from './Emailer';
 import type { EmailKind } from '@/lib/portal/email';
 import { ClientField } from './ClientField';
 import { campaignContact, shareUrl } from '@/lib/portal/share';
+import { rand, rateTotals } from '@/lib/portal/rates';
 import { DECLINED_PREFIX, Shape } from './ShareView';
 import { canDeleteDraft, countdown, DeleteDraftButton } from './CampaignCard';
 import { useAdminSession } from '@/components/auth/AdminSession';
@@ -158,6 +159,26 @@ function ClientChangesBox({ c }: { c: Campaign }) {
   );
 }
 
+/** One numbered step in "Next steps": done (✓) or still to do, with its button. */
+function NextRow({ n, done, optional = false, title, detail, children }: { n: number; done: boolean; optional?: boolean; title: string; detail: string; children: React.ReactNode }) {
+  return (
+    <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-body-sm font-bold ${done ? 'bg-success-bg text-success-fg' : 'bg-bg-muted text-fg'}`} aria-hidden="true">{done ? '✓' : n}</span>
+        <div className="flex min-w-0 flex-col">
+          <span className="text-body-md font-semibold text-fg">
+            {title}
+            {optional ? <span className="ml-2 text-body-sm font-normal text-fg-subtle">optional</span> : null}
+            <span className="sr-only">{done ? ' (done)' : ''}</span>
+          </span>
+          <span className="text-body-sm text-fg-muted">{detail}</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2 pl-10 sm:pl-0">{children}</div>
+    </li>
+  );
+}
+
 /** What the signed-in user can do next, given where the campaign is. */
 function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   // A note the AI drafted from the client's brief, when the proposal started that way.
@@ -199,33 +220,46 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
   let tone: 'accent' | 'danger' | 'quiet' = 'accent';
 
   if (sales && ['draft', 'proposed', 'changes'].includes(c.status)) {
-    const checks = [
-      { done: Boolean(c.start && c.end), text: 'Dates', href: '#f-start' },
-      { done: c.items.length > 0, text: 'Screens', href: '#media' },
-    ];
-    const ready = checks.every((x) => x.done);
-    title = c.status === 'proposed' ? `${campaignClientName(c)} sent a request` : c.status === 'changes' ? 'Changes requested' : `Build the ${w.noun}`;
+    const hasClient = Boolean(c.clientId || c.prospect?.company || c.prospect?.name);
+    const datesSet = Boolean(c.start && c.end);
+    const t = rateTotals(c);
+    const ready = c.items.length > 0 && datesSet;
+    const n = c.items.length;
+    title = c.status === 'proposed' ? `${campaignClientName(c)} sent a request` : c.status === 'changes' ? 'Changes requested' : 'Next steps';
     body = (
       <>
         <ClientChangesBox c={c} />
-        <p className="text-body-md text-fg-muted">
-          {c.status === 'proposed' ? 'Shape the plan, then send it back as a proposal.' : c.status === 'changes' ? 'See what they asked for in the updates below.' : 'Send it to the client when it’s ready.'}
-        </p>
-        <Checklist items={checks} />
-        {!contact?.email ? <p className="text-body-sm text-fg-muted">No client email yet — add one in <a href="#f-client" className="font-semibold text-accent hover:underline">Campaign details</a> below, or type it into the email.</p> : null}
-        <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for the client (optional)" className={`${input} h-auto py-2.5`} />
-        <div className="flex flex-wrap gap-2">
-          {ready ? (
-            <button type="button" className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
-              {contact?.name ? `Email ${w.noun} to ${contact.name.split(' ')[0]}` : `Email ${w.noun}`}
+        <ol className="flex flex-col divide-y divide-border rounded-2xl bg-bg">
+          <NextRow n={1} done={n > 0} title={n > 0 ? `${n} ${n === 1 ? w.unit : `${w.unit}s`} added` : `Add ${w.unit}s`} detail={n > 0 ? 'Listed below. Add more any time.' : 'Pick them in the Media Explorer.'}>
+            <Link href="/explorer" onClick={() => portal.setActive(c.id)} className={n > 0 ? btn.quiet : btn.primary}>{n > 0 ? '+ Add more' : `+ Add ${w.unit}s`}</Link>
+          </NextRow>
+          <NextRow n={2} done={hasClient && datesSet} title="Client and dates" detail={`${hasClient ? campaignClientName(c) : 'No client yet'} · ${datesSet ? formatRange(c.start, c.end) : 'no dates yet'}${contact?.email ? '' : ' · no client email yet'}`}>
+            <a href="#details" className={hasClient && datesSet ? btn.quiet : btn.secondary}>{hasClient && datesSet ? 'Edit' : 'Add'}</a>
+          </NextRow>
+          {w.noun === 'proposal' ? (
+            <NextRow n={3} done={t.priced > 0} optional title="Prices" detail={t.priced ? `${t.priced} of ${t.lines} lines priced · ${rand(t.total)}` : 'Type them in or upload a price list. Lines without a price show R 0.00.'}>
+              <a href="#rates" className={btn.quiet}>{t.priced ? 'Edit' : 'Add prices'}</a>
+            </NextRow>
+          ) : null}
+          <NextRow n={w.noun === 'proposal' ? 4 : 3} done={false} title={`Check it and send it to ${contact?.name ? contact.name.split(' ')[0] : 'the client'}`} detail={ready ? `Preview what they’ll see, then email it. They approve or decline from the link.` : `Add ${n ? 'the dates' : `${w.unit}s and dates`} first.`}>
+            <PreviewButton c={c} user={user} variant="secondary" label="Preview" />
+            <button type="button" disabled={!ready} className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
+              Email {w.noun}
             </button>
-          ) : (
-            <button type="button" disabled className={btn.primary}>Email {w.noun} to client</button>
-          )}
-          {ready ? <button type="button" className={btn.secondary} onClick={approveForClient}>{w.approve} for the client</button> : null}
-          {ready ? <PreviewButton c={c} user={user} variant="secondary" /> : null}
-          {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>{c.status === 'proposed' ? 'Decline request' : 'Decline'}</button> : null}
-        </div>
+          </NextRow>
+        </ol>
+        {ready ? (
+          <details className="text-body-sm text-fg-muted">
+            <summary className="cursor-pointer font-semibold text-fg-muted hover:text-fg">More options</summary>
+            <div className="mt-3 flex flex-col gap-3">
+              <textarea id="f-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="A personal note for the email (optional)" className={`${input} h-auto py-2.5`} />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={btn.secondary} onClick={approveForClient}>The client already agreed: {w.approve.toLowerCase()} for them</button>
+                {c.status !== 'draft' ? <button type="button" className={btn.quiet} onClick={() => portal.move(c.id, 'declined', note)}>{c.status === 'proposed' ? 'Decline request' : 'Decline'}</button> : null}
+              </div>
+            </div>
+          </details>
+        ) : null}
       </>
     );
   } else if (sales && c.status === 'approved') {
@@ -637,12 +671,12 @@ function ShareButton({ c, user }: { c: Campaign; user: PortalUser }) {
 
 
 /** One button for everything sales send: the PDF, the presentation and the rate card, each previewed first. */
-function PreviewButton({ c, user, variant = 'quiet' }: { c: Campaign; user: PortalUser; variant?: 'quiet' | 'secondary' }) {
+function PreviewButton({ c, user, variant = 'quiet', label = 'Preview & download' }: { c: Campaign; user: PortalUser; variant?: 'quiet' | 'secondary'; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className={variant === 'secondary' ? btn.secondary : btn.quiet} disabled={!c.items.length} title={c.items.length ? '' : 'Add screens first'} onClick={() => setOpen(true)}>
-        Preview &amp; download
+        {label}
       </button>
       {open ? <DownloadsDialog c={c} user={user} onClose={() => setOpen(false)} /> : null}
     </>
@@ -717,16 +751,21 @@ function View({ id, user }: { id: string; user: PortalUser }) {
               <Link href="/explorer" onClick={() => { if (!isActive) portal.setActive(c.id); }} className={btn.secondary}>+ Add screens</Link>
             ) : null}
             <PreviewButton c={c} user={user} />
-            {canDeleteDraft(c, user, isAdmin) ? <DeleteDraftButton c={c} className="h-11 rounded-full px-4 hover:bg-danger-bg hover:no-underline" onDeleted={() => router.push('/portal')} /> : null}
-            <ShareButton c={c} user={user} />
-            {user.role === 'sales' ? (
-              <button type="button" className={btn.quiet} onClick={() => router.push(`/portal/campaign?id=${portal.duplicate(c.id)}`)} title="A new draft with the same client, screens and audience; set new dates">
-                Duplicate
-              </button>
-            ) : null}
+            <details className="relative">
+              <summary className={`${btn.quiet} cursor-pointer list-none marker:hidden`} aria-label="More actions">More ▾</summary>
+              <div className="absolute right-0 z-popover mt-1 flex w-56 flex-col items-stretch rounded-2xl border border-border bg-bg p-1.5 shadow-3 [&>*]:justify-start">
+                <ShareButton c={c} user={user} />
+                {user.role === 'sales' ? (
+                  <button type="button" className={btn.quiet} onClick={() => router.push(`/portal/campaign?id=${portal.duplicate(c.id)}`)} title="A new draft with the same client, screens and audience; set new dates">
+                    Duplicate
+                  </button>
+                ) : null}
+                {canDeleteDraft(c, user, isAdmin) ? <DeleteDraftButton c={c} className="h-11 rounded-full px-4 hover:bg-danger-bg hover:no-underline" onDeleted={() => router.push('/portal')} /> : null}
+              </div>
+            </details>
           </div>
         </div>
-        {!ph && c.status !== 'declined' ? <Steps c={c} role={user.role} /> : null}
+        {!ph && c.status !== 'declined' && !(user.role === 'sales' && ['draft', 'proposed', 'changes'].includes(c.status)) ? <Steps c={c} role={user.role} /> : null}
       </header>
 
       {/* What to do next comes first; the details form below it. */}
@@ -762,7 +801,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
       </div>
 
       <p className="text-body-sm text-fg-subtle">
-        Visits are estimates from each mall’s annual foot count (Rialtofoods proposal, April 2022) over the flight dates. Media is subject to availability.
+        Visits are estimates from each mall’s shopper numbers over the flight dates. Media is subject to availability.
       </p>
     </Page>
   );

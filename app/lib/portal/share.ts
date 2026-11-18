@@ -1,7 +1,7 @@
 import { withBasePath } from '@/lib/basePath';
 import { CLIENTS } from './seed';
 import { campaignClientName, docKind, userById } from './logic';
-import type { Campaign, CampaignItem, CampaignStatus, DocKind } from './types';
+import type { Campaign, CampaignItem, CampaignStatus, DocKind, RateCard } from './types';
 
 /**
  * The booking page a client opens from an email — no account needed. The
@@ -25,6 +25,8 @@ export interface SharedProposal {
   readonly items: readonly CampaignItem[];
   readonly from: { readonly name: string; readonly title: string; readonly email: string } | null;
   readonly at: string;
+  /** A proposal's prices, when sales priced it (never sent with a site list). */
+  readonly rateCard?: RateCard | null;
 }
 
 function toBase64Url(text: string): string {
@@ -55,6 +57,7 @@ export function snapshot(c: Campaign, senderId: string): SharedProposal {
     items: c.items,
     from: sales ? { name: sales.name, title: sales.title, email: sales.email } : null,
     at: new Date().toISOString(),
+    rateCard: docKind(c) === 'proposal' ? c.rateCard ?? null : null,
   };
 }
 

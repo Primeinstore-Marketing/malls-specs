@@ -24,7 +24,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
   const [tab, setTab] = useState<Tab>(start);
   // Every tab always opens: the rate card explains itself when it has no prices yet.
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'pdf', label: 'Site list (PDF)' },
+    { id: 'pdf', label: `${w.Noun} (PDF)` },
     { id: 'pptx', label: 'Presentation (PowerPoint)' },
     { id: 'xlsx', label: 'Rate card (Excel)' },
   ];
@@ -85,7 +85,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
 
   const t = rateTotals(c);
   const card = c.rateCard;
-  const downloadLabel = tab === 'pdf' ? 'Download site list (PDF)' : tab === 'pptx' ? 'Download presentation (PowerPoint)' : 'Download rate card (Excel)';
+  const downloadLabel = tab === 'pdf' ? `Download ${w.noun} (PDF)` : tab === 'pptx' ? 'Download presentation (PowerPoint)' : 'Download rate card (Excel)';
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-[rgba(6,12,28,0.55)] p-0 sm:p-6 print:hidden" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -111,7 +111,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-bg-subtle">
           {tab === 'pdf' ? (
-            <iframe title="Site list as the client sees it" src={`${shareUrl(c, user.id)}&preview=1`} className="h-full w-full border-0 bg-bg" />
+            <iframe title={`${w.Noun} as the client sees it`} src={`${shareUrl(c, user.id)}&preview=1`} className="h-full w-full border-0 bg-bg" />
           ) : null}
           {tab === 'pptx' ? (
             <div className="flex flex-col items-center gap-3 p-4">

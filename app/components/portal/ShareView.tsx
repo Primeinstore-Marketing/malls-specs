@@ -8,7 +8,8 @@ import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
 import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
-import { days, DOC_WORDS, formatDate, formatRange, phase } from '@/lib/portal/logic';
+import { days, docKind, docWords, formatDate, formatRange, itemLabel, phase } from '@/lib/portal/logic';
+import { PERIOD_LABEL, hasRates, pricedLines, rand, rateTotals } from '@/lib/portal/rates';
 import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
@@ -43,6 +44,50 @@ export function Shape({ w, h, size = 56 }: { w: number | null; h: number | null;
 
 const res = (s: { width: number | null; height: number | null }) => (s.width && s.height ? `${s.width} × ${s.height} px` : 'Size to be confirmed');
 
+/** The proposal's prices, as on the rate card sales filled in. */
+function Investment({ p }: { p: SharedProposal }) {
+  const rows = pricedLines(p).filter((r) => r.line.rate != null);
+  const t = rateTotals(p);
+  const per = p.rateCard?.per ?? 'week';
+  const periodsHead = { week: 'Weeks', '4 weeks': '4-week periods', month: 'Months', flight: 'Flights' }[per];
+  return (
+    <section className="flex flex-col gap-4" aria-labelledby="invest-title">
+      <h2 id="invest-title" className="text-display-sm text-fg">Investment</h2>
+      <div className="overflow-x-auto rounded-3xl bg-bg">
+        <table className="w-full min-w-[560px] text-left text-body-sm">
+          <thead className="text-label-md uppercase text-fg-muted">
+            <tr className="border-b border-border">
+              <th className="px-4 py-3 font-semibold">Media</th>
+              <th className="px-4 py-3 text-right font-semibold">Rate {PERIOD_LABEL[per]}</th>
+              <th className="px-4 py-3 text-right font-semibold">Discount</th>
+              <th className="px-4 py-3 text-right font-semibold">{periodsHead}</th>
+              <th className="px-4 py-3 text-right font-semibold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.item.id} className="border-b border-border last:border-0">
+                <td className="px-4 py-3 text-fg">{itemLabel(r.item)}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-fg">{rand(r.line.rate ?? 0)}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-fg-muted">{r.line.discount ? `${r.line.discount}%` : '—'}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-fg-muted">{r.periods}</td>
+                <td className="px-4 py-3 text-right font-semibold tabular-nums text-fg">{rand(r.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="text-fg">
+            {t.discount > 0 ? <tr><td colSpan={4} className="px-4 pt-3 text-right text-fg-muted">Discount</td><td className="px-4 pt-3 text-right tabular-nums">– {rand(t.discount)}</td></tr> : null}
+            <tr><td colSpan={4} className="px-4 pt-3 text-right text-fg-muted">Total excluding VAT</td><td className="px-4 pt-3 text-right font-semibold tabular-nums">{rand(t.net)}</td></tr>
+            {p.rateCard?.vat ? <tr><td colSpan={4} className="px-4 pt-1 text-right text-fg-muted">VAT (15%)</td><td className="px-4 pt-1 text-right tabular-nums">{rand(t.vat)}</td></tr> : null}
+            {p.rateCard?.vat ? <tr><td colSpan={4} className="px-4 pb-3 pt-1 text-right font-semibold">Total including VAT</td><td className="px-4 pb-3 pt-1 text-right text-body-md font-semibold tabular-nums">{rand(t.total)}</td></tr> : <tr><td colSpan={5} className="pb-3" /></tr>}
+          </tfoot>
+        </table>
+      </div>
+      {p.rateCard?.note ? <p className="whitespace-pre-line text-body-sm text-fg-muted">{p.rateCard.note}</p> : null}
+    </section>
+  );
+}
+
 /** Quick reasons a client can tap when declining. */
 const DECLINE_REASONS = ['Budget', 'Timing', 'Different malls or screens', 'Not going ahead', 'Other'] as const;
 
@@ -57,7 +102,7 @@ function statusLine(p: SharedProposal): { text: string; tone: string } {
   if (p.status === 'booked') return { text: 'Booked', tone: 'bg-success-bg text-success-fg' };
   if (p.status === 'approved') return { text: 'Approved — confirming', tone: 'bg-accent-subtle text-accent' };
   if (p.status === 'changes') return { text: 'Changes sent to Primedia', tone: 'bg-accent-subtle text-accent' };
-  return { text: 'Site list — waiting for your approval', tone: 'bg-warning-bg text-warning-fg' };
+  return { text: `${docWords(p).Noun} — waiting for your approval`, tone: 'bg-warning-bg text-warning-fg' };
 }
 
 /* ---------- The client's edits, kept in this browser until sent ---------- */
@@ -222,9 +267,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const flight = days(edits.start, edits.end);
   const status = approved ? { text: 'Approved — Primedia is confirming', tone: 'bg-success-bg text-success-fg' } : statusLine(p);
   const first = p.from?.name.split(' ')[0] ?? 'your account manager';
-  // Proposal (screens we suggest) or site list (from PIMS, once booked).
-  // What the client approves here is always the site list: the screens and the files to supply. (The proposal is the presentation.)
-  const w = DOC_WORDS.sitelist;
+  // A proposal is approved as a proposal, whatever it holds (screens, a site list, a rate card).
+  // Only a document sales made as a site list is approved as one.
+  const w = docWords(p);
 
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
@@ -497,6 +542,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
             </ul>
           </section>
         ) : null}
+
+        {/* ---- Investment: a proposal's prices, when sales priced it ---- */}
+        {docKind(p) === 'proposal' && hasRates(p) ? <Investment p={p} /> : null}
 
         {/* ---- Approve, or send changes ---- */}
         <section className={`flex flex-col gap-4 rounded-3xl p-5 sm:p-6 print:hidden ${changed ? 'border-2 border-accent bg-bg' : 'bg-bg'}`} aria-labelledby="decide-title">
