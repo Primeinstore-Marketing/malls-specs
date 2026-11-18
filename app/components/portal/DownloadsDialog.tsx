@@ -5,7 +5,7 @@ import type { PreviewSlide } from '@/lib/portal/deck';
 import { DeckPreview } from './DeckPreview';
 import { useLiveData } from '@/lib/liveData';
 import { docWords, itemDetail, itemLabel } from '@/lib/portal/logic';
-import { hasRates, PERIOD_LABEL, pricedLines, rand, rateTotals, VAT_RATE } from '@/lib/portal/rates';
+import { emptyRateCard, hasRates, PERIOD_LABEL, pricedLines, rand, rateTotals, VAT_RATE } from '@/lib/portal/rates';
 import { shareUrl } from '@/lib/portal/share';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
 
@@ -120,23 +120,17 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
               {deck && deckState !== 'building' ? <DeckPreview slides={deck.slides} /> : null}
             </div>
           ) : null}
-          {tab === 'xlsx' && !priced ? (
-            <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
-              <h3 className="text-display-sm text-fg">No prices yet</h3>
-              <p className="max-w-md text-body-md text-fg-muted">
-                The rate card is made from the prices on this proposal. Add a rate to at least one line and it’s ready to download, with discounts, totals and VAT worked out.
-              </p>
-              <button type="button" onClick={goToRates} className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
-                Add prices
-              </button>
-              <p className="text-body-sm text-fg-subtle">Prices go in the PowerPoint and the Excel only, never on the client’s link.</p>
-            </div>
-          ) : null}
-          {tab === 'xlsx' && priced && card ? (
-            <div className="p-4 sm:p-6">
+          {tab === 'xlsx' ? (
+            <div className="flex flex-col gap-3 p-4 sm:p-6">
+              {!priced ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-bg px-4 py-3">
+                  <p className="text-body-sm text-fg-muted"><strong className="font-semibold text-fg">No prices yet:</strong> every line is R 0.00. Add them on the proposal, or upload a price list there.</p>
+                  <button type="button" onClick={goToRates} className="inline-flex h-10 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">Add prices</button>
+                </div>
+              ) : null}
               <div className="overflow-hidden rounded-2xl border border-border bg-bg">
                 <div className="bg-brand-surface px-5 py-3 text-body-sm font-semibold uppercase tracking-wide text-brand-on-surface">Rate card · {c.name}</div>
-                <p className="px-5 pt-3 text-body-sm text-fg-muted">Rates {PERIOD_LABEL[card.per]}, in rand, excluding VAT.</p>
+                <p className="px-5 pt-3 text-body-sm text-fg-muted">Rates {PERIOD_LABEL[(card ?? emptyRateCard()).per]}, in rand, excluding VAT.</p>
                 <div className="overflow-x-auto px-5 py-3">
                   <table className="w-full min-w-[620px] text-body-sm">
                     <thead>
@@ -148,17 +142,17 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
                       {pricedLines(c).map((r) => (
                         <tr key={r.item.id} className="border-t border-border">
                           <td className="py-2"><span className="font-medium text-fg">{itemLabel(r.item)}</span> <span className="text-fg-muted">· {itemDetail(r.item)}</span></td>
-                          <td className="py-2 text-right tabular-nums">{r.line.rate != null ? rand(r.line.rate) : '—'}</td>
+                          <td className="py-2 text-right tabular-nums">{rand(r.line.rate ?? 0)}</td>
                           <td className="py-2 text-right tabular-nums">{r.line.discount ?? 0}%</td>
                           <td className="py-2 text-right tabular-nums">{r.periods}</td>
-                          <td className="py-2 text-right font-semibold tabular-nums">{r.total != null ? rand(r.total) : '—'}</td>
+                          <td className="py-2 text-right font-semibold tabular-nums">{rand(r.total)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <dl className="ml-auto flex max-w-sm flex-col gap-1 px-5 pb-5 text-body-sm">
-                  {([['Rate card value', rand(t.gross)], ['Discount', t.discount > 0 ? `– ${rand(t.discount)}` : rand(0)], [card.vat ? 'Total excl. VAT' : 'Total (excl. VAT)', rand(t.net)], ...(card.vat ? [[`VAT (${Math.round(VAT_RATE * 100)}%)`, rand(t.vat)], ['Total incl. VAT', rand(t.total)]] : [])] as [string, string][]).map(([k, v], i, all) => (
+                  {([['Rate card value', rand(t.gross)], ['Discount', t.discount > 0 ? `– ${rand(t.discount)}` : rand(0)], [card?.vat ? 'Total excl. VAT' : 'Total (excl. VAT)', rand(t.net)], ...(card?.vat ? [[`VAT (${Math.round(VAT_RATE * 100)}%)`, rand(t.vat)], ['Total incl. VAT', rand(t.total)]] : [])] as [string, string][]).map(([k, v], i, all) => (
                     <div key={k} className={`flex justify-between gap-4 ${i === all.length - 1 ? 'border-t border-border pt-2 text-body-md font-bold text-fg' : 'text-fg-muted'}`}><dt>{k}</dt><dd className="tabular-nums">{v}</dd></div>
                   ))}
                 </dl>
@@ -169,7 +163,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
           <p className="text-body-sm text-fg-muted">
-            {tab === 'pdf' ? 'Opens your browser’s print window: choose “Save as PDF”.' : tab === 'pptx' ? 'Each presentation gets its own layout. Not keen on this one? Shuffle it.' : priced ? 'Totals are live formulas in Excel.' : 'Add a price to download the rate card.'}
+            {tab === 'pdf' ? 'Opens your browser’s print window: choose “Save as PDF”.' : tab === 'pptx' ? 'Each presentation gets its own layout. Not keen on this one? Shuffle it.' : 'Totals are live formulas in Excel.'}
           </p>
           <div className="flex gap-2">
             {tab === 'pptx' ? (
@@ -179,7 +173,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campai
             ) : null}
             <button
               type="button"
-              disabled={saving || (tab === 'pptx' && !deck) || (tab === 'xlsx' && !priced)}
+              disabled={saving || (tab === 'pptx' && !deck)}
               onClick={() => void download()}
               className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >

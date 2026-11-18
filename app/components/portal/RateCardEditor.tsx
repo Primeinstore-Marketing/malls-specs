@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { mallName } from '@/lib/insights';
 import { itemDetail, itemLabel, itemMall } from '@/lib/portal/logic';
-import { defaultPeriods, emptyRateCard, PERIOD_LABEL, pricedLines, rand, rateTotals, VAT_RATE } from '@/lib/portal/rates';
+import { defaultPeriods, emptyRateCard, PERIOD_LABEL, pricedLines, rand, rateTotals, ratesFromRows, VAT_RATE } from '@/lib/portal/rates';
+import { readBrief } from '@/lib/portal/briefReader';
+import { parseSiteRows } from '@/lib/portal/siteRows';
 import { portal } from '@/lib/portal/store';
 import type { Campaign, PortalUser, RateCard, RateLine, RatePeriod } from '@/lib/portal/types';
 
@@ -57,6 +59,26 @@ export function RateCardEditor({ c, user, editable }: { c: Campaign; user: Porta
   const auto = defaultPeriods(card.per, c.start, c.end);
   const [allDiscount, setAllDiscount] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [upload, setUpload] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const priceFile = useRef<HTMLInputElement>(null);
+
+  /** A price list (Excel or CSV): each line's price, matched by site number, mall and location, or screen name. */
+  async function uploadPrices(file: File | undefined) {
+    if (!file) return;
+    setUpload(null);
+    try {
+      const payload = await readBrief(file);
+      if (payload.kind !== 'text') throw new Error('Prices are read from Excel or CSV files. Save the price list as Excel (.xlsx) or CSV and try again.');
+      const rows = parseSiteRows(payload.text);
+      if (!rows.some((r) => r.rate != null)) throw new Error('No price column found. The file needs a column headed Rate, Price, Cost or Amount, beside the site number, mall or location.');
+      const { lines, found } = ratesFromRows(c.items, rows, card.lines);
+      if (!found) throw new Error(`None of the ${rows.length} rows in ${file.name} matched a line on this ${c.kind === 'sitelist' ? 'site list' : 'proposal'}. Check the site numbers or mall names.`);
+      save({ lines });
+      setUpload({ tone: 'ok', text: `Prices added to ${found} of ${c.items.length} lines from ${file.name}.${found < c.items.length ? ' The rest stay at R 0.00: type them in.' : ''}` });
+    } catch (e) {
+      setUpload({ tone: 'error', text: e instanceof Error ? e.message : 'Couldn’t read that file.' });
+    }
+  }
 
   const save = (next: Partial<RateCard>) => portal.setRateCard(c.id, { ...card, ...next });
   const setLine = (itemId: string, change: Partial<RateLine>) => {
@@ -73,14 +95,31 @@ export function RateCardEditor({ c, user, editable }: { c: Campaign; user: Porta
         <div className="flex flex-col gap-1">
           <h2 id="rates-title" className="text-display-sm text-fg">Rate card</h2>
           <p className="max-w-prose text-body-sm text-fg-muted">
-            Your prices for this proposal, excluding VAT. They go in the PowerPoint and the Excel rate card; the client’s approval link never shows prices.
+            Every line starts at R 0.00. Type the prices in, or upload a price list (Excel or CSV with a Rate, Price or Cost column). They go in the PowerPoint and the Excel rate card; the client’s link never shows prices.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {editable ? (
+            <>
+              <button type="button" onClick={() => priceFile.current?.click()} className="inline-flex h-11 items-center rounded-full border border-border-strong bg-bg px-5 text-body-sm font-semibold text-fg hover:border-fg">
+                Upload prices
+              </button>
+              <input
+                ref={priceFile}
+                type="file"
+                accept=".xlsx,.csv,.txt,.tsv"
+                aria-label="Upload a price list (Excel or CSV)"
+                className="hidden"
+                onChange={(e) => {
+                  void uploadPrices(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+            </>
+          ) : null}
           <button
             type="button"
-            disabled={Boolean(busy) || !t.priced}
-            title={t.priced ? '' : 'Add at least one rate first'}
+            disabled={Boolean(busy)}
             onClick={() => {
               setBusy('Making the rate card…');
               import('@/lib/portal/rateCardExcel')
@@ -95,6 +134,7 @@ export function RateCardEditor({ c, user, editable }: { c: Campaign; user: Porta
         </div>
       </div>
 
+      {upload ? <p role={upload.tone === 'error' ? 'alert' : 'status'} className={`text-body-sm ${upload.tone === 'error' ? 'text-danger-fg' : 'text-success-fg'}`}>{upload.text}</p> : null}
       {editable ? (
         <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-bg-subtle p-4">
           <label className="flex flex-col gap-1.5">
@@ -151,16 +191,16 @@ export function RateCardEditor({ c, user, editable }: { c: Campaign; user: Porta
                     <span className="block text-[12px] text-fg-muted">{[where, itemDetail(p.item)].filter(Boolean).join(' · ')}</span>
                   </td>
                   <td className="px-2 py-2">
-                    {editable ? <NumberField label={`Rate card for ${itemLabel(p.item)}`} value={p.line.rate} placeholder="R" onCommit={(v) => setLine(p.item.id, { rate: v })} /> : <span className="block text-right">{p.line.rate != null ? rand(p.line.rate) : '—'}</span>}
+                    {editable ? <NumberField label={`Rate card for ${itemLabel(p.item)}`} value={p.line.rate} placeholder="0.00" onCommit={(v) => setLine(p.item.id, { rate: v })} /> : <span className="block text-right">{rand(p.line.rate ?? 0)}</span>}
                   </td>
                   <td className="px-2 py-2">
                     {editable ? <NumberField label={`Discount for ${itemLabel(p.item)}`} value={p.line.discount} placeholder="0" max={100} onCommit={(v) => setLine(p.item.id, { discount: v })} /> : <span className="block text-right">{p.line.discount ?? 0}%</span>}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-fg-muted">{p.net != null ? rand(p.net) : '—'}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-fg-muted">{rand(p.net)}</td>
                   <td className="px-2 py-2">
                     {editable ? <NumberField label={`Periods for ${itemLabel(p.item)}`} value={p.line.periods} placeholder={String(auto)} onCommit={(v) => setLine(p.item.id, { periods: v })} /> : <span className="block text-right">{p.periods}</span>}
                   </td>
-                  <td className="px-2 py-2 text-right font-semibold tabular-nums text-fg">{p.total != null ? rand(p.total) : '—'}</td>
+                  <td className="px-2 py-2 text-right font-semibold tabular-nums text-fg">{rand(p.total)}</td>
                 </tr>
               );
             })}

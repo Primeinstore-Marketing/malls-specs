@@ -5,8 +5,11 @@ export function EmptyState({
   description,
   action,
   compact = false,
+  page = false,
 }: {
   title: string;
+  /** The whole page (e.g. "not found"): the title is the page's main heading. */
+  page?: boolean;
   description?: string;
   action?: ReactNode;
   compact?: boolean;
@@ -17,7 +20,7 @@ export function EmptyState({
         compact ? 'gap-1 px-4 py-6' : 'gap-2 px-6 py-16'
       }`}
     >
-      <p className={compact ? 'text-body-sm font-medium text-fg-muted' : 'text-display-sm text-fg'}>{title}</p>
+      {page ? <h1 className="text-display-sm text-fg">{title}</h1> : <p className={compact ? 'text-body-sm font-medium text-fg-muted' : 'text-display-sm text-fg'}>{title}</p>}
       {description ? (
         <p className={`max-w-sm text-fg-subtle ${compact ? 'text-body-sm' : 'text-body-md'}`}>{description}</p>
       ) : null}

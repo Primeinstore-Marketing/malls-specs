@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import { contentPhotoRights } from '@/lib/content';
 import { PHOTO_RIGHTS, deckMall, mallName, packageByCode } from '@/lib/insights';
@@ -16,8 +16,20 @@ const OPTIONS: [PhotoRightsStatus, string][] = [
 
 /** Mark deck photos cleared once permission is in. Saved as content "photo-rights". */
 function Register() {
-  useLiveData(); // re-render when the deck's data arrives from the API
-  const [statuses, setStatuses] = useState<Record<string, PhotoRightsStatus>>(() => contentPhotoRights());
+  const { status } = useLiveData(); // re-render when the deck's data arrives from the API
+  const loaded = status === 'ready';
+  // Only what's changed here: merged over the saved statuses at every render, so a page opened
+  // before the saved statuses arrive can't save over them.
+  const [edits, setEdits] = useState<Record<string, PhotoRightsStatus>>({});
+  const statuses: Record<string, PhotoRightsStatus> = { ...contentPhotoRights(), ...edits };
+  const setStatuses = (change: (s: Record<string, PhotoRightsStatus>) => Record<string, PhotoRightsStatus>) => setEdits((e) => change(e));
+  const unsaved = Object.keys(edits).length;
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unsaved]);
   const [kind, setKind] = useState<'mall' | 'package' | 'screen'>('mall');
   const [state, setState] = useState<string | null>(null);
   const current = (src: string) => statuses[src] ?? PHOTO_RIGHTS.find((r) => r.src === src)?.status ?? 'needs-clearance';
@@ -26,8 +38,9 @@ function Register() {
   async function save() {
     setState('Saving…');
     try {
-      await api.putContent('photo-rights', { statuses });
+      await api.putContent('photo-rights', { statuses: { ...contentPhotoRights(), ...edits } });
       await refreshLiveData();
+      setEdits({});
       setState('Saved — cleared photos now show on client pages.');
     } catch (e) {
       setState(e instanceof Error ? e.message : 'Couldn’t save.');
@@ -70,8 +83,8 @@ function Register() {
       </ul>
       <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 backdrop-blur lg:left-[var(--sidebar-width)]">
         <div className="mx-auto flex max-w-admin items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <p className="text-body-sm text-fg-muted" role="status">{state ?? 'Changes go live when you save.'}</p>
-          <button type="button" className={primaryBtn} onClick={() => void save()}>Save</button>
+          <p className="text-body-sm text-fg-muted" role="status">{state ?? (unsaved ? `${unsaved} unsaved ${unsaved === 1 ? 'change' : 'changes'}: they go live when you save.` : 'Changes go live when you save.')}</p>
+          <button type="button" className={primaryBtn} disabled={!loaded || !unsaved} onClick={() => void save()}>{loaded ? 'Save' : 'Loading…'}</button>
         </div>
       </div>
     </div>

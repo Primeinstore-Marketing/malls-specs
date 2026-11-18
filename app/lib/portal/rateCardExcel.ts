@@ -95,7 +95,7 @@ export async function buildRateCard(c: Campaign, user: PortalUser): Promise<{ bl
     row.getCell(2).value = itemLabel(p.item);
     row.getCell(3).value = mallOf(p.item);
     row.getCell(4).value = itemDetail(p.item);
-    row.getCell(5).value = p.line.rate ?? null;
+    row.getCell(5).value = p.line.rate ?? 0;
     row.getCell(6).value = (p.line.discount ?? 0) / 100;
     row.getCell(7).value = { formula: `IF(E${r}="","",E${r}*(1-F${r}))` };
     row.getCell(8).value = p.periods;

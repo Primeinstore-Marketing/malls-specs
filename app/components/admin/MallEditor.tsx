@@ -532,8 +532,10 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
 
 function Load() {
   const params = useSearchParams();
-  useLiveData(); // malls arrive with the live data
+  const { status } = useLiveData(); // malls and their shopper data arrive with the live data
   const id = params.get('id') ?? '';
+  // Wait for the saved data: an editor opened on half-loaded data would save its empty fields over the real ones.
+  if (status === 'idle' || status === 'loading') return <p className="text-body-md text-fg-muted" role="status">Loading the mall…</p>;
   if (params.get('new') === '1') {
     return (
       <Editor

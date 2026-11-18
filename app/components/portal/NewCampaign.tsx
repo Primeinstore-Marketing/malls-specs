@@ -3,7 +3,7 @@
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { annualVisits, compact } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
 import { addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
@@ -15,7 +15,9 @@ import { briefInventory, mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } 
 import { CLIENTS } from '@/lib/portal/seed';
 import type { MallEntry as Entry } from '@/lib/portal/mallScreens';
 import { useLiveData } from '@/lib/liveData';
-import type { Campaign, DocKind, NewCampaignItem, PortalUser, Prospect } from '@/lib/portal/types';
+import type { Campaign, DocKind, NewCampaignItem, PortalUser, Prospect, RateCard } from '@/lib/portal/types';
+import { emptyRateCard, ratesFromRows } from '@/lib/portal/rates';
+import type { SiteRow } from '@/lib/portal/siteRows';
 import { AudiencePicker, readAudience } from '@/components/insights/AudiencePicker';
 import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
@@ -66,6 +68,8 @@ function Form({ user }: { user: PortalUser }) {
   const [picked, setPicked] = useState<Map<string, NewCampaignItem>>(new Map());
   // A client's site list, from their document: every row, as they gave it.
   const [siteLines, setSiteLines] = useState<SiteItem[]>([]);
+  // Prices found in the dropped document (a priced site list or booking sheet), for the rate card.
+  const [priceRows, setPriceRows] = useState<readonly SiteRow[]>([]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
 
@@ -119,14 +123,28 @@ function Form({ user }: { user: PortalUser }) {
     end: end || null,
     audience,
     items: items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` })),
+    ...docRates(items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` }))),
   });
+  /** The document's prices on the new campaign's rate card (for the whole flight: change it there if they're weekly). */
+  const docRates = (lines: Campaign['items']): { rateCard?: RateCard } => {
+    if (!priceRows.length) return {};
+    const { lines: rated, found } = ratesFromRows(lines, priceRows);
+    return found ? { rateCard: { ...emptyRateCard(), per: 'flight', lines: rated } } : {};
+  };
+  const docPriced = priceRows.length ? ratesFromRows(items as Campaign['items'], priceRows).found : 0;
   /** Sales, in one step: save the proposal, then open the emailer on its page (it marks it sent once emailed). */
   function createAndEmail() {
-    save(false, false);
-    router.push(`/portal/campaign?id=${newId}&email=1`);
+    const id = save(false, false);
+    if (id) router.push(`/portal/campaign?id=${id}&email=1`);
   }
 
+  // One campaign per click: a second click while it's being created does nothing.
+  const creating = useRef(false);
+  const [created, setCreated] = useState(false);
   function save(send: boolean, go = true): string {
+    if (creating.current) return '';
+    creating.current = true;
+    setCreated(true);
     const id = portal.create({ ...fields() });
     if (send) portal.move(id, sales ? 'sent' : 'proposed');
     if (go) router.push(`/portal/campaign?id=${id}`);
@@ -149,8 +167,9 @@ function Form({ user }: { user: PortalUser }) {
   const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; truncated: boolean; undo: () => void } | null>(null);
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
   const [clientKey, setClientKey] = useState(0);
-  function applyDraft(draft: BriefDraft, file: string, truncated = false) {
-    const before = { name, client, objective, start, end, picked, reasons, siteLines, kind };
+  function applyDraft(draft: BriefDraft, file: string, truncated = false, docRows: readonly SiteRow[] = []) {
+    const before = { name, client, objective, start, end, picked, reasons, siteLines, kind, priceRows };
+    setPriceRows(docRows.some((r) => r.rate != null) ? docRows : []);
     // A document with site lines (a PIMS export) makes a site list.
     if (draft.sites?.length) setKind('sitelist');
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
@@ -211,6 +230,7 @@ function Form({ user }: { user: PortalUser }) {
         setReasons(before.reasons);
         setSiteLines(before.siteLines);
         setKind(before.kind);
+        setPriceRows(before.priceRows);
         setAiDraft(null);
       },
     });
@@ -243,6 +263,7 @@ function Form({ user }: { user: PortalUser }) {
             <div className="flex min-w-0 flex-col gap-1">
               <strong className="text-body-lg text-fg">Drafted from {aiDraft.file}</strong>
               <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
+              {docPriced ? <p className="text-body-sm font-semibold text-success-fg">Prices for {docPriced} {docPriced === 1 ? 'line' : 'lines'} from the document go on the rate card (as prices for the whole flight; change that on the rate card if they’re weekly).</p> : null}
               <p className="text-body-sm text-fg-muted">
                 {aiDraft.draft.sites?.length
                   ? `All ${aiDraft.draft.sites.length} sites from the document are in the site list: ${aiDraft.draft.sites.filter((x) => x.match).length} matched to screens on the site, ${aiDraft.draft.sites.filter((x) => !x.match).length} marked “check”.`
@@ -280,7 +301,7 @@ function Form({ user }: { user: PortalUser }) {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className={fieldLabel}>Starts</span>
-              <input type="date" className={input} value={start} min={todayIso()} onChange={(e) => setStart(e.target.value)} />
+              <input type="date" className={input} value={start} min={kind === 'sitelist' ? undefined : todayIso()} onChange={(e) => { const v = e.target.value; setStart(v); if (v && end && end < v) setEnd(addDays(v, Math.max(0, days(start, end) - 1) || 27)); }} />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className={fieldLabel}>Ends</span>
@@ -412,14 +433,14 @@ function Form({ user }: { user: PortalUser }) {
             <div className="flex shrink-0 flex-col gap-2">
               {sales && recipient?.email && hasLines ? (
                 start && end ? (
-                  <button type="button" onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
+                  <button type="button" disabled={created} onClick={createAndEmail} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
                     Create and email to {recipient.name.split(' ')[0] || 'the client'}
                   </button>
                 ) : null
               ) : null}
               <button
                 type="button"
-                disabled={!start || !end}
+                disabled={!start || !end || created}
                 onClick={() => save(!sales)}
                 className={
                   sales && recipient?.email && hasLines
@@ -430,7 +451,7 @@ function Form({ user }: { user: PortalUser }) {
                 {sales ? (recipient?.email && hasLines ? 'Create without sending' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief to Primedia'}
               </button>
               {!sales ? (
-                <button type="button" onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
+                <button type="button" disabled={created} onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
                   Save as draft
                 </button>
               ) : null}
@@ -500,7 +521,7 @@ function Form({ user }: { user: PortalUser }) {
             </a>
             <button
               type="button"
-              disabled={!start || !end}
+              disabled={!start || !end || created}
               onClick={() => (sales && recipient?.email && hasLines ? createAndEmail() : save(!sales))}
               className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >

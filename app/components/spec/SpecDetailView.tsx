@@ -115,6 +115,7 @@ export function SpecDetailView({ specId }: { specId: string }) {
     return (
       <div className="mx-auto max-w-page px-4 py-16 sm:px-6">
         <EmptyState
+          page
           title={status === 'loading' || status === 'idle' ? 'Loading…' : 'Screen not found'}
           description={
             status === 'loading' || status === 'idle'

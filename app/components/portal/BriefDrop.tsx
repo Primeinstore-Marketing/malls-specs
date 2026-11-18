@@ -4,6 +4,27 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { BriefDraft } from '@/lib/api';
 import { BRIEF_ACCEPT, MAX_BRIEF_MB, readBrief } from '@/lib/portal/briefReader';
+import { parseSiteRows } from '@/lib/portal/siteRows';
+import type { SiteRow } from '@/lib/portal/siteRows';
+
+/** The AI couldn't be reached: a site list from the document's rows alone, matched later by site code where possible. */
+function rowsDraft(rows: readonly SiteRow[], file: string): BriefDraft {
+  const dates = (k: 'start' | 'end') => rows.map((r) => r[k]).filter((d): d is string => Boolean(d)).sort();
+  const starts = dates('start');
+  const ends = dates('end');
+  return {
+    summary: `Read ${rows.length} ${rows.length === 1 ? 'site' : 'sites'} from ${file}. The AI wasn’t available, so sites are matched to screens by their site code where possible; the rest are marked “check” for you to match.`,
+    name: '',
+    client: { company: '', contactName: '', email: '' },
+    start: starts[0] ?? null,
+    end: ends[ends.length - 1] ?? null,
+    objective: '',
+    items: [],
+    noteForClient: '',
+    missing: ['Add the client and check the name: the AI wasn’t available to read them from the document.'],
+    sites: rows.map(({ rate: _rate, ...r }) => ({ ...r, match: null })),
+  };
+}
 
 type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } | { step: 'error'; text: string };
 
@@ -11,7 +32,7 @@ type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } |
  * "Start from the client's brief": drop or choose a PDF, Word, PowerPoint,
  * Excel or image file, and the AI drafts the whole proposal from it.
  */
-export function BriefDrop({ inventory, onDraft, pims = false, compact = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean; /** A slim bar, and a file dropped anywhere on the page is read. */ compact?: boolean }) {
+export function BriefDrop({ inventory, onDraft, pims = false, compact = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean, rows: readonly SiteRow[]) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean; /** A slim bar, and a file dropped anywhere on the page is read. */ compact?: boolean }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -20,8 +41,11 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
   async function handle(file: File | undefined) {
     if (!file || busy) return;
     setState({ step: 'reading', file: file.name });
+    // Rows (and any prices) read here, so a site list still works when the AI can't be reached.
+    let rows: SiteRow[] = [];
     try {
       const payload = await readBrief(file);
+      rows = payload.kind === 'text' ? parseSiteRows(payload.text) : [];
       setState({ step: 'drafting', file: file.name });
       const { draft, truncated } = await api.briefDraft({
         filename: file.name,
@@ -30,9 +54,15 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
         today: new Date().toISOString().slice(0, 10),
       });
       setState({ step: 'idle' });
-      onDraft(draft, file.name, truncated);
+      onDraft(draft, file.name, truncated, rows);
     } catch (e) {
-      setState({ step: 'error', text: e instanceof Error ? e.message : 'That didn’t work. Try again.' });
+      const why = e instanceof Error ? e.message : 'That didn’t work. Try again.';
+      if (rows.length && !/MB|old Office|damaged|can’t open|couldn’t find any text|Drop a PDF/i.test(why)) {
+        setState({ step: 'idle' });
+        onDraft(rowsDraft(rows, file.name), file.name, false, rows);
+        return;
+      }
+      setState({ step: 'error', text: why });
     }
   }
 

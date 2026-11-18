@@ -534,7 +534,7 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
         ) : null}
         <label className="flex flex-col gap-1.5">
           <span className={label}>Starts</span>
-          <input id="f-start" type="date" className={input} value={c.start ?? ''} onChange={(e) => portal.edit(c.id, { start: e.target.value || null })} />
+          <input id="f-start" type="date" className={input} value={c.start ?? ''} onChange={(e) => { const v = e.target.value || null; portal.edit(c.id, v && c.end && c.end < v ? { start: v, end: v } : { start: v }); }} />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className={label}>Ends</span>
@@ -655,7 +655,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
   }, []);
   useDocumentTitle(c && visibleTo(c, user) ? c.name : null);
   if (!c || !visibleTo(c, user)) {
-    return <Page><EmptyState title="We can’t find that campaign." description="It may have been removed, or belong to another account." /></Page>;
+    return <Page><EmptyState page title="We can’t find that campaign." description="It may have been removed, or belong to another account." /></Page>;
   }
   const ph = phase(c);
   const editable = canEdit(c, user);

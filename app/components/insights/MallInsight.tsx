@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 function Mall({ id }: { id: string }) {
   const m = deckMall(id);
   useDocumentTitle(m ? `${mallName(m)} · Who shops here` : null);
-  if (!m) return <Page><EmptyState title="We don’t have insights for that mall." description="Pick one from the list of malls." /></Page>;
+  if (!m) return <Page><EmptyState page title="We don’t have insights for that mall." description="Pick one from the list of malls." /></Page>;
   const p = m.profile;
   const visits = annualVisits(m);
   const same = DECK_MALLS.filter((x) => x.province === m.province && x.id !== m.id);

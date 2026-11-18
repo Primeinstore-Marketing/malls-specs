@@ -654,7 +654,7 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
     const card = c.rateCard!;
     text(slide, 'Investment', { x: 0.8, y: 0.6, w: 8, h: 0.7, fontSize: 30, bold: true, color: BRAND.ink });
     text(slide, `Rates ${PERIOD_LABEL[card.per]}, in rand, excluding VAT.`, { x: 0.8, y: 1.3, w: 8, h: 0.4, fontSize: 13, color: BRAND.muted });
-    const lines = pricedLines(c).filter((p) => p.total != null).sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
+    const lines = pricedLines(c).sort((a, b) => b.total - a.total);
     const shown = lines.slice(0, 9);
     const left = look.mallOffset % 2 === 0;
     const tx = left ? 0.8 : 4.6;
@@ -668,9 +668,9 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
       ],
       ...shown.map((p) => [
         { text: `${itemLabel(p.item)}\n${itemDetail(p.item)}`, options: { color: BRAND.ink } },
-        { text: p.line.rate != null ? rand(p.line.rate) : '—', options: { color: BRAND.muted, align: 'right' } },
+        { text: rand(p.line.rate ?? 0), options: { color: BRAND.muted, align: 'right' } },
         { text: `${p.line.discount ?? 0}%`, options: { color: BRAND.muted, align: 'right' } },
-        { text: rand(p.total ?? 0), options: { bold: true, color: BRAND.ink, align: 'right' } },
+        { text: rand(p.total), options: { bold: true, color: BRAND.ink, align: 'right' } },
       ]),
     ];
     slide.addTable(rows as never, { x: tx, y: 1.9, w: 7.9, colW: [3.9, 1.5, 1.0, 1.5], fontFace: FONT, fontSize: 11, margin: 0.06, border: { type: 'solid', pt: 0.75, color: BRAND.line } } as never);

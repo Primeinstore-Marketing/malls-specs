@@ -319,7 +319,8 @@ export const portal = {
   create(fields: Partial<Campaign> = {}): string {
     const { s, user } = current();
     // A caller may choose the id (so an email link can point at the campaign before it exists).
-    const id = fields.id ?? uid('c');
+    // Never reuse an id that's taken (a double click, or the builder opened again): a clash would lose this campaign.
+    const id = fields.id && !s.campaigns.some((x) => x.id === fields.id) ? fields.id : uid('c');
     const c: Campaign = {
       name: 'Untitled campaign',
       clientId: user.role === 'client' ? user.clientId ?? null : null,

@@ -115,6 +115,7 @@ export function PictureDrop({ specId, onSessionExpired, compact = false }: { spe
         type="file"
         accept="image/*,.heic,.heif,video/mp4,video/webm"
         multiple
+        aria-label="Choose photos"
         className="sr-only"
         tabIndex={-1}
         onChange={(e) => {
