@@ -51,7 +51,7 @@ export function TopBar({ onMenuToggle, compactBrand = false }: { onMenuToggle: (
         Skip to content
       </a>
 
-      <div className={`flex shrink-0 items-center bg-brand-surface px-3 sm:px-4 ${compactBrand ? 'lg:px-6' : 'lg:w-[var(--sidebar-width)]'}`}>
+      <div className={`relative -mb-px flex shrink-0 items-center bg-brand-surface px-3 sm:px-4 ${compactBrand ? 'lg:px-6' : 'lg:w-[var(--sidebar-width)]'}`}>
         <button
           type="button"
           onClick={onMenuToggle}

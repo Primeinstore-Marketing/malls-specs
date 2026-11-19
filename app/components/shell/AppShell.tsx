@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AdminSessionProvider>
         <CollectionsProvider>
           <div className="min-h-screen">
-            <TopBar onMenuToggle={() => setMobileNavOpen((open) => !open)} compactBrand={portalPage} />
+            <TopBar onMenuToggle={() => setMobileNavOpen((open) => !open)} compactBrand={portalPage && !appMenu} />
 
             {!isDesktop && mobileNavOpen ? (
               <button
