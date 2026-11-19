@@ -118,25 +118,21 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
             </div>
           </div>
         ) : null}
-        <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-dashed px-4 py-3 ${busy ? 'border-accent bg-accent-subtle' : 'border-border-strong bg-bg-subtle'}`}>
-          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-body-md text-fg-on-accent">✦</span>
-          <p id="brief-title" className="min-w-0 flex-1 text-body-sm text-fg" role="status">
-            {status ?? (
-              <>
-                <strong>Have the client’s brief, booking sheet or PIMS site list?</strong>{' '}
-                <span className="text-fg-muted">Drop it anywhere on this page and the AI fills everything in. PDF, Word, PowerPoint, Excel or image, up to {MAX_BRIEF_MB} MB.</span>
-              </>
-            )}
-          </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => input.current?.click()}
-            className="inline-flex h-10 shrink-0 items-center rounded-full border border-border-strong bg-bg px-4 text-body-sm font-semibold text-fg hover:border-fg disabled:opacity-60"
-          >
-            {busy ? <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true" /> : null}
-            {busy ? 'Working…' : 'Choose a file'}
-          </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+          title={`PDF, Word, PowerPoint, Excel or image, up to ${MAX_BRIEF_MB} MB. You can also drop it anywhere on this page.`}
+          className={`flex w-full items-center justify-center gap-3 rounded-2xl border border-dashed px-4 py-3 text-body-md font-semibold transition-colors disabled:cursor-wait ${busy ? 'border-accent bg-accent-subtle text-fg' : 'border-border-strong bg-bg-subtle text-fg hover:border-accent hover:bg-accent-subtle'}`}
+        >
+          {busy ? (
+            <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true" />
+          ) : (
+            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-body-md text-fg-on-accent">✦</span>
+          )}
+          <span id="brief-title" role="status">{status ?? (pims ? 'Upload the site list' : 'Upload a brief or site list')}</span>
+        </button>
+        <div className="hidden">
           <input
             ref={input}
             type="file"
