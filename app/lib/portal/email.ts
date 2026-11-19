@@ -1,6 +1,7 @@
 import type { Catalogue } from '@data-model';
 import { withBasePath } from '@/lib/basePath';
-import { docWords, formatDate, formatRange } from './logic';
+import { docKind, docWords, formatDate, formatRange } from './logic';
+import { hasRates, rand, rateTotals } from './rates';
 import { campaignScreens, creativeGroups, creativeLabel, sheetHref } from './screens';
 import { campaignContact, shareUrl } from './share';
 import type { Campaign, PortalUser } from './types';
@@ -67,6 +68,15 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   }[kind];
   const cta = kind === 'booked' ? 'View your booking' : `Review and approve the ${w.noun}`;
   const hasTemplates = groups.some((z) => z.files.some((f) => f.template));
+  // A proposal shows what we propose (screens by mall, and the price); a site list and a booking show the creative to supply.
+  const isProposal = docKind(c) === 'proposal' && kind !== 'booked';
+  const byMall = new Map<string, string[]>();
+  for (const x of screens) {
+    const size = x.width && x.height ? `${x.width} × ${x.height} px` : 'size to be confirmed';
+    byMall.set(x.mallName, [...(byMall.get(x.mallName) ?? []), `${x.title}${x.qty > 1 ? ` × ${x.qty}` : ''} (${size})`]);
+  }
+  const priced = hasRates(c) ? rateTotals(c) : null;
+  const investment = priced ? `${rand(c.rateCard?.vat ? priced.total : priced.net)}${c.rateCard?.vat ? ' including VAT' : ' excluding VAT'}` : null;
 
   /* ---- Plain text ---- */
   const text = [
@@ -78,9 +88,17 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     `${cta}:`,
     link,
     '',
-    `Creative to supply${deadline ? ` (needed before ${deadline})` : ''}: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}`,
-    ...groups.map((z, i) => `- Creative ${i + 1}: ${creativeLabel(z)}, for ${unitOf(z.count)} in ${z.malls} ${z.malls === 1 ? 'mall' : 'malls'}`),
-    hasTemplates ? '\nThe After Effects templates and spec sheets for each size are on the page above.' : '',
+    ...(isProposal
+      ? [
+          `The screens we propose (${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}):`,
+          ...[...byMall.entries()].map(([m, list]) => `- ${m}: ${list.join('; ')}`),
+          investment ? `\nInvestment: ${investment}` : '',
+        ]
+      : [
+          `Creative to supply${deadline ? ` (needed before ${deadline})` : ''}: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}`,
+          ...groups.map((z, i) => `- Creative ${i + 1}: ${creativeLabel(z)}, for ${unitOf(z.count)} in ${z.malls} ${z.malls === 1 ? 'mall' : 'malls'}`),
+          hasTemplates ? '\nThe After Effects templates and spec sheets for each size are on the page above.' : '',
+        ]),
     '',
     'Regards,',
     user.name,
@@ -128,7 +146,14 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     </td></tr></table>
     <p style="${FONT}margin:10px 0 0;font-size:12px;color:${C.muted};">Or open <a href="${esc(link)}" style="color:${C.blue};">${esc(link.replace(/^https?:\/\//, ''))}</a></p>
   </td></tr>
-  ${groups.length ? `<tr><td style="${FONT}padding:24px 28px 4px;">
+  ${isProposal && byMall.size ? `<tr><td style="${FONT}padding:24px 28px 4px;">
+    <div style="font-size:16px;font-weight:bold;color:${C.ink};">The screens we propose</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${[...byMall.entries()]
+      .map(([m, list]) => `<tr><td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:15px;color:${C.ink};"><strong>${esc(m)}</strong><br><span style="font-size:13px;color:${C.muted};">${list.map(esc).join('<br>')}</span></td></tr>`)
+      .join('')}</table>
+    ${investment ? `<div style="margin-top:12px;padding:12px 16px;background:${C.soft};font-size:15px;color:${C.ink};">Investment: <strong>${esc(investment)}</strong></div>` : ''}
+  </td></tr>` : ''}
+  ${!isProposal && groups.length ? `<tr><td style="${FONT}padding:24px 28px 4px;">
     <div style="font-size:16px;font-weight:bold;color:${C.ink};">Creative to supply: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}</div>
     <div style="margin-top:4px;font-size:13px;color:${C.muted};">One video or still per creative${deadline ? `, before ${esc(deadline)}` : ''}.${hasTemplates ? ' Build it in the After Effects template; the spec sheet has the file types and safe areas.' : ''} Where the size is still to be confirmed, Primedia will send it. The page lists every site in each group.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${sizeRows}</table>
