@@ -4,6 +4,7 @@ import { downloadUrl } from '@/lib/api';
 import { mallName as publicName, packageByCode, mapIdOf } from '@/lib/insights';
 import { mallPlace } from '@/lib/sites';
 import { formatAspectRatio, getMalls, getScreenSize } from '@/lib/malls';
+import { specFiles } from '@/lib/specFiles';
 import type { CampaignItem } from './types';
 
 /**
@@ -48,13 +49,9 @@ function orientationOf(w: number, h: number): BookedScreen['orientation'] {
   return w >= h ? 'Landscape' : 'Portrait';
 }
 
-function sheetFor(spec: Specification, catalogue: Catalogue): Asset | null {
-  return getAssets(spec.downloadIds, catalogue).find((a) => a.mimeType === 'application/pdf') ?? null;
-}
-
-function templateFor(spec: Specification, catalogue: Catalogue): Asset | null {
-  return getAssets([...spec.downloadIds, ...spec.attachmentIds], catalogue).find((a) => /aftereffects/i.test(a.mimeType) || /\.aep$/i.test(a.filename)) ?? null;
-}
+// The screen's own spec sheet and template, or its network format's (see lib/specFiles).
+const sheetFor = (spec: Specification, catalogue: Catalogue): Asset | null => specFiles(spec, catalogue).sheet;
+const templateFor = (spec: Specification, catalogue: Catalogue): Asset | null => specFiles(spec, catalogue).template;
 
 export function sheetHref(sheet: Asset): string {
   return downloadUrl(sheet.storageKey);

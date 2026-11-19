@@ -3,6 +3,7 @@
 import type { Asset, MetadataField } from '@data-model';
 import { getSpecification, getAssets, getRelatedSpecifications, getRevisions } from '@/lib/catalogue';
 import { downloadUrl, fileUrl } from '@/lib/api';
+import { specFiles } from '@/lib/specFiles';
 import { formatFileSize } from '@/lib/fileSize';
 import { useLiveData } from '@/lib/liveData';
 import { getMallForSpec, MALL_GROUP_LABELS } from '@/lib/malls';
@@ -131,6 +132,8 @@ export function SpecDetailView({ specId }: { specId: string }) {
   const mall = getMallForSpec(spec.id, catalogue);
   const media = getAssets(spec.mediaIds, catalogue);
   const downloads = getAssets(spec.downloadIds, catalogue);
+  // No files of its own: the network format's spec sheet and template, when it's the same size.
+  const borrowed = specFiles(spec, catalogue);
   const attachments = getAssets(spec.attachmentIds, catalogue);
   const related = getRelatedSpecifications(spec, catalogue);
   const revisions = getRevisions(spec, catalogue);
@@ -174,7 +177,16 @@ export function SpecDetailView({ specId }: { specId: string }) {
 
         {spec.description ? <p className="max-w-[68ch] text-body-lg text-fg-muted">{spec.description}</p> : null}
 
-        <DownloadButtons downloads={downloads} />
+        {downloads.length ? (
+          <DownloadButtons downloads={downloads} />
+        ) : borrowed.from && (borrowed.sheet || borrowed.template) ? (
+          <div className="flex flex-col gap-2">
+            <DownloadButtons downloads={[borrowed.sheet, borrowed.template].filter((x): x is NonNullable<typeof x> => Boolean(x))} />
+            <p className="text-body-sm text-fg-subtle">
+              The {borrowed.from.title} spec sheet and template: this screen uses the network {borrowed.from.title} format.
+            </p>
+          </div>
+        ) : null}
       </header>
 
       <ArtworkGuideCard spec={spec} />
