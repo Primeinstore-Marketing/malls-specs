@@ -12,19 +12,18 @@ import type { Campaign, PortalUser } from '@/lib/portal/types';
 type Tab = 'pdf' | 'pptx' | 'xlsx';
 
 /**
- * "Preview & download": the three things sales can send, each previewed
- * before it's saved. The PDF is the client's page as printed; the
- * PowerPoint is the very file you'll download (shuffle for a new design);
- * the rate card shows its lines and totals.
+ * "Preview & download": the presentation and the rate card, each previewed
+ * before it's saved. The PowerPoint is the very file you'll download
+ * (shuffle for a new design); the rate card shows its lines and totals.
+ * (The client's page has its own "Download PDF".)
  */
-export function DownloadsDialog({ c, user, onClose, start = 'pdf' }: { c: Campaign; user: PortalUser; onClose: () => void; start?: Tab }) {
+export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campaign; user: PortalUser; onClose: () => void; start?: Tab }) {
   const { catalogue } = useLiveData();
   const w = docWords(c);
   const priced = hasRates(c);
   const [tab, setTab] = useState<Tab>(start);
   // Every tab always opens: the rate card explains itself when it has no prices yet.
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'pdf', label: `${w.Noun} (PDF)` },
     { id: 'pptx', label: 'Presentation (PowerPoint)' },
     { id: 'xlsx', label: 'Rate card (Excel)' },
   ];
