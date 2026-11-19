@@ -270,6 +270,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   // A proposal is approved as a proposal, whatever it holds (screens, a site list, a rate card).
   // Only a document sales made as a site list is approved as one.
   const w = docWords(p);
+  const isProposal = docKind(p) === 'proposal';
 
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
@@ -498,7 +499,11 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <dl className="mt-2 grid grid-cols-3 gap-6 border-t border-border pt-5 sm:max-w-xl">
             <div><dt className="text-body-sm text-fg-muted">Malls</dt><dd className="text-display-md text-fg">{[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}</dd></div>
             <div><dt className="text-body-sm text-fg-muted">{lines.some((l) => l.screen.site) ? 'Sites' : 'Screens'}</dt><dd className="text-display-md text-fg">{total}</dd></div>
-            <div><dt className="text-body-sm text-fg-muted">Creatives</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
+            {isProposal ? (
+              <div><dt className="text-body-sm text-fg-muted">Screen sizes</dt><dd className="text-display-md text-fg">{sizes.length + unknown}</dd></div>
+            ) : (
+              <div><dt className="text-body-sm text-fg-muted">Creatives</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
+            )}
           </dl>
           {editable ? (
             <p className="text-body-sm text-fg-muted print:hidden">
@@ -507,7 +512,49 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           ) : null}
         </section>
 
-        {/* ---- What to supply: the site list grouped by creative ---- */}
+        {/* ---- A proposal: the screens we propose, mall by mall ---- */}
+        {isProposal ? (
+          <section className="flex flex-col gap-4" aria-labelledby="proposed-title">
+            <div className="flex flex-col gap-1">
+              <h2 id="proposed-title" className="text-display-sm text-fg">The screens we propose</h2>
+              <p className="max-w-prose text-body-md text-fg-muted">{total} {total === 1 ? 'screen' : 'screens'} in {[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length} malls, {formatRange(edits.start, edits.end)}. Media is subject to availability until booked.</p>
+            </div>
+            {groups.size ? (
+              <ul className="flex flex-col gap-4">
+                {[...groups.entries()].map(([key, g]) => {
+                  const facts = mallFacts(g.entry?.deck);
+                  const hero = g.entry ? entryPhoto(g.entry, true) : null;
+                  return (
+                    <li key={key} className="flex flex-col gap-4 rounded-3xl bg-bg p-4 sm:p-5 print:break-inside-avoid">
+                      <div className="flex gap-4">
+                        {hero ? <Zoomable src={hero} title={g.title} detail={g.entry?.area} className="h-20 w-28 shrink-0 rounded-2xl" /> : null}
+                        <div className="flex min-w-0 flex-col gap-1.5">
+                          <h3 className="text-body-lg font-semibold text-fg">{g.title}</h3>
+                          {g.entry?.area ? <span className="text-body-sm text-fg-muted">{g.entry.area}</span> : null}
+                          {facts.length ? <Facts facts={facts} max={4} /> : null}
+                        </div>
+                      </div>
+                      <ul className="grid gap-2 sm:grid-cols-2">
+                        {g.lines.filter((l) => !l.removed).map((l, i) => (
+                          <li key={`${l.item.id}-${i}`} className="flex items-center gap-3 rounded-2xl bg-bg-subtle p-2.5">
+                            {l.photo ? <Zoomable src={l.photo} title={`${g.title} · ${l.screen.title}`} className="h-14 w-20 shrink-0 rounded-xl" /> : <span className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl bg-bg-muted"><Shape w={l.screen.width} h={l.screen.height} /></span>}
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate text-body-sm font-semibold text-fg">{l.screen.title}{l.screen.qty > 1 ? ` × ${l.screen.qty}` : ''}</span>
+                              <span className="truncate text-body-sm text-fg-muted">{[l.screen.orientation, res(l.screen)].filter(Boolean).join(' · ')}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No screens yet.</p>}
+          </section>
+        ) : null}
+
+        {/* ---- A site list: what to supply, grouped by creative ---- */}
+        {!isProposal ? (
         <section className="flex flex-col gap-4" aria-labelledby="supply-title">
           <div className="flex flex-col gap-1">
             <h2 id="supply-title" className="text-display-sm text-fg">What you need to supply</h2>
@@ -519,9 +566,10 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           </div>
           {lines.length ? <CreativeGroups groups={creatives} start={edits.start} end={edits.end} audience="client" /> : <p className="rounded-3xl border border-dashed border-border-strong p-6 text-center text-body-md text-fg-muted">No sites yet.</p>}
         </section>
+        ) : null}
 
-        {/* ---- The malls: pictures and who shops there ---- */}
-        {groups.size ? (
+        {/* ---- A site list's malls: pictures and who shops there (a proposal shows them with its screens) ---- */}
+        {groups.size && !isProposal ? (
           <section className="flex flex-col gap-4 print:hidden" aria-labelledby="malls-title">
             <h2 id="malls-title" className="text-display-sm text-fg">The malls</h2>
             <ul className="grid gap-3 sm:grid-cols-2">
