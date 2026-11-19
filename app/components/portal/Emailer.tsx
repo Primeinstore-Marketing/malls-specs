@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ClientEmail } from '@/lib/portal/email';
+import { downloadEmailFile } from '@/lib/portal/emailFile';
 
 /**
  * Sending an email to a client, on any computer: see the email as the client
- * will, copy it (with its design), open a new email in Outlook, Gmail or the
- * mail app with the address and subject filled in, and paste. Works the same
- * on Mac and Windows, in the browser or the desktop apps.
+ * will, then open it in the installed Outlook ready to send (address, subject
+ * and the designed email filled in), or copy it and paste it into a new email
+ * in Outlook on the web, Gmail or the mail app.
  */
 export function Emailer({
   email,
@@ -26,6 +27,7 @@ export function Emailer({
   const [to, setTo] = useState(email.to);
   const [copied, setCopied] = useState<'email' | 'subject' | 'link' | null>(null);
   const [opened, setOpened] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   const hidden = useRef<HTMLDivElement>(null);
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   const paste = mac ? '⌘V' : 'Ctrl+V';
@@ -83,7 +85,7 @@ export function Emailer({
 
   const q = (o: Record<string, string>) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
   const apps = [
-    { label: 'Outlook', note: 'Work email in the browser', href: `https://outlook.office.com/mail/deeplink/compose?${q({ to, subject: email.subject })}`, newTab: true },
+    { label: 'Outlook on the web', note: 'Work email in the browser', href: `https://outlook.office.com/mail/deeplink/compose?${q({ to, subject: email.subject })}`, newTab: true },
     { label: 'Gmail', note: 'In the browser', href: `https://mail.google.com/mail/?${q({ view: 'cm', fs: '1', to, su: email.subject })}`, newTab: true },
     { label: 'Mail app', note: mac ? 'Outlook or Apple Mail on this Mac' : 'Outlook on this PC', href: `mailto:${to}?${q({ subject: email.subject })}`, newTab: false },
   ];
@@ -126,11 +128,28 @@ export function Emailer({
 
           {/* How to send it. */}
           <div className="flex flex-col gap-5 border-t border-border p-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
+            <div className="flex flex-col gap-2 rounded-2xl border border-accent bg-accent-subtle p-4">
+              <strong className="text-body-md text-fg">Outlook app</strong>
+              <span className="text-body-sm text-fg-muted">Opens a new email in Outlook on this {mac ? 'Mac' : 'PC'} with the address, subject and the designed email filled in. Check it and press Send.</span>
+              <button
+                type="button"
+                onClick={() => setSaved(downloadEmailFile({ to, subject: email.subject, html: email.html, text: email.text }, mac))}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover"
+              >
+                Open in Outlook
+              </button>
+              {saved ? (
+                <span role="status" className="text-body-sm text-fg">
+                  Saved <strong className="break-all">{saved}</strong>. Open it from your downloads (at the top right of the browser) and it opens in Outlook, ready to send. Tip: choose “Always open files of this type” and next time it opens by itself.
+                </span>
+              ) : null}
+            </div>
+            <span className="text-body-sm font-semibold text-fg-muted">Or copy and paste it into another email app</span>
             <div className="flex gap-3">
-              <span className={`${step} ${copied === 'email' ? 'bg-success-fg text-bg' : 'bg-accent text-fg-on-accent'}`}>{copied === 'email' ? '✓' : '1'}</span>
+              <span className={`${step} ${copied === 'email' ? 'bg-success-fg text-bg' : 'bg-bg-muted text-fg'}`}>{copied === 'email' ? '✓' : '1'}</span>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <strong className="text-body-md text-fg">Copy the email</strong>
-                <button type="button" onClick={() => void copyEmail()} className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
+                <button type="button" onClick={() => void copyEmail()} className="inline-flex h-11 items-center justify-center rounded-full border border-border-strong px-5 text-body-sm font-semibold text-fg hover:border-fg">
                   {copied === 'email' ? 'Copied ✓' : 'Copy email'}
                 </button>
               </div>

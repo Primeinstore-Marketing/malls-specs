@@ -353,7 +353,7 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
       {emailing ? (
         <Emailer
           email={email(emailing, emailing === 'proposal' ? sentNote.current || note : '')}
-          title={{ proposal: 'Email the proposal', reminder: 'Email a reminder', booked: 'Email the booking confirmation' }[emailing]}
+          title={{ proposal: `Email the ${docWords(c).noun}`, reminder: 'Email a reminder', booked: 'Email the booking confirmation' }[emailing]}
           doneLabel={emailing === 'proposal' ? 'I’ve sent it — mark as sent' : 'I’ve sent it'}
           onSent={() => {
             if (emailing === 'proposal') {
