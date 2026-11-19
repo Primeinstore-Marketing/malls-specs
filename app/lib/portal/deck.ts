@@ -339,7 +339,7 @@ function snapshotSlides(pptx: Pptx): PreviewSlide[] {
 }
 
 /** Builds a deck (a fresh random layout each time) without saving it: for the preview, then the download. */
-export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<{ blob: Blob; fileName: string; slides: PreviewSlide[] }> {
+export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalogue, opts: { link?: string } = {}): Promise<{ blob: Blob; fileName: string; slides: PreviewSlide[] }> {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
@@ -358,7 +358,8 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
   const r = reach(c);
   const total = screens.reduce((n, s) => n + s.qty, 0);
   const flight = days(c.start, c.end);
-  const link = shareUrl(c, user.id);
+  // The client's own page passes its link (it has no campaign to make one from).
+  const link = opts.link ?? shareUrl(c, user.id);
   const logos = { white: await logo('/brand/logo-white-deck.png'), navy: await logo('/brand/logo-navy-deck.png') };
   const label = `Primedia Malls · ${w.Noun}${forClient ? ` for ${forClient}` : ''} · ${c.name}`;
   let n = 1;
@@ -756,8 +757,8 @@ export function saveBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 
-export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Catalogue): Promise<string> {
-  const { blob, fileName } = await buildDeck(c, user, catalogue);
+export async function downloadDeck(c: Campaign, user: PortalUser, catalogue: Catalogue, opts: { link?: string } = {}): Promise<string> {
+  const { blob, fileName } = await buildDeck(c, user, catalogue, opts);
   saveBlob(blob, fileName);
   return fileName;
 }

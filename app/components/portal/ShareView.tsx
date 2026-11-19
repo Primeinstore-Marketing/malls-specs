@@ -18,7 +18,7 @@ import type { MallEntry, ScreenRow } from '@/lib/portal/mallScreens';
 import { decodeProposal, proposalUrl } from '@/lib/portal/share';
 import type { SharedProposal } from '@/lib/portal/share';
 import { portal, usePortalState, usePortalUser } from '@/lib/portal/store';
-import type { Campaign, CampaignItem, NewCampaignItem } from '@/lib/portal/types';
+import type { Campaign, CampaignItem, NewCampaignItem, PortalUser } from '@/lib/portal/types';
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 
@@ -28,8 +28,8 @@ import { Zoomable } from '@/components/ui/ImageViewer';
  * like, who shops there, and what artwork to send. While it's a proposal the
  * client can remove screens, add screens from any mall and propose new dates;
  * "Send changes" emails the account manager a link to the edited proposal.
- * Edits are kept in this browser until sent. Built to print: "Download PDF"
- * is this page without the editing tools.
+ * Edits are kept in this browser until sent. A proposal downloads as the
+ * PowerPoint sales send; a site list prints as a PDF ("Download PDF").
  *
  * Public page: only uploaded or rights-cleared photos are shown.
  */
@@ -272,6 +272,29 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const w = docWords(p);
   const isProposal = docKind(p) === 'proposal';
 
+  /* A proposal downloads as the PowerPoint sales send (a site list prints as a PDF). */
+  const [deckBusy, setDeckBusy] = useState(false);
+  const [deckError, setDeckError] = useState<string | null>(null);
+  async function downloadPowerPoint() {
+    setDeckBusy(true);
+    setDeckError(null);
+    try {
+      const { downloadDeck } = await import('@/lib/portal/deck');
+      const asCampaign: Campaign = {
+        id: p.id, name: p.name, kind: p.kind, clientId: null,
+        prospect: p.client && p.client !== 'No client yet' ? { company: p.client, name: '', email: '' } : null,
+        objective: p.objective, start: p.start, end: p.end, audience: null, status: p.status,
+        createdBy: '', createdAt: p.at, updatedAt: p.at, items: p.items, events: [], rateCard: p.rateCard ?? null,
+      };
+      const from: PortalUser = { id: '', name: p.from?.name ?? 'Primedia Malls', title: p.from?.title ?? '', email: p.from?.email ?? '', role: 'sales' };
+      await downloadDeck(asCampaign, from, catalogue, { link: window.location.href.replace(/[?&](print|preview)=1/g, '') });
+    } catch {
+      setDeckError('We couldn’t make the PowerPoint just now. Try again in a moment.');
+    } finally {
+      setDeckBusy(false);
+    }
+  }
+
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
   const removeItem = (key: string) => setEdits((e) => ({ ...e, items: e.items.filter((x) => itemKey(x) !== key) }));
@@ -428,9 +451,19 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <Image src={withBasePath('/brand/logo-navy.svg')} alt="" aria-hidden="true" width={140} height={29} className="hidden h-[26px] w-auto print:block" />
           <div className="flex items-center gap-3">
             <span className="text-body-sm text-brand-on-surface-muted print:text-fg-muted">Sent {formatDate(p.at.slice(0, 10))}</span>
-            <button type="button" onClick={() => window.print()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">
-              Download PDF
-            </button>
+            {isProposal ? (
+              <button type="button" disabled={deckBusy} onClick={() => void downloadPowerPoint()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-60 print:hidden">
+                {deckBusy ? 'Preparing PowerPoint…' : 'Download PowerPoint'}
+              </button>
+            ) : null}
+            {isProposal && deckError ? (
+              <span role="alert" className="text-body-sm text-brand-on-surface print:hidden">{deckError}</span>
+            ) : null}
+            {isProposal ? null : (
+              <button type="button" onClick={() => window.print()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">
+                Download PDF
+              </button>
+            )}
           </div>
         </div>
       </header>
