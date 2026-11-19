@@ -94,7 +94,7 @@ export function SignInForm({ onSignedIn, autoFocus = false }: { onSignedIn?: (ac
             <input type="email" autoComplete="username" autoFocus={autoFocus} value={email} onChange={(e) => setEmail(e.target.value)} disabled={disabled} className={authInput} />
           </label>
           {mode === 'signup' ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1.5">
                 <span className={authLabel}>Your name</span>
                 <input autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} disabled={disabled} className={authInput} />

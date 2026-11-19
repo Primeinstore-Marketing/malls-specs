@@ -14,14 +14,13 @@ import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/scre
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import { DeckPreview } from './DeckPreview';
 import type { PreviewSlide } from '@/lib/portal/deck';
-import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
+import type { BookedScreen } from '@/lib/portal/screens';
 import { entryKeyFor, entryPhoto, itemKey, mallEntries, mallFacts, rowsFor } from '@/lib/portal/mallScreens';
 import type { MallEntry, ScreenRow } from '@/lib/portal/mallScreens';
 import { decodeProposal, proposalUrl } from '@/lib/portal/share';
 import type { SharedProposal } from '@/lib/portal/share';
 import { portal, usePortalState, usePortalUser } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, NewCampaignItem, PortalUser } from '@/lib/portal/types';
-import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 
 /**
@@ -608,7 +607,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                           {facts.length ? <Facts facts={facts} max={4} /> : null}
                         </div>
                       </div>
-                      <ul className="grid gap-2 sm:grid-cols-2">
+                      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {g.lines.filter((l) => !l.removed).map((l, i) => (
                           <li key={`${l.item.id}-${i}`} className="flex items-center gap-3 rounded-2xl bg-bg-subtle p-2.5">
                             {l.photo ? <Zoomable src={l.photo} title={`${g.title} · ${l.screen.title}`} className="h-14 w-20 shrink-0 rounded-xl" /> : <span className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl bg-bg-muted"><Shape w={l.screen.width} h={l.screen.height} /></span>}
@@ -653,7 +652,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         {groups.size && !isProposal && !isRateCard ? (
           <section className="flex flex-col gap-4 print:hidden" aria-labelledby="malls-title">
             <h2 id="malls-title" className="text-display-sm text-fg">The malls</h2>
-            <ul className="grid gap-3 sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[...groups.entries()].map(([key, g]) => {
                 const facts = mallFacts(g.entry?.deck);
                 const hero = g.entry ? entryPhoto(g.entry, true) : null;
@@ -715,7 +714,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                 {editable ? `Approve it as it stands, ask ${first} for changes, or decline it.` : `${p.from?.name.split(' ')[0] ?? 'Your account manager'} is your contact for artwork and anything else.`}
               </p>
               {editable ? (
-                <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Your decision">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Your decision">
                   <button type="button" onClick={() => setApproving(true)} className="flex flex-col items-start gap-0.5 rounded-2xl bg-accent px-5 py-4 text-left text-fg-on-accent hover:bg-accent-hover">
                     <span className="text-body-md font-semibold">✓ {w.approve}</span>
                     <span className="text-body-sm opacity-80">Everything is right</span>

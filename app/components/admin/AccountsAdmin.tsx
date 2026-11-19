@@ -171,7 +171,7 @@ function NewAccount({ onCreated }: { onCreated: () => void }) {
   return (
     <section aria-labelledby="new-account" className="flex flex-col gap-3 rounded-2xl bg-bg-subtle p-4">
       <h2 id="new-account" className="text-body-lg font-semibold text-fg">Add a person</h2>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_auto] sm:items-end">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_auto] sm:items-end">
         <label className="flex flex-col gap-1.5"><span className={fieldLabel}>Work email</span><input type="email" className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@primedia.co.za" /></label>
         <label className="flex flex-col gap-1.5"><span className={fieldLabel}>Name</span><input className={field} value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="flex flex-col gap-1.5"><span className={fieldLabel}>Job title</span><input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Account Manager, Primedia Malls" /></label>

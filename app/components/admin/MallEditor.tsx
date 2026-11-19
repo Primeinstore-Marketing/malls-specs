@@ -9,18 +9,16 @@ import { deckMallForApp, deckPhoto, packagePhotos } from '@/lib/insights';
 import type { MallContent, MediaPackage, UploadedPhoto } from '@/lib/insights';
 import type { Share, ShopperProfile } from '@/lib/insights/types';
 import { readMallDeck } from '@/lib/insights/deckReader';
-import { contentUpdatedAt } from '@/lib/content';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
 import { NETWORK_SPEC_IDS, resolvePackageSpec, sheetHref } from '@/lib/portal/screens';
 import { getAssets } from '@/lib/catalogue';
 import { getAllMallsForAdmin, getMalls, getScreenSize } from '@/lib/malls';
-import { allSites, placeLine, pointLocation, SA_PROVINCES, siteById, slugifySite } from '@/lib/sites';
+import { allSites, placeLine, SA_PROVINCES, siteById, slugifySite } from '@/lib/sites';
 import type { SiteGroup, SiteRecord } from '@/lib/sites';
 import { newScreenSpec } from '@/lib/newScreen';
 import { specHref } from '@/lib/liveData';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { LocationPicker } from './LocationPicker';
-import { getCatalogue } from '@/lib/catalogue';
 import { AdminGate, field, fieldLabel, primaryBtn, quietBtn, uploadPhoto } from './AdminGate';
 
 /**
@@ -376,7 +374,7 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
       </div>
 
       <Group title="1 · Name and place">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Text label="Name in lists" value={site.name} placeholder="e.g. Cresta" onChange={(v) => setS({ name: v })} />
           <Text label="Full public name" value={place.name} placeholder="e.g. Cresta Shopping Centre" onChange={(v) => setPlace({ name: v })} />
           <label className="flex flex-col gap-1.5">
@@ -447,7 +445,7 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
           </label>
           {deckNote ? <span role="status" className={`text-body-sm ${deckNote.ok ? 'text-fg-muted' : 'text-danger-fg'}`}>{deckNote.text}</span> : null}
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Text label="Visits a year" value={m.annualFootcount} placeholder={p.monthlyFootcount ? `${(p.monthlyFootcount * 12).toLocaleString('en-ZA')} (month × 12)` : 'e.g. 12 000 000'} onChange={(v) => set({ annualFootcount: num(v) })} />
           <Text label="Visits a month" value={p.monthlyFootcount} onChange={(v) => setProfile({ monthlyFootcount: num(v) })} />
           <Text label="Women %" value={p.female} onChange={(v) => setProfile({ female: num(v) })} />
@@ -495,7 +493,7 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
       </Group>
 
       <Group title="Advertising recall" note="Share of recent mall visitors, %.">
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <Text label="Notice mall ads" value={m.media?.noticeMallAds} onChange={(v) => setMedia('noticeMallAds', v)} />
           <Text label="Notice indoor ads" value={m.media?.noticeIndoorAds} onChange={(v) => setMedia('noticeIndoorAds', v)} />
           <Text label="Seen large screens" value={m.media?.seenLargeScreens} onChange={(v) => setMedia('seenLargeScreens', v)} />
@@ -510,7 +508,7 @@ function Editor({ start, deckStart, isNew }: { start: SiteRecord; deckStart: Mal
             const deckPhotos = packagePhotos(pkg.code).filter((x) => !x.uploaded);
             return (
               <li key={i} className="flex flex-col gap-3 rounded-2xl bg-bg-subtle p-4">
-                <div className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_12rem_6rem]">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_12rem_6rem]">
                   <Text label="Code" value={pkg.code} onChange={(v) => setPkg(i, { code: v.toUpperCase() })} />
                   <Text label="Name" value={pkg.name} onChange={(v) => setPkg(i, { name: v })} />
                   <label className="flex flex-col gap-1.5">

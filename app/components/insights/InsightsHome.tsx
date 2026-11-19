@@ -42,7 +42,7 @@ function Compare() {
   ];
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <select
             key={i}

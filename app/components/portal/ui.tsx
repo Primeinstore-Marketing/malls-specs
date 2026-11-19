@@ -2,10 +2,9 @@
 
 import { CLIENT_REQUESTS } from '@/lib/features';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { CLIENTS, USERS } from '@/lib/portal/seed';
-import { CLIENT_STATUS_TONE, STATUS_TONE, canEdit, formatRange, itemLabel, statusLabel } from '@/lib/portal/logic';
+import { CLIENT_STATUS_TONE, STATUS_TONE, canEdit, itemLabel, statusLabel } from '@/lib/portal/logic';
 import { ui } from '@/lib/portal/ui-state';
 import { portal, refreshCampaigns, useCampaignSync, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { useLiveData } from '@/lib/liveData';

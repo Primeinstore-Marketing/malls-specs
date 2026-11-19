@@ -10,11 +10,9 @@ import type { DeckMall } from '@/lib/insights';
 import {
   STEP_LABELS,
   canEdit,
-  campaignClientName, clientName,
+  campaignClientName,
   days,
   formatRange,
-  formatDate,
-  itemKey,
   itemLabel,
   itemMall,
   DOC_KINDS,
@@ -28,12 +26,11 @@ import {
   userById,
   visibleTo,
 } from '@/lib/portal/logic';
-import { CLIENTS } from '@/lib/portal/seed';
 import { campaignOwner, portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, CampaignItem, NewCampaignItem, PortalUser, SiteItem } from '@/lib/portal/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AddToProposal, Avatar, Page, RequireSignIn, StatusPill } from './ui';
-import { artworkSizes, campaignScreens, creativeGroups, screensFor, sheetHref } from '@/lib/portal/screens';
+import { artworkSizes, campaignScreens, creativeGroups, screensFor } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
 import { SiteMatch } from './SiteMatch';
 import { unmatchedSummary } from '@/lib/portal/siteStatus';
@@ -41,7 +38,6 @@ import { getMalls } from '@/lib/malls';
 import { SizeDownloads } from './SizeDownloads';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { buildClientEmail } from '@/lib/portal/email';
-import { getScreenSize } from '@/lib/malls';
 import { itemKey as itemKeyOf } from '@/lib/portal/mallScreens';
 import { Emailer } from './Emailer';
 import type { EmailKind } from '@/lib/portal/email';
@@ -546,7 +542,7 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
   return (
     <>
       {summary}
-      <div className="grid gap-4 sm:grid-cols-2 print:hidden">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:hidden">
         {sales ? (
           // Proposal, site list or rate card: sets the words on its page, the client's link, the email and the downloads.
           <div className="flex flex-col gap-1.5 sm:col-span-2">

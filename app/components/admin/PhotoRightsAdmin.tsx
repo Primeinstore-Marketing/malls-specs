@@ -59,7 +59,7 @@ function Register() {
           </button>
         ))}
       </div>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {PHOTO_RIGHTS.filter((r) => r.kind === kind).map((r) => {
           const m = deckMall(r.mall);
           return (

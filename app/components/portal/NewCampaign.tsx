@@ -3,12 +3,11 @@
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { annualVisits, compact, semShare } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
-import { DOC_WORDS, addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
+import { DOC_WORDS, addDays, days, reach, todayIso } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
-import { clientEmail } from '@/lib/portal/email';
 import { clientContact } from '@/lib/portal/share';
 import { artworkSizes, campaignScreens } from '@/lib/portal/screens';
 import { briefInventory, mallEntries, pkgKey, rowsFor as rowsForEntry, scrKey } from '@/lib/portal/mallScreens';
@@ -365,7 +364,7 @@ function Form({ user }: { user: PortalUser }) {
                         </dl>
                       ) : null}
 
-                      <ul className="grid gap-2 sm:grid-cols-2">
+                      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {rows.map((row) => {
                           const on = picked.has(row.key);
                           return (

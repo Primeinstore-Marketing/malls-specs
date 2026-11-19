@@ -2,7 +2,7 @@
 
 import { PictureDrop } from './PictureDrop';
 import { Zoomable } from '@/components/ui/ImageViewer';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Asset, Specification } from '@data-model';
 import { api, fileUrl } from '@/lib/api';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
@@ -109,7 +109,7 @@ export function ScreenPhotos({ spec, media, mallId }: { spec: Specification; med
         />
       ) : null}
       {media.length ? null : candidates.length ? (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {candidates.map((c) => {
             const pending = !c.photo.uploaded && photoRights(c.photo.src)?.status !== 'cleared';
             return (

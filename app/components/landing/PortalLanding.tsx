@@ -17,19 +17,19 @@ import { useAuthDialog } from '@/components/auth/AuthDialogContext';
 
 const STEPS = [
   CLIENT_REQUESTS
-    ? ['Plan it, or send us your site list', 'Plan your own campaign here: pick malls and screens, add your dates and send it to sales. Or email your account manager the site list or brief you already have (Excel, PDF, Word or PowerPoint). Either way, they turn it into a proposal.']
-    : ['Send us your site list or brief', 'Email your account manager the booking sheet, site list or brief you already have: Excel, PDF, Word or PowerPoint. They turn it into a proposal in minutes.'],
-  ['You get one link', 'It opens your site list, grouped by creative: how many videos or stills to make, at what size, with the template for each. No account needed.'],
-  ['Approve in one click', 'Approve the whole site list, or ask for changes with a note to your account manager.'],
-  ['Send the artwork', 'One file per creative, built in its After Effects template, before the campaign starts.'],
+    ? ['Tell us what you need', 'Plan it here (malls, screens and dates) and send it to sales, or email your account manager your brief or booking sheet: Excel, PDF, Word or PowerPoint.']
+    : ['Tell us what you need', 'Email your account manager your brief or booking sheet: Excel, PDF, Word or PowerPoint. Who you want to reach, when, and your budget is enough to start.'],
+  ['Get your proposal', 'One link, no account needed: the screens we suggest in each mall, who shops there and, if you asked, the prices. View it as slides and download it as PowerPoint.'],
+  ['Approve, change or decline', 'Approve in one click, tell your account manager what to change, or decline with a reason. They see your answer straight away.'],
+  ['Get your site list and send the artwork', 'Once booked, your site list shows every site, how many creatives to make, their sizes and the After Effects template for each. Send them before the campaign starts.'],
 ] as const;
 
 /** The four groups the site serves, each with its way in. Matches Phase 5 — Portal UX Design, section 2. */
 const AUDIENCES = [
-  ['Visitors', 'Designers, agencies and studios: find a screen, check its size, download the spec sheet and After Effects template. No sign-in.'],
-  ['Sales', 'Primedia account managers: drop the client’s site list or brief and the proposal fills itself in. Check it and email the client one link.'],
-  ['Clients', CLIENT_REQUESTS ? 'Brands and agencies: plan your own campaign and send it to sales, or send your site list. Then approve the proposal from one link that shows how many creatives to supply.' : 'Brands and agencies: send your site list, then approve it from one link that shows how many creatives to supply.'],
-  ['Admin', 'Primedia staff: keep malls, screens, pictures, clients, photo rights and accounts up to date.'],
+  ['Visitors', 'Designers, agencies and studios: find any mall screen, check its size and download its spec sheet and After Effects template. No sign-in needed.'],
+  ['Sales', 'Primedia account managers: build a proposal, a site list or a rate card in minutes. Pick screens or upload the client’s brief, see who shops at each mall, add prices and send the client one link.'],
+  ['Clients', CLIENT_REQUESTS ? 'Brands and agencies: plan a campaign and send it to sales. Then open the one link we send you to view, download and approve your proposal, site list or rate card.' : 'Brands and agencies: open the one link we send you to view, download and approve your proposal, site list or rate card. No account needed.'],
+  ['Admin', 'Primedia staff: keep the malls, screens, specs, pictures, shopper data, photo rights and accounts up to date.'],
 ] as const;
 
 export function PortalLanding() {
@@ -90,7 +90,7 @@ export function PortalLanding() {
 
       <section className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 pt-14 sm:px-6 lg:px-8 lg:pt-20" aria-labelledby="who-title">
         <h2 id="who-title" className="text-display-lg text-fg">Who it’s for</h2>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {AUDIENCES.map(([who, text], i) => (
             <li key={who} className="flex flex-col gap-2 rounded-2xl border border-border bg-bg p-5">
               <span className="text-label-md font-semibold uppercase text-fg-muted">{i + 1}</span>
@@ -105,10 +105,10 @@ export function PortalLanding() {
       <section className="mx-auto grid w-full max-w-page gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:px-8 lg:py-20" aria-labelledby="how-title">
         <div className="flex flex-col gap-3">
           <h2 id="how-title" className="text-display-lg text-fg">How it works</h2>
-          <p className="text-body-md text-fg-muted">For clients and their agencies: {CLIENT_REQUESTS ? 'from your plan or site list' : 'from your site list'} to approved screens and artwork, in four steps.</p>
+          <p className="text-body-md text-fg-muted">For brands and their agencies: from your brief to screens on air, in four steps.</p>
           {CLIENT_REQUESTS ? <Link href="/request" className="self-start text-body-sm font-semibold text-accent hover:underline">Plan your campaign →</Link> : null}
         </div>
-        <ol className="grid gap-6 sm:grid-cols-2">
+        <ol className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {STEPS.map(([title, text], i) => (
             <li key={title} className="flex flex-col gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-subtle text-body-md font-bold text-accent">{i + 1}</span>

@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import Image from 'next/image';
-import { Button } from '@/components/ui/Button';
 import { useSearchPalette } from '@/components/search/SearchPaletteContext';
 import { Notifications, PortalAccount } from '@/components/portal/Chrome';
 import { usePortalUser } from '@/lib/portal/store';

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { compact } from '@/lib/insights';
-import { campaignClientName, clientName, days, docWords, formatRange, phase, reach, todayIso } from '@/lib/portal/logic';
+import { campaignClientName, days, docWords, formatRange, phase, reach, todayIso } from '@/lib/portal/logic';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
 import { StatusPill } from './ui';
 import { useState } from 'react';

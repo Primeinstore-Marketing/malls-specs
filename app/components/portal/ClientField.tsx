@@ -77,7 +77,7 @@ export function ClientField({
         </select>
       </label>
       {value === NEW ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1.5">
             <span className={label}>Company</span>
             <input className={input} disabled={disabled} value={p.company} onChange={(e) => set('company', e.target.value)} placeholder="e.g. Sunrise Dairy" />

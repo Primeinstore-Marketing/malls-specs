@@ -405,12 +405,12 @@ function MallPage({ mall, screens, all, malls, live, onPick }: { mall: Mall; scr
       {d?.packages.length ? (
         <section className="flex flex-col gap-4" aria-labelledby="pkg-title">
           <h3 id="pkg-title" className="text-display-sm text-fg">Packages</h3>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {d.packages.map((pkg) => {
               const photo = packagePhotos(pkg.code)[0];
               const name = `${pkg.format}${pkg.units ? ` × ${pkg.units}` : ''}`;
               return (
-                <div key={pkg.code} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-2.5 pr-4">
+                <div key={pkg.code} className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-bg p-2.5 pr-4">
                   <Zoomable src={photo?.src ?? null} title={`${name} package`} packageCode={pkg.code} note={pkg.sites} className="h-16 w-20 rounded-xl">
                     <ShapeArt size={null} />
                   </Zoomable>
@@ -428,7 +428,7 @@ function MallPage({ mall, screens, all, malls, live, onPick }: { mall: Mall; scr
 
       <section className="flex flex-col gap-4" aria-labelledby="screens-title">
         <h3 id="screens-title" className="text-display-sm text-fg">Screens here</h3>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {screens.map((s) => (
             <ScreenCard key={s.spec.id} s={s} live={live} showMall={false} onMall={onPick} />
           ))}
@@ -438,7 +438,7 @@ function MallPage({ mall, screens, all, malls, live, onPick }: { mall: Mall; scr
       {near.length ? (
         <section className="flex flex-col gap-4" aria-labelledby="near-title">
           <h3 id="near-title" className="text-display-sm text-fg">More in {place?.province}</h3>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {near.map((m) => (
               <MallCard key={m.id} mall={m} screens={all.filter((s) => s.mall.id === m.id)} all={all} onPick={onPick} />
             ))}
@@ -546,7 +546,7 @@ function Explorer() {
     );
   } else if (view === 'screens') {
     results = (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {list.map((s) => (
           <ScreenCard key={s.spec.id} s={s} live={live} showMall onMall={(id) => pick(id)} />
         ))}
@@ -554,7 +554,7 @@ function Explorer() {
     );
   } else {
     results = (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {shownMalls.map((m) => (
           <MallCard key={m.id} mall={m} screens={byMall(list, m)} all={screens} onPick={pick} />
         ))}

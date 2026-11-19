@@ -60,7 +60,7 @@ function Register({ user }: { user: PortalUser }) {
         ))}
       </div>
 
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((r) => {
           const mall = deckMall(r.mall);
           return (
