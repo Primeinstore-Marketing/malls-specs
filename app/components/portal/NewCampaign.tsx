@@ -22,6 +22,7 @@ import { ClientField } from './ClientField';
 import { Zoomable } from '@/components/ui/ImageViewer';
 import { Page, RequireSignIn, Section } from './ui';
 import { BriefDrop } from './BriefDrop';
+import type { BriefMake } from './BriefDrop';
 import { SiteMatch } from './SiteMatch';
 import { formatScreen, siteStatus, statusText, unmatchedSummary } from '@/lib/portal/siteStatus';
 import { getMalls } from '@/lib/malls';
@@ -166,10 +167,12 @@ function Form({ user }: { user: PortalUser }) {
   const [aiDraft, setAiDraft] = useState<{ draft: BriefDraft; file: string; kept: number; dropped: number; truncated: boolean; undo: () => void } | null>(null);
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
   const [clientKey, setClientKey] = useState(0);
-  function applyDraft(draft: BriefDraft, file: string, truncated = false, docRows: readonly SiteRow[] = []) {
+  function applyDraft(draft: BriefDraft, file: string, truncated = false, docRows: readonly SiteRow[] = [], make?: BriefMake) {
     const before = { name, client, objective, start, end, picked, reasons, siteLines, kind, priceRows };
     setPriceRows(docRows.some((r) => r.rate != null) ? docRows : []);
-    // Site lines stay on whatever sales chose to make: a proposal can carry a site list and rate card.
+    // Sales chose what to make from the file; a file dropped on the page keeps what's being made.
+    // A proposal can carry the file's site list and prices too.
+    if (make) setKind(make);
     const rows = new Map(mallEntries(catalogue).flatMap((e) => rowsFor(e).map((r) => [r.key, r] as const)));
     const chosen = draft.items.filter((i) => rows.has(i.key));
     const iso = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
@@ -261,7 +264,7 @@ function Form({ user }: { user: PortalUser }) {
         <section role="status" className="flex flex-col gap-3 rounded-2xl border-2 border-accent bg-accent-subtle p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1">
-              <strong className="text-body-lg text-fg">Drafted from {aiDraft.file}</strong>
+              <strong className="text-body-lg text-fg">{DOC_WORDS[kind].Noun} drafted from {aiDraft.file}</strong>
               <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
               {docPriced ? <p className="text-body-sm font-semibold text-success-fg">Prices for {docPriced} {docPriced === 1 ? 'line' : 'lines'} from the document go on the rate card (as prices for the whole flight; change that on the rate card if they’re weekly).</p> : null}
               <p className="text-body-sm text-fg-muted">

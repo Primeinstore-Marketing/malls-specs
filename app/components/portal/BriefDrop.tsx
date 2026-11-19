@@ -26,19 +26,44 @@ function rowsDraft(rows: readonly SiteRow[], file: string): BriefDraft {
   };
 }
 
+/** What an uploaded file is turned into. */
+export type BriefMake = 'proposal' | 'sitelist';
+
 type State = { step: 'idle' } | { step: 'reading' | 'drafting'; file: string } | { step: 'error'; text: string };
 
 /**
  * "Start from the client's brief": drop or choose a PDF, Word, PowerPoint,
  * Excel or image file, and the AI drafts the whole proposal from it.
  */
-export function BriefDrop({ inventory, onDraft, pims = false, compact = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean, rows: readonly SiteRow[]) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean; /** A slim bar, and a file dropped anywhere on the page is read. */ compact?: boolean }) {
+export function BriefDrop({ inventory, onDraft, pims = false, compact = false }: { inventory: () => string; onDraft: (draft: BriefDraft, filename: string, truncated: boolean, rows: readonly SiteRow[], make?: BriefMake) => void; /** Making a site list: ask for the PIMS export. */ pims?: boolean; /** A slim bar, and a file dropped anywhere on the page is read. */ compact?: boolean }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const busy = state.step === 'reading' || state.step === 'drafting';
+  // Compact: the button first asks what to make, then opens the file picker.
+  const [menu, setMenu] = useState(false);
+  const make = useRef<BriefMake | undefined>(undefined);
+  const box = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) setMenu(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [menu]);
+  const choose = (m: BriefMake) => {
+    make.current = m;
+    setMenu(false);
+    input.current?.click();
+  };
 
-  async function handle(file: File | undefined) {
+  async function handle(file: File | undefined, as: BriefMake | undefined = make.current) {
+    make.current = undefined;
     if (!file || busy) return;
     setState({ step: 'reading', file: file.name });
     // Rows (and any prices) read here, so a site list still works when the AI can't be reached.
@@ -54,12 +79,12 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
         today: new Date().toISOString().slice(0, 10),
       });
       setState({ step: 'idle' });
-      onDraft(draft, file.name, truncated, rows);
+      onDraft(draft, file.name, truncated, rows, as);
     } catch (e) {
       const why = e instanceof Error ? e.message : 'That didn’t work. Try again.';
       if (rows.length && !/MB|old Office|damaged|can’t open|couldn’t find any text|Drop a PDF/i.test(why)) {
         setState({ step: 'idle' });
-        onDraft(rowsDraft(rows, file.name), file.name, false, rows);
+        onDraft(rowsDraft(rows, file.name), file.name, false, rows, as);
         return;
       }
       setState({ step: 'error', text: why });
@@ -91,7 +116,7 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
       e.preventDefault();
       depth = 0;
       setPageOver(false);
-      void handleRef.current(e.dataTransfer?.files?.[0]);
+      void handleRef.current(e.dataTransfer?.files?.[0], undefined);
     };
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragleave', leave);
@@ -109,19 +134,21 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
     const status =
       state.step === 'reading' ? `Opening ${state.file}…` : state.step === 'drafting' ? `The AI is reading ${state.file}: about half a minute…` : null;
     return (
-      <section aria-labelledby="brief-title" className="flex flex-col gap-1.5">
+      <section ref={box} aria-labelledby="brief-title" className="relative flex flex-col gap-1.5">
         {pageOver ? (
           <div className="pointer-events-none fixed inset-0 z-modal flex items-center justify-center bg-[rgba(6,12,28,0.55)] p-6 backdrop-blur-sm">
             <div className="rounded-3xl border-2 border-dashed border-white bg-accent px-10 py-8 text-center text-fg-on-accent shadow-4">
               <div className="text-display-sm">Drop it here</div>
-              <div className="text-body-md">A brief, booking sheet or PIMS site list fills in the proposal.</div>
+              <div className="text-body-md">A brief, booking sheet or PIMS site list fills in the page.</div>
             </div>
           </div>
         ) : null}
         <button
           type="button"
           disabled={busy}
-          onClick={() => input.current?.click()}
+          onClick={() => setMenu((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={menu}
           title={`PDF, Word, PowerPoint, Excel or image, up to ${MAX_BRIEF_MB} MB. You can also drop it anywhere on this page.`}
           className={`flex w-full items-center justify-center gap-3 rounded-2xl border border-dashed px-4 py-3 text-body-md font-semibold transition-colors disabled:cursor-wait ${busy ? 'border-accent bg-accent-subtle text-fg' : 'border-border-strong bg-bg-subtle text-fg hover:border-accent hover:bg-accent-subtle'}`}
         >
@@ -130,8 +157,29 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
           ) : (
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-body-md text-fg-on-accent">✦</span>
           )}
-          <span id="brief-title" role="status">{status ?? (pims ? 'Upload the site list' : 'Upload a brief or site list')}</span>
+          <span id="brief-title">{status ?? 'Upload a brief or site list'}</span>
         </button>
+        <span role="status" className="sr-only">{status ?? ''}</span>
+        {menu ? (
+          <div role="menu" aria-label="What to make from the file" className="absolute inset-x-0 top-full z-popover mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-border bg-bg p-2 shadow-3 sm:grid-cols-2">
+            {([
+              ['proposal', 'Make a proposal', 'From a brief or booking sheet: the AI picks the screens, client and dates.'],
+              ['sitelist', 'Make a site list', 'From a PIMS export or booking: every site, with its spec sheet and template.'],
+            ] as const).map(([m, label, hint]) => (
+              <button
+                key={m}
+                type="button"
+                role="menuitem"
+                autoFocus={m === (pims ? 'sitelist' : 'proposal')}
+                onClick={() => choose(m)}
+                className="flex flex-col gap-0.5 rounded-xl px-4 py-3 text-left hover:bg-accent-subtle focus-visible:bg-accent-subtle focus-visible:outline-none"
+              >
+                <span className="text-body-md font-semibold text-fg">{label}</span>
+                <span className="text-body-sm text-fg-muted">{hint}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="hidden">
           <input
             ref={input}
