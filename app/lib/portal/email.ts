@@ -53,14 +53,16 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   const w = docWords(c);
   const unit = (n: number) => `${n} ${n === 1 ? w.unit : `${w.unit}s`}`;
   const subject = {
-    proposal: w.noun === 'proposal' ? `Proposal: ${c.name}` : `Site list for approval: ${c.name}`,
+    proposal: w.noun === 'proposal' ? `Proposal: ${c.name}` : w.noun === 'rate card' ? `Rate card: ${c.name}` : `Site list for approval: ${c.name}`,
     reminder: `Reminder: the ${w.noun} for ${c.name} is waiting for your approval`,
     booked: `Booking confirmed: ${c.name}`,
   }[kind];
-  const heading = { proposal: w.noun === 'proposal' ? 'Your proposal is ready' : 'Your site list is ready for approval', reminder: `Your ${w.noun} is waiting for approval`, booked: 'Your booking is confirmed' }[kind];
+  const heading = { proposal: w.noun === 'proposal' ? 'Your proposal is ready' : w.noun === 'rate card' ? 'Your rate card is ready' : 'Your site list is ready for approval', reminder: `Your ${w.noun} is waiting for approval`, booked: 'Your booking is confirmed' }[kind];
   const opener = {
     proposal:
-      w.noun === 'proposal'
+      w.noun === 'rate card'
+        ? `Here’s the rate card for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the prices and download them in Excel, then approve it in one click or tell me what to change.`
+        : w.noun === 'proposal'
         ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the screens, the malls and the investment, then approve it in one click or tell me what to change.`
         : `Here’s the site list for ${c.name}, from our booking system: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please check the screens and approve it in one click, or tell me what to change. It also shows how many files to make and the template for each.`,
     reminder: `A quick reminder that the ${w.noun} for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
@@ -69,7 +71,8 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
   const cta = kind === 'booked' ? 'View your booking' : `Review and approve the ${w.noun}`;
   const hasTemplates = groups.some((z) => z.files.some((f) => f.template));
   // A proposal shows what we propose (screens by mall, and the price); a site list and a booking show the creative to supply.
-  const isProposal = docKind(c) === 'proposal' && kind !== 'booked';
+  // (A rate card is shown the same way: its screens and the price.)
+  const isProposal = docKind(c) !== 'sitelist' && kind !== 'booked';
   const byMall = new Map<string, string[]>();
   for (const x of screens) {
     const size = x.width && x.height ? `${x.width} × ${x.height} px` : 'size to be confirmed';

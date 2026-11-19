@@ -539,7 +539,7 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
       id: c.id,
       name: c.name,
       // Proposal or site list (older campaigns: unset, and the page works it out).
-      kind: c.kind === 'sitelist' || c.kind === 'proposal' ? c.kind : undefined,
+      kind: c.kind === 'sitelist' || c.kind === 'proposal' || c.kind === 'ratecard' ? c.kind : undefined,
       client,
       status: c.status,
       start: c.start,
@@ -548,7 +548,7 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
       items: c.items,
       from: owner ? { name: owner.name || owner.email, title: owner.title, email: owner.email } : null,
       at: sent ?? c.updatedAt ?? row.updated_at,
-      // A proposal shows its prices to the client; a site list never does.
+      // A proposal or rate card shows its prices to the client; a site list never does.
       rateCard: c.kind !== 'sitelist' && c.rateCard ? c.rateCard : null,
     },
     changesPending: Boolean(c.clientChanges),

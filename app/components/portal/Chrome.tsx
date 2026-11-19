@@ -275,6 +275,7 @@ export function PortalAccount() {
     ['/portal', 'Sales workspace'],
     ['/portal/new', 'New proposal'],
     ['/portal/new?kind=sitelist', 'New site list'],
+    ['/portal/new?kind=ratecard', 'New rate card'],
     ['/portal/clients', 'Client contacts'],
     ['/insights', 'Audience insights'],
     ['/portal/photos', 'Photo rights'],
@@ -339,6 +340,7 @@ export function PortalAccount() {
 /** Phone menu on portal pages: just the pages, big and tappable. */
 const NAV_ICONS: Record<string, React.ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
+  tag: <><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9Z" /><circle cx="7.5" cy="7.5" r="1.5" /></>,
   list: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></>,
   home: <><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9" /></>,
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6.5 6.5 0 0 0-2.5-5.1" /></>,
@@ -361,7 +363,7 @@ export function PortalDrawer() {
   const sales = user?.role === 'sales';
   const groups: [string, [string, string, string][]][] = user
     ? [
-        ...(sales ? ([['Create', [['/portal/new', 'New proposal', 'plus'], ['/portal/new?kind=sitelist', 'New site list', 'list']]]] as [string, [string, string, string][]][]) : []),
+        ...(sales ? ([['Create', [['/portal/new', 'New proposal', 'plus'], ['/portal/new?kind=sitelist', 'New site list', 'list'], ['/portal/new?kind=ratecard', 'New rate card', 'tag']]]] as [string, [string, string, string][]][]) : []),
         ['Work', [['/portal', sales ? 'Workspace' : 'My campaigns', 'home'], ...(sales ? ([['/portal/clients', 'Client contacts', 'users']] as [string, string, string][]) : [])]],
         ['Explore', [['/explorer', 'Media Explorer', 'screen'], ['/insights', 'Insights', 'chart'], ['/', 'Screen specs and map', 'map']]],
         ['Manage', [['/portal/photos', 'Photo rights', 'photo'], ...(isAdmin ? ([['/admin/malls', 'Site admin', 'gear']] as [string, string, string][]) : []), ['/account', 'Your account', 'person']]],

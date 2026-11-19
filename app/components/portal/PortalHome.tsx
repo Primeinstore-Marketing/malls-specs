@@ -129,11 +129,12 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
         <p className="text-body-lg text-fg-muted">{screensLive ? `${screensLive} screens live for ${live.length} ${live.length === 1 ? 'campaign' : 'campaigns'}` : 'Nothing live right now'} · {by('sent').length} with clients{needs.length ? ` · ${needs.length} need you` : ''}</p>
       </header>
 
-      {/* The two jobs, as big starting points. */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      {/* The three jobs, as big starting points. */}
+      <div className="grid gap-3 sm:grid-cols-3">
         {([
           ['/portal/new', 'New proposal', 'Suggest malls and screens for a client, or drop their brief and let the AI draft it.', true],
           ['/portal/new?kind=sitelist', 'New site list', 'A booked campaign: drop the site list export, check the sites and send it for approval.', false],
+          ['/portal/new?kind=ratecard', 'New rate card', 'Prices on their own: pick the screens, add the rates (or upload a price list) and send it.', false],
         ] as const).map(([href, title, note, lead]) => (
           <Link
             key={href}

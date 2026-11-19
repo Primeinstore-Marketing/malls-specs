@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { mallName } from '@/lib/insights';
-import { itemDetail, itemLabel, itemMall } from '@/lib/portal/logic';
+import { docWords, itemDetail, itemLabel, itemMall } from '@/lib/portal/logic';
 import { defaultPeriods, emptyRateCard, PERIOD_LABEL, pricedLines, rand, rateTotals, ratesFromRows, VAT_RATE } from '@/lib/portal/rates';
 import { readBrief } from '@/lib/portal/briefReader';
 import { parseSiteRows } from '@/lib/portal/siteRows';
@@ -72,7 +72,7 @@ export function RateCardEditor({ c, user, editable }: { c: Campaign; user: Porta
       const rows = parseSiteRows(payload.text);
       if (!rows.some((r) => r.rate != null)) throw new Error('No price column found. The file needs a column headed Rate, Price, Cost or Amount, beside the site number, mall or location.');
       const { lines, found } = ratesFromRows(c.items, rows, card.lines);
-      if (!found) throw new Error(`None of the ${rows.length} rows in ${file.name} matched a line on this ${c.kind === 'sitelist' ? 'site list' : 'proposal'}. Check the site numbers or mall names.`);
+      if (!found) throw new Error(`None of the ${rows.length} rows in ${file.name} matched a line on this ${docWords(c).noun}. Check the site numbers or mall names.`);
       save({ lines });
       setUpload({ tone: 'ok', text: `Prices added to ${found} of ${c.items.length} lines from ${file.name}.${found < c.items.length ? ' The rest stay at R 0.00: type them in.' : ''}` });
     } catch (e) {

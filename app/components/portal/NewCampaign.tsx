@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { annualVisits, compact, semShare } from '@/lib/insights';
 import type { AudienceTarget } from '@/lib/insights';
-import { addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
+import { DOC_WORDS, addDays, days, formatRange, reach, todayIso } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
 import { clientEmail } from '@/lib/portal/email';
 import { clientContact } from '@/lib/portal/share';
@@ -53,8 +53,8 @@ function Form({ user }: { user: PortalUser }) {
   const sales = user.role === 'sales';
   const { catalogue } = useLiveData();
   // Two jobs: a proposal (screens we suggest), or the site list from PIMS once it's booked.
-  const [kind, setKind] = useState<DocKind>(params.get('kind') === 'sitelist' ? 'sitelist' : 'proposal');
-  useDocumentTitle(kind === 'sitelist' ? 'New site list' : 'New proposal');
+  const [kind, setKind] = useState<DocKind>(params.get('kind') === 'sitelist' ? 'sitelist' : params.get('kind') === 'ratecard' ? 'ratecard' : 'proposal');
+  useDocumentTitle(`New ${DOC_WORDS[kind].noun}`);
   // A site list made from a proposal starts with its name, client and dates.
   const { campaigns } = usePortalState();
   const [from] = useState(() => campaigns.find((x) => x.id === params.get('from')) ?? null);
@@ -108,7 +108,7 @@ function Form({ user }: { user: PortalUser }) {
   const [newId] = useState(() => `c-${Math.random().toString(36).slice(2, 9)}`);
   /** No name typed: "Coca Cola · December 2026" (client and start month), so nothing goes to a client as "Untitled". */
   const autoName = () => {
-    const who = (client.clientId ? CLIENTS.find((x) => x.id === client.clientId)?.name : client.prospect?.company?.trim()) || (kind === 'sitelist' ? 'Site list' : 'Proposal');
+    const who = (client.clientId ? CLIENTS.find((x) => x.id === client.clientId)?.name : client.prospect?.company?.trim()) || DOC_WORDS[kind].Noun;
     const when = start ? new Date(`${start}T00:00:00`).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' }) : '';
     return when ? `${who} · ${when}` : who;
   };
@@ -244,13 +244,15 @@ function Form({ user }: { user: PortalUser }) {
   return (
     <Page>
       <header className="flex flex-col gap-2">
-        <h1 className="text-display-lg text-fg">{!sales ? 'Tell us about your campaign' : kind === 'sitelist' ? 'New site list' : 'New proposal'}</h1>
+        <h1 className="text-display-lg text-fg">{!sales ? 'Tell us about your campaign' : `New ${DOC_WORDS[kind].noun}`}</h1>
         <p className="max-w-prose text-body-md text-fg-muted">
           {!sales
             ? 'Who you want to reach and when. We’ll suggest malls as you go, and your account manager will turn it into a proposal.'
             : kind === 'sitelist'
               ? 'Drop the PIMS export, check the sites, create.'
-              : 'Pick the screens, add the client, create. Or drop their brief and it fills itself in.'}
+              : kind === 'ratecard'
+                ? 'Pick the screens to price, add the client, create. Then add the prices (type them or upload a price list) and send it.'
+                : 'Pick the screens, add the client, create. Or drop their brief and it fills itself in.'}
         </p>
         {from ? <p className="text-body-sm text-fg-muted">Starting from the proposal “{from.name}”: its client and dates are filled in.</p> : null}
       </header>
@@ -447,7 +449,7 @@ function Form({ user }: { user: PortalUser }) {
                     : 'inline-flex h-11 items-center justify-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50'
                 }
               >
-                {sales ? (recipient?.email && hasLines ? 'Create without sending' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief to Primedia'}
+                {sales ? (recipient?.email && hasLines ? 'Create without sending' : `Create ${DOC_WORDS[kind].noun}`) : 'Send brief to Primedia'}
               </button>
               {!sales ? (
                 <button type="button" disabled={created} onClick={() => save(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10">
@@ -524,7 +526,7 @@ function Form({ user }: { user: PortalUser }) {
               onClick={() => (sales && recipient?.email && hasLines ? createAndEmail() : save(!sales))}
               className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-5 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
-              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : kind === 'sitelist' ? 'Create site list' : 'Create proposal') : 'Send brief'}
+              {!start || !end ? 'Choose dates first' : sales ? (recipient?.email && hasLines ? 'Create and email' : `Create ${DOC_WORDS[kind].noun}`) : 'Send brief'}
             </button>
           </div>
         </div>
@@ -536,7 +538,7 @@ function Form({ user }: { user: PortalUser }) {
 
 export function NewCampaign() {
   const params = useSearchParams();
-  // Switching between "New proposal" and "New site list" in the menu starts a fresh form.
+  // Switching between "New proposal", "New site list" and "New rate card" in the menu starts a fresh form.
   const key = `${params.get('kind') ?? ''}:${params.get('from') ?? ''}`;
   return <RequireSignIn what="campaign planning">{(user) => <Form key={key} user={user} />}</RequireSignIn>;
 }

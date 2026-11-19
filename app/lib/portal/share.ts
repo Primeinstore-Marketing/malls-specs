@@ -57,7 +57,7 @@ export function snapshot(c: Campaign, senderId: string): SharedProposal {
     items: c.items,
     from: sales ? { name: sales.name, title: sales.title, email: sales.email } : null,
     at: new Date().toISOString(),
-    rateCard: docKind(c) === 'proposal' ? c.rateCard ?? null : null,
+    rateCard: docKind(c) !== 'sitelist' ? c.rateCard ?? null : null,
   };
 }
 

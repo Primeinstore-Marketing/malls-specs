@@ -46,15 +46,28 @@ export function Shape({ w, h, size = 56 }: { w: number | null; h: number | null;
 
 const res = (s: { width: number | null; height: number | null }) => (s.width && s.height ? `${s.width} × ${s.height} px` : 'Size to be confirmed');
 
+/** The shared document as a campaign, so the PowerPoint and Excel builders can make the client's copy. */
+function sharedCampaign(p: SharedProposal): Campaign {
+  return {
+    id: p.id, name: p.name, kind: p.kind, clientId: null,
+    prospect: p.client && p.client !== 'No client yet' ? { company: p.client, name: '', email: '' } : null,
+    objective: p.objective, start: p.start, end: p.end, audience: null, status: p.status,
+    createdBy: '', createdAt: p.at, updatedAt: p.at, items: p.items, events: [], rateCard: p.rateCard ?? null,
+  };
+}
+
+/** Who sent it, as the builders want it. */
+const sharedSender = (p: SharedProposal): PortalUser => ({ id: '', name: p.from?.name ?? 'Primedia Malls', title: p.from?.title ?? '', email: p.from?.email ?? '', role: 'sales' });
+
 /** The proposal's prices, as on the rate card sales filled in. */
-function Investment({ p }: { p: SharedProposal }) {
+function Investment({ p, title = 'Investment' }: { p: SharedProposal; title?: string }) {
   const rows = pricedLines(p).filter((r) => r.line.rate != null);
   const t = rateTotals(p);
   const per = p.rateCard?.per ?? 'week';
   const periodsHead = { week: 'Weeks', '4 weeks': '4-week periods', month: 'Months', flight: 'Flights' }[per];
   return (
     <section className="flex flex-col gap-4" aria-labelledby="invest-title">
-      <h2 id="invest-title" className="text-display-sm text-fg">Investment</h2>
+      <h2 id="invest-title" className="text-display-sm text-fg">{title}</h2>
       <div className="overflow-x-auto rounded-3xl bg-bg">
         <table className="w-full min-w-[560px] text-left text-body-sm">
           <thead className="text-label-md uppercase text-fg-muted">
@@ -273,6 +286,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   // Only a document sales made as a site list is approved as one.
   const w = docWords(p);
   const isProposal = docKind(p) === 'proposal';
+  const isRateCard = docKind(p) === 'ratecard';
 
   /* A proposal is its presentation: built here, shown slide by slide, and that same file downloaded. (A site list prints as a PDF.) */
   const [deck, setDeck] = useState<{ blob: Blob; fileName: string; slides: PreviewSlide[] } | null>(null);
@@ -284,20 +298,24 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
     (async () => {
       try {
         const { buildDeck } = await import('@/lib/portal/deck');
-        const asCampaign: Campaign = {
-          id: p.id, name: p.name, kind: p.kind, clientId: null,
-          prospect: p.client && p.client !== 'No client yet' ? { company: p.client, name: '', email: '' } : null,
-          objective: p.objective, start: p.start, end: p.end, audience: null, status: p.status,
-          createdBy: '', createdAt: p.at, updatedAt: p.at, items: p.items, events: [], rateCard: p.rateCard ?? null,
-        };
-        const from: PortalUser = { id: '', name: p.from?.name ?? 'Primedia Malls', title: p.from?.title ?? '', email: p.from?.email ?? '', role: 'sales' };
-        setDeck(await buildDeck(asCampaign, from, catalogue, { link: window.location.href.replace(/[?&](print|preview)=1/g, ''), seed: p.id }));
+        setDeck(await buildDeck(sharedCampaign(p), sharedSender(p), catalogue, { link: window.location.href.replace(/[?&](print|preview)=1/g, ''), seed: p.id }));
         setDeckState('ready');
       } catch {
         setDeckState('failed');
       }
     })();
   }, [isProposal, dataReady, deckState, p, catalogue]);
+  /* A rate card downloads as its Excel file. */
+  const [excelBusy, setExcelBusy] = useState(false);
+  const downloadExcel = async () => {
+    setExcelBusy(true);
+    try {
+      const { downloadRateCard } = await import('@/lib/portal/rateCardExcel');
+      await downloadRateCard(sharedCampaign(p), sharedSender(p));
+    } finally {
+      setExcelBusy(false);
+    }
+  };
   const downloadPowerPoint = async () => {
     if (!deck) return;
     const { saveBlob } = await import('@/lib/portal/deck');
@@ -465,7 +483,12 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                 {deck ? 'Download PowerPoint' : deckState === 'failed' ? 'PowerPoint unavailable' : 'Preparing PowerPoint…'}
               </button>
             ) : null}
-            {isProposal ? null : (
+            {isRateCard ? (
+              <button type="button" disabled={excelBusy || !hasRates(p)} title={hasRates(p) ? '' : 'No prices yet'} onClick={() => void downloadExcel()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-60 print:hidden">
+                {excelBusy ? 'Preparing Excel…' : 'Download Excel'}
+              </button>
+            ) : null}
+            {isProposal || isRateCard ? null : (
               <button type="button" onClick={() => window.print()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">
                 Download PDF
               </button>
@@ -538,7 +561,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <dl className="mt-2 grid grid-cols-3 gap-6 border-t border-border pt-5 sm:max-w-xl">
             <div><dt className="text-body-sm text-fg-muted">Malls</dt><dd className="text-display-md text-fg">{[...groups.values()].filter((g) => g.lines.some((l) => !l.removed)).length}</dd></div>
             <div><dt className="text-body-sm text-fg-muted">{lines.some((l) => l.screen.site) ? 'Sites' : 'Screens'}</dt><dd className="text-display-md text-fg">{total}</dd></div>
-            {isProposal ? (
+            {isRateCard ? (
+              <div><dt className="text-body-sm text-fg-muted">Total</dt><dd className="text-display-md text-fg">{hasRates(p) ? rand(p.rateCard?.vat ? rateTotals(p).total : rateTotals(p).net) : '—'}</dd></div>
+            ) : isProposal ? (
               <div><dt className="text-body-sm text-fg-muted">Screen sizes</dt><dd className="text-display-md text-fg">{sizes.length + unknown}</dd></div>
             ) : (
               <div><dt className="text-body-sm text-fg-muted">Creatives</dt><dd className="text-display-md text-fg">{creatives.length}</dd></div>
@@ -602,8 +627,15 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           </section>
         ) : null}
 
+        {/* ---- A rate card: the prices ---- */}
+        {isRateCard ? (
+          hasRates(p) ? <Investment p={p} title="Rate card" /> : (
+            <p className="rounded-3xl bg-bg p-8 text-center text-body-md text-fg-muted">The prices aren’t on this rate card yet. {first} will send them shortly.</p>
+          )
+        ) : null}
+
         {/* ---- A site list: what to supply, grouped by creative ---- */}
-        {!isProposal ? (
+        {!isProposal && !isRateCard ? (
         <section className="flex flex-col gap-4" aria-labelledby="supply-title">
           <div className="flex flex-col gap-1">
             <h2 id="supply-title" className="text-display-sm text-fg">What you need to supply</h2>
@@ -618,7 +650,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         ) : null}
 
         {/* ---- A site list's malls: pictures and who shops there (a proposal shows them with its screens) ---- */}
-        {groups.size && !isProposal ? (
+        {groups.size && !isProposal && !isRateCard ? (
           <section className="flex flex-col gap-4 print:hidden" aria-labelledby="malls-title">
             <h2 id="malls-title" className="text-display-sm text-fg">The malls</h2>
             <ul className="grid gap-3 sm:grid-cols-2">

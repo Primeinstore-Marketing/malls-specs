@@ -72,7 +72,8 @@ export interface CampaignEvent {
  * client to approve, and so everyone knows how many files to make, at what
  * size, with which spec sheets and templates).
  */
-export type DocKind = 'proposal' | 'sitelist';
+/** Proposal (screens we suggest, with or without prices), site list (booked sites), or a rate card on its own (prices). */
+export type DocKind = 'proposal' | 'sitelist' | 'ratecard';
 
 export interface Campaign {
   readonly id: string;

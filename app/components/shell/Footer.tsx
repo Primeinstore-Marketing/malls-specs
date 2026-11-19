@@ -31,6 +31,7 @@ export function Footer() {
             { label: 'Workspace', href: '/portal' },
             { label: 'New proposal', href: '/portal/new' },
             { label: 'New site list', href: '/portal/new?kind=sitelist' },
+            { label: 'New rate card', href: '/portal/new?kind=ratecard' },
             { label: 'Client contacts', href: '/portal/clients' },
             { label: 'Media Explorer', href: '/explorer' },
             { label: 'Insights', href: '/insights' },

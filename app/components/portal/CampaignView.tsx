@@ -17,6 +17,8 @@ import {
   itemKey,
   itemLabel,
   itemMall,
+  DOC_KINDS,
+  DOC_WORDS,
   docKind,
   docWords,
   phase,
@@ -74,7 +76,7 @@ function Steps({ c, role }: { c: Campaign; role: PortalUser['role'] }) {
   const at = stepIndex(c.status);
   return (
     <ol className="grid grid-cols-2 gap-2" aria-label="Progress">
-      {(role === 'sales' && docKind(c) === 'sitelist' ? ['Site list', 'Site list sent'] : STEP_LABELS[role]).map((name, i) => (
+      {(role === 'sales' && docKind(c) !== 'proposal' ? [docWords(c).Noun, `${docWords(c).Noun} sent`] : STEP_LABELS[role]).map((name, i) => (
         <li key={name} className="flex min-w-0 flex-col gap-2" aria-current={i === at ? 'step' : undefined}>
           <span className={`h-1 rounded-full ${i <= at ? 'bg-accent' : 'bg-bg-muted'}`} />
           <span className={`truncate text-body-sm ${i === at ? 'font-semibold text-fg' : i < at ? 'text-fg-muted' : 'text-fg-subtle'}`}>{name}</span>
@@ -223,7 +225,8 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     const hasClient = Boolean(c.clientId || c.prospect?.company || c.prospect?.name);
     const datesSet = Boolean(c.start && c.end);
     const t = rateTotals(c);
-    const ready = c.items.length > 0 && datesSet;
+    const rateDoc = docKind(c) === 'ratecard';
+    const ready = c.items.length > 0 && datesSet && (!rateDoc || t.priced > 0);
     const n = c.items.length;
     title = c.status === 'proposed' ? `${campaignClientName(c)} sent a request` : c.status === 'changes' ? 'Changes requested' : 'Next steps';
     body = (
@@ -236,12 +239,12 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           <NextRow n={2} done={hasClient && datesSet} title="Client and dates" detail={`${hasClient ? campaignClientName(c) : 'No client yet'} · ${datesSet ? formatRange(c.start, c.end) : 'no dates yet'}${contact?.email ? '' : ' · no client email yet'}`}>
             <a href="#details" className={hasClient && datesSet ? btn.quiet : btn.secondary}>{hasClient && datesSet ? 'Edit' : 'Add'}</a>
           </NextRow>
-          {w.noun === 'proposal' ? (
-            <NextRow n={3} done={t.priced > 0} optional title="Prices" detail={t.priced ? `${t.priced} of ${t.lines} lines priced · ${rand(t.total)}` : 'Type them in or upload a price list. Lines without a price show R 0.00.'}>
+          {w.noun !== 'site list' ? (
+            <NextRow n={3} done={t.priced > 0} optional={!rateDoc} title="Prices" detail={t.priced ? `${t.priced} of ${t.lines} lines priced · ${rand(t.total)}` : 'Type them in or upload a price list. Lines without a price show R 0.00.'}>
               <a href="#rates" className={btn.quiet}>{t.priced ? 'Edit' : 'Add prices'}</a>
             </NextRow>
           ) : null}
-          <NextRow n={w.noun === 'proposal' ? 4 : 3} done={false} title={`Check it and send it to ${contact?.name ? contact.name.split(' ')[0] : 'the client'}`} detail={ready ? `Preview what they’ll see, then email it. They approve or decline from the link.` : `Add ${n ? 'the dates' : `${w.unit}s and dates`} first.`}>
+          <NextRow n={w.noun !== 'site list' ? 4 : 3} done={false} title={`Check it and send it to ${contact?.name ? contact.name.split(' ')[0] : 'the client'}`} detail={ready ? `Preview what they’ll see, then email it. They approve or decline from the link.` : rateDoc && n && datesSet ? 'Add at least one price first.' : `Add ${n ? 'the dates' : `${w.unit}s and dates`} first.`}>
             <PreviewButton c={c} user={user} variant="secondary" label="Preview" />
             <button type="button" disabled={!ready} className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
               Email {w.noun}
@@ -545,11 +548,11 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
       {summary}
       <div className="grid gap-4 sm:grid-cols-2 print:hidden">
         {sales ? (
-          // Proposal or site list: sets the words on its page, the client's link, the email and the downloads.
+          // Proposal, site list or rate card: sets the words on its page, the client's link, the email and the downloads.
           <div className="flex flex-col gap-1.5 sm:col-span-2">
             <span className={label}>This is a</span>
             <div role="radiogroup" aria-label="This is a" className="flex w-fit gap-1 rounded-full bg-bg-subtle p-1">
-              {(['proposal', 'sitelist'] as const).map((k) => (
+              {DOC_KINDS.map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -558,7 +561,7 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
                   onClick={() => portal.edit(c.id, { kind: k })}
                   className={`h-9 rounded-full px-4 text-body-sm font-semibold transition-colors ${docKind(c) === k ? 'bg-bg text-fg shadow-1' : 'text-fg-muted hover:text-fg'}`}
                 >
-                  {k === 'proposal' ? 'Proposal' : 'Site list'}
+                  {DOC_WORDS[k].Noun}
                 </button>
               ))}
             </div>
@@ -715,7 +718,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         <span className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={withBasePath('/brand/logo-navy.svg')} alt="Primedia Malls" className="h-[26px] w-auto" />
-          <strong className="text-body-lg">{docKind(c) === 'sitelist' ? 'Site list' : 'Campaign proposal'}</strong>
+          <strong className="text-body-lg">{docKind(c) === 'proposal' ? 'Campaign proposal' : docWords(c).Noun}</strong>
         </span>
         <span className="text-body-sm text-fg-muted">{new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       </div>
@@ -724,7 +727,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
             <Link href={backHref} className="text-body-sm font-semibold text-fg-muted hover:text-fg print:hidden">← {user.role === 'sales' ? 'Workspace' : 'My campaigns'}</Link>
-            <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docKind(c) === 'sitelist' ? 'Site list' : 'Proposal'}</span>
+            <span className="text-label-md font-semibold uppercase text-accent print:hidden">{docWords(c).Noun}</span>
             <h1 className="text-display-xl text-fg">{c.name}</h1>
             {campaignOwner(c.id) && c.createdBy !== user.id ? <p className="text-body-sm text-fg-subtle print:hidden">Sales: {campaignOwner(c.id)}</p> : null}
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-md text-fg-muted">

@@ -3,7 +3,7 @@ import type { DeckMall } from '@/lib/insights';
 import { CLIENTS, USERS } from './seed';
 import type { Campaign, CampaignItem, CampaignStatus, DocKind, PortalUser } from './types';
 
-/** Proposal or site list: set when it was made, else a campaign with site lines (from a PIMS export) is a site list. */
+/** Proposal, site list or rate card: set when it was made, else a campaign with site lines (from a PIMS export) is a site list. */
 export function docKind(c: { kind?: DocKind; items: readonly CampaignItem[] }): DocKind {
   return c.kind ?? (c.items.some((i) => i.kind === 'site') ? 'sitelist' : 'proposal');
 }
@@ -12,7 +12,11 @@ export function docKind(c: { kind?: DocKind; items: readonly CampaignItem[] }): 
 export const DOC_WORDS: Readonly<Record<DocKind, { noun: string; Noun: string; approve: string; unit: 'site' | 'screen' }>> = {
   proposal: { noun: 'proposal', Noun: 'Proposal', approve: 'Approve proposal', unit: 'screen' },
   sitelist: { noun: 'site list', Noun: 'Site list', approve: 'Approve site list', unit: 'site' },
+  ratecard: { noun: 'rate card', Noun: 'Rate card', approve: 'Approve rate card', unit: 'screen' },
 };
+
+/** The three kinds, in the order the menus show them. */
+export const DOC_KINDS: readonly DocKind[] = ['proposal', 'sitelist', 'ratecard'];
 
 export const docWords = (c: { kind?: DocKind; items: readonly CampaignItem[] }) => DOC_WORDS[docKind(c)];
 
