@@ -51,7 +51,17 @@ interface Look {
   readonly rounded: boolean;
 }
 
-const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
+/** Random by default (sales can shuffle); seeded so a client's page always shows the same design. */
+let random: () => number = Math.random;
+function seeded(seed: string): () => number {
+  let h = 2166136261;
+  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(random() * xs.length)];
 
 function chooseLook(): Look {
   const lead = pick([BRAND.navy, BRAND.blue, BRAND.navy]);
@@ -60,7 +70,7 @@ function chooseLook(): Look {
     accent: lead === BRAND.blue ? BRAND.navy : pick([BRAND.blue, BRAND.sky]),
     cover: pick([0, 1, 2, 3] as const),
     summary: pick([0, 1, 2] as const),
-    mallOffset: Math.floor(Math.random() * 3),
+    mallOffset: Math.floor(random() * 3),
     closing: pick([0, 1, 2] as const),
     paper: pick([BRAND.white, BRAND.white, BRAND.soft]),
     // Square corners only: Mac and iPhone previews (Quick Look, Mail) can't draw rounded shapes or circles.
@@ -339,7 +349,7 @@ function snapshotSlides(pptx: Pptx): PreviewSlide[] {
 }
 
 /** Builds a deck (a fresh random layout each time) without saving it: for the preview, then the download. */
-export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalogue, opts: { link?: string } = {}): Promise<{ blob: Blob; fileName: string; slides: PreviewSlide[] }> {
+export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalogue, opts: { link?: string; seed?: string } = {}): Promise<{ blob: Blob; fileName: string; slides: PreviewSlide[] }> {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
@@ -348,7 +358,9 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
   pptx.title = c.name;
   pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
 
+  random = opts.seed ? seeded(opts.seed) : Math.random;
   const look = chooseLook();
+  random = Math.random;
   const w = docWords(c);
   const client = campaignClientName(c);
   const forClient = client && client !== 'No client yet' ? client : '';

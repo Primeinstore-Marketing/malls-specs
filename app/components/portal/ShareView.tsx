@@ -12,6 +12,8 @@ import { days, docKind, docWords, formatDate, formatRange, itemLabel, phase } fr
 import { PERIOD_LABEL, hasRates, pricedLines, rand, rateTotals } from '@/lib/portal/rates';
 import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
+import { DeckPreview } from './DeckPreview';
+import type { PreviewSlide } from '@/lib/portal/deck';
 import type { BookedScreen, SizeFiles } from '@/lib/portal/screens';
 import { entryKeyFor, entryPhoto, itemKey, mallEntries, mallFacts, rowsFor } from '@/lib/portal/mallScreens';
 import type { MallEntry, ScreenRow } from '@/lib/portal/mallScreens';
@@ -272,28 +274,35 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   const w = docWords(p);
   const isProposal = docKind(p) === 'proposal';
 
-  /* A proposal downloads as the PowerPoint sales send (a site list prints as a PDF). */
-  const [deckBusy, setDeckBusy] = useState(false);
-  const [deckError, setDeckError] = useState<string | null>(null);
-  async function downloadPowerPoint() {
-    setDeckBusy(true);
-    setDeckError(null);
-    try {
-      const { downloadDeck } = await import('@/lib/portal/deck');
-      const asCampaign: Campaign = {
-        id: p.id, name: p.name, kind: p.kind, clientId: null,
-        prospect: p.client && p.client !== 'No client yet' ? { company: p.client, name: '', email: '' } : null,
-        objective: p.objective, start: p.start, end: p.end, audience: null, status: p.status,
-        createdBy: '', createdAt: p.at, updatedAt: p.at, items: p.items, events: [], rateCard: p.rateCard ?? null,
-      };
-      const from: PortalUser = { id: '', name: p.from?.name ?? 'Primedia Malls', title: p.from?.title ?? '', email: p.from?.email ?? '', role: 'sales' };
-      await downloadDeck(asCampaign, from, catalogue, { link: window.location.href.replace(/[?&](print|preview)=1/g, '') });
-    } catch {
-      setDeckError('We couldn’t make the PowerPoint just now. Try again in a moment.');
-    } finally {
-      setDeckBusy(false);
-    }
-  }
+  /* A proposal is its presentation: built here, shown slide by slide, and that same file downloaded. (A site list prints as a PDF.) */
+  const [deck, setDeck] = useState<{ blob: Blob; fileName: string; slides: PreviewSlide[] } | null>(null);
+  const [deckState, setDeckState] = useState<'idle' | 'building' | 'ready' | 'failed'>('idle');
+  const dataReady = live.status === 'ready' || live.status === 'offline';
+  useEffect(() => {
+    if (!isProposal || !dataReady || deckState !== 'idle') return;
+    setDeckState('building');
+    (async () => {
+      try {
+        const { buildDeck } = await import('@/lib/portal/deck');
+        const asCampaign: Campaign = {
+          id: p.id, name: p.name, kind: p.kind, clientId: null,
+          prospect: p.client && p.client !== 'No client yet' ? { company: p.client, name: '', email: '' } : null,
+          objective: p.objective, start: p.start, end: p.end, audience: null, status: p.status,
+          createdBy: '', createdAt: p.at, updatedAt: p.at, items: p.items, events: [], rateCard: p.rateCard ?? null,
+        };
+        const from: PortalUser = { id: '', name: p.from?.name ?? 'Primedia Malls', title: p.from?.title ?? '', email: p.from?.email ?? '', role: 'sales' };
+        setDeck(await buildDeck(asCampaign, from, catalogue, { link: window.location.href.replace(/[?&](print|preview)=1/g, ''), seed: p.id }));
+        setDeckState('ready');
+      } catch {
+        setDeckState('failed');
+      }
+    })();
+  }, [isProposal, dataReady, deckState, p, catalogue]);
+  const downloadPowerPoint = async () => {
+    if (!deck) return;
+    const { saveBlob } = await import('@/lib/portal/deck');
+    saveBlob(deck.blob, deck.fileName);
+  };
 
   const has = (key: string) => current.has(key);
   const addItem = (item: NewCampaignItem) => setEdits((e) => (e.items.some((x) => itemKey(x) === itemKey(item)) ? e : { ...e, items: [...e.items, item] }));
@@ -452,12 +461,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           <div className="flex items-center gap-3">
             <span className="text-body-sm text-brand-on-surface-muted print:text-fg-muted">Sent {formatDate(p.at.slice(0, 10))}</span>
             {isProposal ? (
-              <button type="button" disabled={deckBusy} onClick={() => void downloadPowerPoint()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-60 print:hidden">
-                {deckBusy ? 'Preparing PowerPoint…' : 'Download PowerPoint'}
+              <button type="button" disabled={!deck} onClick={() => void downloadPowerPoint()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-60 print:hidden">
+                {deck ? 'Download PowerPoint' : deckState === 'failed' ? 'PowerPoint unavailable' : 'Preparing PowerPoint…'}
               </button>
-            ) : null}
-            {isProposal && deckError ? (
-              <span role="alert" className="text-body-sm text-brand-on-surface print:hidden">{deckError}</span>
             ) : null}
             {isProposal ? null : (
               <button type="button" onClick={() => window.print()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">
@@ -545,8 +551,18 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           ) : null}
         </section>
 
-        {/* ---- A proposal: the screens we propose, mall by mall ---- */}
-        {isProposal ? (
+        {/* ---- A proposal: its presentation, slide by slide ---- */}
+        {isProposal && deckState !== 'failed' ? (
+          <section className="flex flex-col gap-4" aria-labelledby="deck-title">
+            <h2 id="deck-title" className="sr-only">The proposal</h2>
+            {deck ? <DeckPreview slides={deck.slides} /> : (
+              <p className="rounded-3xl bg-bg p-8 text-center text-body-md text-fg-muted" role="status">Preparing your proposal…</p>
+            )}
+          </section>
+        ) : null}
+
+        {/* ---- A proposal whose presentation couldn't be built: the screens, mall by mall ---- */}
+        {isProposal && deckState === 'failed' ? (
           <section className="flex flex-col gap-4" aria-labelledby="proposed-title">
             <div className="flex flex-col gap-1">
               <h2 id="proposed-title" className="text-display-sm text-fg">The screens we propose</h2>
@@ -625,7 +641,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         ) : null}
 
         {/* ---- Investment: a proposal's prices, when sales priced it ---- */}
-        {docKind(p) === 'proposal' && hasRates(p) ? <Investment p={p} /> : null}
+        {isProposal && deckState === 'failed' && hasRates(p) ? <Investment p={p} /> : null}
 
         {/* ---- Approve, or send changes ---- */}
         <section className={`flex flex-col gap-4 rounded-3xl p-5 sm:p-6 print:hidden ${changed ? 'border-2 border-accent bg-bg' : 'bg-bg'}`} aria-labelledby="decide-title">
