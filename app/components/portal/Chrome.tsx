@@ -3,62 +3,14 @@
 import { useLiveData } from '@/lib/liveData';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { withBasePath } from '@/lib/basePath';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { compact } from '@/lib/insights';
-import { canEdit, campaignClientName, clientName, itemLabel, reach, timeAgo, userById, visibleTo } from '@/lib/portal/logic';
+import { canEdit, campaignClientName, itemLabel, timeAgo, userById, visibleTo } from '@/lib/portal/logic';
 import { ui, useUi } from '@/lib/portal/ui-state';
 import { portal, useCampaignSync, usePortalState, usePortalUser } from '@/lib/portal/store';
 import { Avatar, addWithToast } from './ui';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { draftCount, useRequestDraft } from '@/lib/requestDraft';
-
-/** "Building: Festive Feast · 4 items" — follows the user round the site while they add media. */
-export function CampaignTray() {
-  useLiveData(); // re-render when the deck's data arrives from the API
-  const { campaigns, active, userId } = usePortalState();
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const user = userId ? userById(userId) : undefined;
-  const c = user ? campaigns.find((x) => x.id === active[user.id]) : undefined;
-  if (!user || !c || !canEdit(c, user) || pathname.startsWith('/portal/campaign') || pathname.startsWith('/sign-in')) return null;
-  const r = reach(c);
-  const summary = `${c.items.length} ${c.items.length === 1 ? 'item' : 'items'} · ${r.malls} ${r.malls === 1 ? 'mall' : 'malls'}${r.visits ? ` · ~${compact(r.visits)} visits` : ''}`;
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setCollapsed(false)}
-        aria-label={`Show proposal tray: ${c.name}, ${summary}`}
-        className="fixed bottom-4 right-4 z-sticky flex h-11 items-center gap-2 rounded-full bg-brand-surface px-4 text-body-sm font-semibold text-brand-on-surface shadow-3 print:hidden"
-      >
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-[12px] text-fg-on-accent">{c.items.length}</span>
-        <span className="max-w-[10rem] truncate">{c.name}</span>
-      </button>
-    );
-  }
-  return (
-    <div className="fixed bottom-4 right-4 z-sticky flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl bg-brand-surface py-3 pl-4 pr-3 text-brand-on-surface shadow-3 print:hidden">
-      <div className="flex min-w-0 flex-col">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-on-surface-muted">Building</span>
-        <strong className="truncate text-body-md font-semibold">{c.name}</strong>
-        <span className="text-body-sm text-brand-on-surface-muted">{summary}</span>
-      </div>
-      <Link href={`/portal/campaign?id=${c.id}`} className="flex h-11 shrink-0 items-center rounded-full bg-accent px-4 text-body-sm font-semibold text-fg-on-accent hover:bg-accent-hover">
-        Review →
-      </Link>
-      <button
-        type="button"
-        onClick={() => setCollapsed(true)}
-        aria-label="Minimise proposal tray"
-        className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-brand-on-surface-muted hover:bg-white/10 hover:text-brand-on-surface"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-      </button>
-    </div>
-  );
-}
 
 /** "Add to which proposal?" — shown the first time someone adds media, so nothing lands in an unnamed draft. */
 export function CampaignPicker() {

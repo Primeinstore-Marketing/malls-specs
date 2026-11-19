@@ -13,7 +13,7 @@ import { AuthDialogProvider } from '@/components/auth/AuthDialogContext';
 import { AdminSessionProvider } from '@/components/auth/AdminSession';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { SetPasswordGate } from '@/components/auth/SetPasswordGate';
-import { CampaignPicker, CampaignTray, PortalDrawer, ToastHost } from '@/components/portal/Chrome';
+import { CampaignPicker, PortalDrawer, ToastHost } from '@/components/portal/Chrome';
 import { usePortalUser } from '@/lib/portal/store';
 import { RequestTray } from '@/components/request/AddToRequest';
 import { ApprovalSync } from '@/components/portal/ApprovalSync';
@@ -97,7 +97,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <CommandPalette />
             <SignInDialog />
             <SetPasswordGate />
-            <CampaignTray />
             <RequestTray />
             <CampaignPicker />
             <ToastHost />

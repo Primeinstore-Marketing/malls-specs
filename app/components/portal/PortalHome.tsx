@@ -2,10 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Zoomable } from '@/components/ui/ImageViewer';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { DECK_MALLS, annualVisits, compact, mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
-import { addDays, campaignClientName, clientName, itemKey, itemLabel, itemMall, phase, progress, reach, todayIso, visibleTo } from '@/lib/portal/logic';
+import { compact, mallArea, mallName, mallPhoto, matchMalls } from '@/lib/insights';
+import { campaignClientName, clientName, itemMall, phase, progress, reach, visibleTo } from '@/lib/portal/logic';
 import { portal, usePortalState } from '@/lib/portal/store';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
 import { AddToProposal, Page, RequireSignIn } from './ui';
@@ -88,24 +87,6 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
   const upcoming = mine.filter((c) => phase(c) === 'upcoming');
   const needs = by('proposed', 'changes', 'approved');
   const screensLive = live.reduce((s, c) => s + reach(c).units, 0);
-
-  const today = todayIso();
-  const horizon = addDays(today, 60);
-  const busy = new Set(
-    mine
-      .filter((c) => c.status === 'booked' && c.start && c.end && c.start <= horizon && c.end >= today)
-      .flatMap((c) => c.items.map((i) => itemMall(i)?.id).filter(Boolean) as string[]),
-  );
-  const quiet = DECK_MALLS.filter((m) => !busy.has(m.id) && m.packages.length)
-    .sort((a, b) => (annualVisits(b) ?? 0) - (annualVisits(a) ?? 0))
-    .slice(0, 4);
-
-  const counts = new Map<string, { label: string; n: number }>();
-  for (const c of by('booked', 'approved', 'sent')) for (const i of c.items) {
-    const k = itemKey(i);
-    counts.set(k, { label: itemLabel(i), n: (counts.get(k)?.n ?? 0) + 1 });
-  }
-  const popular = [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 4);
 
   type Tab = 'needs' | 'clients' | 'upcoming' | 'live' | 'drafts' | 'all';
   const tabs: { id: Tab; label: string; list: readonly Campaign[]; empty: string; highlight?: (c: Campaign) => string | undefined }[] = [
@@ -211,37 +192,6 @@ function SalesHome({ user, campaigns }: { user: PortalUser; campaigns: readonly 
         )}
       </section>
 
-      <div className="grid gap-10 lg:grid-cols-2">
-        <Block title="Quiet malls" note="Big audiences with nothing booked in the next 60 days.">
-          <ul className="flex flex-col gap-2">
-            {quiet.map((m) => {
-              const photo = mallPhoto(m.id);
-              return (
-                <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-bg-subtle p-3">
-                  {photo ? <Zoomable src={photo.src} title={mallName(m)} detail={`${compact(annualVisits(m) ?? 0)} visits a year · ${m.province}`} className="h-12 w-16 rounded-xl" /> : null}
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <Link href={`/insights/mall?id=${m.id}`} className="truncate text-body-md font-semibold text-fg hover:text-accent">{mallName(m)}</Link>
-                    <span className="truncate text-body-sm text-fg-muted">{compact(annualVisits(m) ?? 0)} visits a year · {m.province}</span>
-                  </div>
-                  <AddToProposal compact item={{ kind: 'package', code: m.packages[0].code }} />
-                </li>
-              );
-            })}
-          </ul>
-        </Block>
-        <Block title="Most requested" note="Packages in proposals and bookings.">
-          {!popular.length ? <p className="rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm text-fg-muted">Fills in as you make proposals.</p> : null}
-          <ol className="flex flex-col gap-2">
-            {popular.map((p, i) => (
-              <li key={`${i}-${p.label}`} className="flex items-center gap-3 rounded-2xl bg-bg-subtle px-4 py-3 text-body-sm">
-                <span className="w-5 text-body-md font-bold tabular-nums text-fg-subtle">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate font-medium text-fg">{p.label}</span>
-                <span className="shrink-0 text-fg-muted">×{p.n}</span>
-              </li>
-            ))}
-          </ol>
-        </Block>
-      </div>
 
     </Page>
   );
