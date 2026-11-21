@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { PreviewSlide } from '@/lib/portal/deck';
 import { DeckPreview } from './DeckPreview';
 import { useLiveData } from '@/lib/liveData';
-import { docWords, itemDetail, itemLabel } from '@/lib/portal/logic';
+import { docKind, includesRateCard, includesSiteList, itemDetail, itemLabel } from '@/lib/portal/logic';
 import { emptyRateCard, hasRates, PERIOD_LABEL, pricedLines, rand, rateTotals, VAT_RATE } from '@/lib/portal/rates';
 import { shareUrl } from '@/lib/portal/share';
 import type { Campaign, PortalUser } from '@/lib/portal/types';
@@ -12,21 +12,23 @@ import type { Campaign, PortalUser } from '@/lib/portal/types';
 type Tab = 'pdf' | 'pptx' | 'xlsx';
 
 /**
- * "Preview & download": the presentation and the rate card, each previewed
- * before it's saved. The PowerPoint is the very file you'll download
- * (shuffle for a new design); the rate card shows its lines and totals.
- * (The client's page has its own "Download PDF".)
+ * "Preview & download": each document previewed before it's saved, and only
+ * the documents this one is. A site list is its site list (PDF); a rate card
+ * is its Excel file; a proposal is its presentation (PowerPoint), plus the
+ * site list and the rate card when sales added them to it.
  */
-export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campaign; user: PortalUser; onClose: () => void; start?: Tab }) {
+export function DownloadsDialog({ c, user, onClose, start }: { c: Campaign; user: PortalUser; onClose: () => void; start?: Tab }) {
   const { catalogue } = useLiveData();
-  const w = docWords(c);
+  const kind = docKind(c);
   const priced = hasRates(c);
-  const [tab, setTab] = useState<Tab>(start);
-  // Every tab always opens: the rate card explains itself when it has no prices yet.
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'pptx', label: 'Presentation (PowerPoint)' },
-    { id: 'xlsx', label: 'Rate card (Excel)' },
+    ...(kind === 'proposal' ? [{ id: 'pptx' as const, label: 'Proposal (PowerPoint)' }] : []),
+    ...(includesSiteList(c) ? [{ id: 'pdf' as const, label: 'Site list (PDF)' }] : []),
+    ...(includesRateCard(c) ? [{ id: 'xlsx' as const, label: 'Rate card (Excel)' }] : []),
   ];
+  const [tab, setTab] = useState<Tab>(start && tabs.some((x) => x.id === start) ? start : tabs[0]?.id ?? 'pptx');
+  // A proposal's site list is shown on its own: the client page as a site list.
+  const siteListView = kind === 'proposal' ? '&view=sitelist' : '';
 
   /** Close and take the person to the price fields on the campaign page. */
   function goToRates() {
@@ -65,7 +67,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campa
   const [saving, setSaving] = useState(false);
   async function download() {
     if (tab === 'pdf') {
-      window.open(shareUrl(c, user.id, true), '_blank', 'noopener');
+      window.open(`${shareUrl(c, user.id, true)}${siteListView}`, '_blank', 'noopener');
       return;
     }
     setSaving(true);
@@ -84,7 +86,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campa
 
   const t = rateTotals(c);
   const card = c.rateCard;
-  const downloadLabel = tab === 'pdf' ? `Download ${w.noun} (PDF)` : tab === 'pptx' ? 'Download presentation (PowerPoint)' : 'Download rate card (Excel)';
+  const downloadLabel = tab === 'pdf' ? 'Download site list (PDF)' : tab === 'pptx' ? 'Download proposal (PowerPoint)' : 'Download rate card (Excel)';
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-[rgba(6,12,28,0.55)] p-0 sm:p-6 print:hidden" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -93,7 +95,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campa
           <h2 id="dl-title" className="text-body-lg font-semibold text-fg">Preview and download</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-fg-muted hover:bg-bg-subtle hover:text-fg">✕</button>
         </div>
-        <div role="tablist" aria-label="What to download" className="no-scrollbar flex gap-1 overflow-x-auto border-b border-border px-4 py-2">
+        <div role="tablist" aria-label="What to download" className={`no-scrollbar gap-1 ${tabs.length > 1 ? 'flex' : 'hidden'} overflow-x-auto border-b border-border px-4 py-2`}>
           {tabs.map((x) => (
             <button
               key={x.id}
@@ -110,7 +112,7 @@ export function DownloadsDialog({ c, user, onClose, start = 'pptx' }: { c: Campa
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-bg-subtle">
           {tab === 'pdf' ? (
-            <iframe title={`${w.Noun} as the client sees it`} src={`${shareUrl(c, user.id)}&preview=1`} className="h-full w-full border-0 bg-bg" />
+            <iframe title="The site list as the client sees it" src={`${shareUrl(c, user.id)}&preview=1${siteListView}`} className="h-full w-full border-0 bg-bg" />
           ) : null}
           {tab === 'pptx' ? (
             <div className="flex flex-col items-center gap-3 p-4">

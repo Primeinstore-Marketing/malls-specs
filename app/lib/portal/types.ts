@@ -101,6 +101,14 @@ export interface Campaign {
   readonly clientChanges?: ClientChanges | null;
   /** Sales' prices for this proposal: in the PowerPoint, the Excel rate card and the client's proposal page (never a site list's). */
   readonly rateCard?: RateCard | null;
+  /** What goes out with a proposal besides its presentation (see includesSiteList / includesRateCard). */
+  readonly includes?: DocIncludes;
+}
+
+/** A proposal can carry a site list (screens, sizes, spec sheets and templates) and a rate card (prices). */
+export interface DocIncludes {
+  readonly siteList?: boolean;
+  readonly rateCard?: boolean;
 }
 
 /** What one line of a proposal costs: the rate card price per period, a discount, and how many periods. */

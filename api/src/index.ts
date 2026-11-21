@@ -498,8 +498,18 @@ type StoredCampaign = {
   clientId?: string | null; prospect?: { company?: string; name?: string } | null; items: unknown[];
   events: { at: string; by: string; text: string; kind: string; id: string }[]; shareKey?: string; updatedAt?: string;
   clientChanges?: unknown;
-  rateCard?: unknown;
+  rateCard?: { lines?: { rate?: number | null }[] } | null;
+  includes?: { siteList?: unknown; rateCard?: unknown };
 };
+
+/** What a document carries, as the site works it out: a site list never has prices; a proposal has what sales added. */
+function sharedIncludes(c: StoredCampaign): { siteList: boolean; rateCard: boolean } {
+  const kind = c.kind === 'sitelist' || c.kind === 'ratecard' ? c.kind : c.kind === 'proposal' || !c.items.some((i) => (i as { kind?: string })?.kind === 'site') ? 'proposal' : 'sitelist';
+  if (kind === 'sitelist') return { siteList: true, rateCard: false };
+  if (kind === 'ratecard') return { siteList: false, rateCard: true };
+  const priced = Boolean(c.rateCard?.lines?.some((l) => l?.rate != null));
+  return { siteList: c.includes?.siteList === true, rateCard: typeof c.includes?.rateCard === 'boolean' ? c.includes.rateCard : priced };
+}
 
 /** The campaign behind a booking link, if the key matches. Same answer for a wrong key and no campaign. */
 async function sharedCampaign(env: Env, id: string, key: string) {
@@ -533,6 +543,7 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
     if (rec) client = (JSON.parse(rec.data) as { name?: string }).name ?? client;
   }
   const sent = [...c.events].reverse().find((e) => e.kind === 'status' && /^Sent the proposal/.test(e.text))?.at;
+  const includes = sharedIncludes(c);
   return json({
     proposal: {
       v: 2,
@@ -548,8 +559,9 @@ async function getProposal(url: URL, env: Env, id: string, knownKey?: string): P
       items: c.items,
       from: owner ? { name: owner.name || owner.email, title: owner.title, email: owner.email } : null,
       at: sent ?? c.updatedAt ?? row.updated_at,
-      // A proposal or rate card shows its prices to the client; a site list never does.
-      rateCard: c.kind !== 'sitelist' && c.rateCard ? c.rateCard : null,
+      // Prices only when the document carries a rate card; a site list never does.
+      rateCard: includes.rateCard && c.rateCard ? c.rateCard : null,
+      includes,
     },
     changesPending: Boolean(c.clientChanges),
     // The page uses id and key from here on (changes, approval).

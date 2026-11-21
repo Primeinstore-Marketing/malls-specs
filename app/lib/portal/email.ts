@@ -1,6 +1,6 @@
 import type { Catalogue } from '@data-model';
 import { withBasePath } from '@/lib/basePath';
-import { docKind, docWords, formatDate, formatRange } from './logic';
+import { docKind, docWords, formatDate, formatRange, includesRateCard, includesSiteList } from './logic';
 import { hasRates, rand, rateTotals } from './rates';
 import { campaignScreens, creativeGroups, creativeLabel, sheetHref } from './screens';
 import { campaignContact, shareUrl } from './share';
@@ -63,7 +63,7 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
       w.noun === 'rate card'
         ? `Here’s the rate card for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the prices and download them in Excel, then approve it in one click or tell me what to change.`
         : w.noun === 'proposal'
-        ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the screens, the malls and the investment, then approve it in one click or tell me what to change.`
+        ? `Here’s our proposal for ${c.name}: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Open the link to see the screens and the malls${includesRateCard(c) ? ', and the investment' : ''}, then approve it in one click or tell me what to change.`
         : `Here’s the site list for ${c.name}, from our booking system: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Please check the screens and approve it in one click, or tell me what to change. It also shows how many files to make and the template for each.`,
     reminder: `A quick reminder that the ${w.noun} for ${c.name} (${dates}) is waiting for your approval. It takes one click.`,
     booked: `${c.name} is booked: ${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}, ${dates}. Here’s the artwork to supply.`,
@@ -78,7 +78,12 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
     const size = x.width && x.height ? `${x.width} × ${x.height} px` : 'size to be confirmed';
     byMall.set(x.mallName, [...(byMall.get(x.mallName) ?? []), `${x.title}${x.qty > 1 ? ` × ${x.qty}` : ''} (${size})`]);
   }
-  const priced = hasRates(c) ? rateTotals(c) : null;
+  const priced = includesRateCard(c) && hasRates(c) ? rateTotals(c) : null;
+  // A proposal can carry the site list (the creatives to supply) and the rate card too.
+  const withSiteList = isProposal && docKind(c) === 'proposal' && includesSiteList(c);
+  const withRateCard = isProposal && docKind(c) === 'proposal' && includesRateCard(c);
+  const extras = [withSiteList ? 'the site list, with the artwork sizes, spec sheets and templates' : '', withRateCard ? 'the rate card, to download in Excel' : ''].filter(Boolean);
+  const alsoIncluded = extras.length ? `It also includes ${extras.join(', and ')}.` : '';
   const investment = priced ? `${rand(c.rateCard?.vat ? priced.total : priced.net)}${c.rateCard?.vat ? ' including VAT' : ' excluding VAT'}` : null;
 
   /* ---- Plain text ---- */
@@ -96,6 +101,8 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
           `The screens we propose (${unit(total)} in ${malls} ${malls === 1 ? 'mall' : 'malls'}):`,
           ...[...byMall.entries()].map(([m, list]) => `- ${m}: ${list.join('; ')}`),
           investment ? `\nInvestment: ${investment}` : '',
+          alsoIncluded ? `\n${alsoIncluded}` : '',
+          ...(withSiteList ? ['', `Creative to supply${deadline ? ` (needed before ${deadline})` : ''}: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}`, ...groups.map((z, i) => `- Creative ${i + 1}: ${creativeLabel(z)}, for ${unitOf(z.count)} in ${z.malls} ${z.malls === 1 ? 'mall' : 'malls'}`)] : []),
         ]
       : [
           `Creative to supply${deadline ? ` (needed before ${deadline})` : ''}: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}`,
@@ -155,8 +162,9 @@ export function buildClientEmail(c: Campaign, user: PortalUser, catalogue: Catal
       .map(([m, list]) => `<tr><td style="${FONT}padding:10px 0;border-top:1px solid ${C.line};font-size:15px;color:${C.ink};"><strong>${esc(m)}</strong><br><span style="font-size:13px;color:${C.muted};">${list.map(esc).join('<br>')}</span></td></tr>`)
       .join('')}</table>
     ${investment ? `<div style="margin-top:12px;padding:12px 16px;background:${C.soft};font-size:15px;color:${C.ink};">Investment: <strong>${esc(investment)}</strong></div>` : ''}
+    ${alsoIncluded ? `<p style="margin:12px 0 0;font-size:14px;line-height:21px;color:${C.muted};">${esc(alsoIncluded)}</p>` : ''}
   </td></tr>` : ''}
-  ${!isProposal && groups.length ? `<tr><td style="${FONT}padding:24px 28px 4px;">
+  ${(!isProposal || withSiteList) && groups.length ? `<tr><td style="${FONT}padding:24px 28px 4px;">
     <div style="font-size:16px;font-weight:bold;color:${C.ink};">Creative to supply: ${groups.length} ${groups.length === 1 ? 'creative' : 'creatives'}</div>
     <div style="margin-top:4px;font-size:13px;color:${C.muted};">One video or still per creative${deadline ? `, before ${esc(deadline)}` : ''}.${hasTemplates ? ' Build it in the After Effects template; the spec sheet has the file types and safe areas.' : ''} Where the size is still to be confirmed, Primedia will send it. The page lists every site in each group.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${sizeRows}</table>

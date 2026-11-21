@@ -124,6 +124,8 @@ function Form({ user }: { user: PortalUser }) {
     audience,
     items: items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` })),
     ...docRates(items.map((i, n) => ({ ...i, id: `i-${newId.slice(2)}-${n}` }))),
+    // A proposal made with the document's site list or prices goes out with them (sales can untick either on its page).
+    ...(kind === 'proposal' ? { includes: { siteList: siteLines.length > 0, rateCard: docPriced > 0 } } : {}),
   });
   /** The document's prices on the new campaign's rate card (for the whole flight: change it there if they're weekly). */
   const docRates = (lines: Campaign['items']): { rateCard?: RateCard } => {

@@ -18,6 +18,8 @@ import {
   DOC_KINDS,
   DOC_WORDS,
   docKind,
+  includesRateCard,
+  includesSiteList,
   docWords,
   phase,
   progress,
@@ -222,7 +224,8 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
     const datesSet = Boolean(c.start && c.end);
     const t = rateTotals(c);
     const rateDoc = docKind(c) === 'ratecard';
-    const ready = c.items.length > 0 && datesSet && (!rateDoc || t.priced > 0);
+    const priceStep = includesRateCard(c);
+    const ready = c.items.length > 0 && datesSet && (!priceStep || t.priced > 0);
     const n = c.items.length;
     title = c.status === 'proposed' ? `${campaignClientName(c)} sent a request` : c.status === 'changes' ? 'Changes requested' : 'Next steps';
     body = (
@@ -235,12 +238,12 @@ function NextStep({ c, user }: { c: Campaign; user: PortalUser }) {
           <NextRow n={2} done={hasClient && datesSet} title="Client and dates" detail={`${hasClient ? campaignClientName(c) : 'No client yet'} · ${datesSet ? formatRange(c.start, c.end) : 'no dates yet'}${contact?.email ? '' : ' · no client email yet'}`}>
             <a href="#details" className={hasClient && datesSet ? btn.quiet : btn.secondary}>{hasClient && datesSet ? 'Edit' : 'Add'}</a>
           </NextRow>
-          {w.noun !== 'site list' ? (
-            <NextRow n={3} done={t.priced > 0} optional={!rateDoc} title="Prices" detail={t.priced ? `${t.priced} of ${t.lines} lines priced · ${rand(t.total)}` : 'Type them in or upload a price list. Lines without a price show R 0.00.'}>
+          {priceStep ? (
+            <NextRow n={3} done={t.priced > 0} title={rateDoc ? 'Prices' : 'Prices for the rate card'} detail={t.priced ? `${t.priced} of ${t.lines} lines priced · ${rand(t.total)}` : 'Type them in or upload a price list. Lines without a price show R 0.00.'}>
               <a href="#rates" className={btn.quiet}>{t.priced ? 'Edit' : 'Add prices'}</a>
             </NextRow>
           ) : null}
-          <NextRow n={w.noun !== 'site list' ? 4 : 3} done={false} title={`Check it and send it to ${contact?.name ? contact.name.split(' ')[0] : 'the client'}`} detail={ready ? `Preview what they’ll see, then email it. They approve or decline from the link.` : rateDoc && n && datesSet ? 'Add at least one price first.' : `Add ${n ? 'the dates' : `${w.unit}s and dates`} first.`}>
+          <NextRow n={priceStep ? 4 : 3} done={false} title={`Check it and send it to ${contact?.name ? contact.name.split(' ')[0] : 'the client'}`} detail={ready ? `Preview what they’ll see, then email it. They approve or decline from the link.` : priceStep && n && datesSet ? 'Add at least one price first.' : `Add ${n ? 'the dates' : `${w.unit}s and dates`} first.`}>
             <PreviewButton c={c} user={user} variant="secondary" label="Preview" />
             <button type="button" disabled={!ready} className={btn.primary} onClick={() => { sentNote.current = note; setEmailing('proposal'); }}>
               Email {w.noun}
@@ -563,6 +566,29 @@ function Details({ c, user }: { c: Campaign; user: PortalUser }) {
             </div>
           </div>
         ) : null}
+        {sales && docKind(c) === 'proposal' ? (
+          // A proposal can go out with the site list and the rate card: on the client's page, in the email and in the downloads.
+          <fieldset className="flex flex-col gap-2 sm:col-span-2">
+            <legend className={`${label} mb-1.5`}>Include in the proposal</legend>
+            {([
+              ['siteList', 'Site list', 'The screens with their artwork sizes, spec sheets and templates. The client can download it as a PDF.', includesSiteList(c)],
+              ['rateCard', 'Rate card', 'The prices. The client sees them on the proposal and can download them in Excel.', includesRateCard(c)],
+            ] as const).map(([key, name, hint, on]) => (
+              <label key={key} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-bg px-4 py-3 hover:border-border-strong">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => portal.edit(c.id, { includes: { siteList: includesSiteList(c), rateCard: includesRateCard(c), [key]: e.target.checked } })}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="flex flex-col">
+                  <span className="text-body-md font-semibold text-fg">{name}</span>
+                  <span className="text-body-sm text-fg-muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        ) : null}
         <label className="flex flex-col gap-1.5 sm:col-span-2">
           <span className={label}>Name</span>
           <input className={input} value={c.name} onChange={(e) => portal.edit(c.id, { name: e.target.value })} />
@@ -791,7 +817,7 @@ function View({ id, user }: { id: string; user: PortalUser }) {
             {c.items.some((i) => i.kind !== 'site') || !c.items.length ? <Items c={{ ...c, items: c.items.filter((i) => i.kind !== 'site') }} user={user} /> : null}
             {editable ? <Suggestions c={c} /> : null}
           </section>
-          {user.role === 'sales' ? <RateCardEditor c={c} user={user} editable={editable} /> : null}
+          {user.role === 'sales' && includesRateCard(c) ? <RateCardEditor c={c} user={user} editable={editable} /> : null}
         </div>
         <section id="updates" className="flex scroll-mt-28 flex-col gap-4 lg:sticky lg:top-[calc(var(--topbar-height)+24px)] lg:h-fit print:hidden" aria-labelledby="updates-title">
           <h2 id="updates-title" className="text-display-sm text-fg">Updates</h2>

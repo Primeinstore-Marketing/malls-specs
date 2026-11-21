@@ -352,7 +352,7 @@ export const portal = {
     save({ ...s, active });
   },
 
-  edit(id: string, fields: Partial<Pick<Campaign, 'name' | 'clientId' | 'prospect' | 'objective' | 'start' | 'end' | 'audience' | 'kind'>>) {
+  edit(id: string, fields: Partial<Pick<Campaign, 'name' | 'clientId' | 'prospect' | 'objective' | 'start' | 'end' | 'audience' | 'kind' | 'includes'>>) {
     updateCampaign(id, () => fields);
   },
 

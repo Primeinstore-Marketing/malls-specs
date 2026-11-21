@@ -1,7 +1,7 @@
 import { annualVisits, deckMall, deckMallForApp, packageByCode } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
 import { CLIENTS, USERS } from './seed';
-import type { Campaign, CampaignItem, CampaignStatus, DocKind, PortalUser } from './types';
+import type { Campaign, CampaignItem, CampaignStatus, DocIncludes, DocKind, PortalUser } from './types';
 
 /** Proposal, site list or rate card: set when it was made, else a campaign with site lines (from a PIMS export) is a site list. */
 export function docKind(c: { kind?: DocKind; items: readonly CampaignItem[] }): DocKind {
@@ -17,6 +17,22 @@ export const DOC_WORDS: Readonly<Record<DocKind, { noun: string; Noun: string; a
 
 /** The three kinds, in the order the menus show them. */
 export const DOC_KINDS: readonly DocKind[] = ['proposal', 'sitelist', 'ratecard'];
+
+type IncludesOf = { kind?: DocKind; items: readonly CampaignItem[]; includes?: DocIncludes; rateCard?: { lines: readonly { rate: number | null }[] } | null };
+
+/** Whether the document carries a site list: a site list always; a proposal when sales add one. A rate card never. */
+export function includesSiteList(c: IncludesOf): boolean {
+  const k = docKind(c);
+  return k === 'sitelist' || (k === 'proposal' && Boolean(c.includes?.siteList));
+}
+
+/** Whether the document carries a rate card: a rate card always; a proposal when sales add one (older proposals: when priced). A site list never. */
+export function includesRateCard(c: IncludesOf): boolean {
+  const k = docKind(c);
+  if (k === 'ratecard') return true;
+  if (k !== 'proposal') return false;
+  return c.includes?.rateCard ?? Boolean(c.rateCard?.lines.some((l) => l.rate != null));
+}
 
 export const docWords = (c: { kind?: DocKind; items: readonly CampaignItem[] }) => DOC_WORDS[docKind(c)];
 

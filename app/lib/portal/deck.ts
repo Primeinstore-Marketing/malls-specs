@@ -21,7 +21,7 @@ import { withBasePath } from '@/lib/basePath';
 import { fileUrl } from '@/lib/api';
 import { STANDARD_BANDS, annualVisits, bandShare, compact, earnsAtLeast, isCleared, mallArea, mallName, mallPhoto, networkStats, packagePhotos, screenPhotos, semShare } from '@/lib/insights';
 import type { DeckMall } from '@/lib/insights';
-import { docWords, formatDate, formatRange, itemMall, days, reach, campaignClientName } from './logic';
+import { docWords, formatDate, formatRange, includesRateCard, itemMall, days, reach, campaignClientName } from './logic';
 import { mallFacts } from './mallScreens';
 import { campaignScreens, creativeGroups, creativeLabel } from './screens';
 import type { BookedScreen, CreativeGroup } from './screens';
@@ -661,8 +661,8 @@ export async function buildDeck(c: Campaign, user: PortalUser, catalogue: Catalo
     footer(slide, false, label, logos, n);
   }
 
-  /* Investment: the rate card, when sales priced the proposal */
-  if (hasRates(c)) {
+  /* Investment: the rate card, when the proposal carries one and it's priced */
+  if (includesRateCard(c) && hasRates(c)) {
     n += 1;
     const slide = pptx.addSlide();
     slide.background = { color: look.paper };

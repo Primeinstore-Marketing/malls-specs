@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { isCleared, packagePhotos } from '@/lib/insights';
 import { EmailButton } from '@/components/ui/EmailButton';
 import { refreshLiveData, useLiveData } from '@/lib/liveData';
-import { days, docKind, docWords, formatDate, formatRange, itemLabel, phase } from '@/lib/portal/logic';
+import { days, docKind, docWords, formatDate, formatRange, includesRateCard, includesSiteList, itemLabel, phase } from '@/lib/portal/logic';
 import { PERIOD_LABEL, hasRates, pricedLines, rand, rateTotals } from '@/lib/portal/rates';
 import { artworkSizes, campaignScreens, creativeGroups } from '@/lib/portal/screens';
 import { CreativeGroups, creativeSummary } from './CreativeGroups';
@@ -284,8 +284,26 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
   // A proposal is approved as a proposal, whatever it holds (screens, a site list, a rate card).
   // Only a document sales made as a site list is approved as one.
   const w = docWords(p);
-  const isProposal = docKind(p) === 'proposal';
-  const isRateCard = docKind(p) === 'ratecard';
+  // A proposal can carry a site list and a rate card; "?view=sitelist" shows (and prints) just its site list.
+  const baseKind = docKind(p);
+  const withSiteList = includesSiteList(p);
+  const withRateCard = includesRateCard(p);
+  const view = params.get('view');
+  const shownKind = baseKind === 'proposal' && view === 'sitelist' && withSiteList ? 'sitelist' : baseKind;
+  const isProposal = shownKind === 'proposal';
+  const isRateCard = shownKind === 'ratecard';
+  const partOfProposal = shownKind !== baseKind;
+  /** This page showing one part of the proposal (or the whole proposal again). */
+  const partUrl = (v: 'sitelist' | null, print = false) => {
+    if (typeof window === 'undefined') return '#';
+    const u = new URL(window.location.href);
+    u.searchParams.delete('print');
+    u.searchParams.delete('preview');
+    if (v) u.searchParams.set('view', v);
+    else u.searchParams.delete('view');
+    if (print) u.searchParams.set('print', '1');
+    return u.toString();
+  };
 
   /* A proposal is its presentation: built here, shown slide by slide, and that same file downloaded. (A site list prints as a PDF.) */
   const [deck, setDeck] = useState<{ blob: Blob; fileName: string; slides: PreviewSlide[] } | null>(null);
@@ -482,6 +500,9 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
                 {deck ? 'Download PowerPoint' : deckState === 'failed' ? 'PowerPoint unavailable' : 'Preparing PowerPoint…'}
               </button>
             ) : null}
+            {partOfProposal ? (
+              <a href={partUrl(null)} className="flex h-10 items-center rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 print:hidden">← The proposal</a>
+            ) : null}
             {isRateCard ? (
               <button type="button" disabled={excelBusy || !hasRates(p)} title={hasRates(p) ? '' : 'No prices yet'} onClick={() => void downloadExcel()} className="h-10 rounded-full border border-white/25 px-4 text-body-sm font-semibold hover:bg-white/10 disabled:opacity-60 print:hidden">
                 {excelBusy ? 'Preparing Excel…' : 'Download Excel'}
@@ -633,11 +654,28 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           )
         ) : null}
 
-        {/* ---- A site list: what to supply, grouped by creative ---- */}
-        {!isProposal && !isRateCard ? (
+        {/* ---- A proposal's rate card: the prices, to download in Excel ---- */}
+        {isProposal && withRateCard ? (
+          <section className="flex flex-col gap-3" aria-label="Rate card">
+            {hasRates(p) ? <Investment p={p} title="Rate card" /> : <p className="rounded-3xl bg-bg p-6 text-center text-body-md text-fg-muted">The prices aren’t on the rate card yet. {first} will send them shortly.</p>}
+            {hasRates(p) ? (
+              <button type="button" disabled={excelBusy} onClick={() => void downloadExcel()} className={`${btnSecondary} self-start print:hidden`}>
+                {excelBusy ? 'Preparing Excel…' : 'Download rate card (Excel)'}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* ---- A site list (or a proposal's site list): what to supply, grouped by creative ---- */}
+        {(!isProposal && !isRateCard) || (isProposal && withSiteList) ? (
         <section className="flex flex-col gap-4" aria-labelledby="supply-title">
           <div className="flex flex-col gap-1">
-            <h2 id="supply-title" className="text-display-sm text-fg">What you need to supply</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="supply-title" className="text-display-sm text-fg">{isProposal ? 'Site list: what you need to supply' : 'What you need to supply'}</h2>
+              {isProposal ? (
+                <a href="#" onClick={(e) => { e.preventDefault(); window.open(partUrl('sitelist', true), '_blank', 'noopener'); }} className={`${btnSecondary} print:hidden`}>Download site list (PDF)</a>
+              ) : null}
+            </div>
             <p className="max-w-prose text-body-md text-fg">{creativeSummary(creatives, unitWord, 'client')}</p>
             <p className="text-body-sm text-fg-muted">
               One video or still per creative{edits.start ? `, before ${formatDate(edits.start)}` : ''}, built in its After Effects template; the spec sheet has the file types and safe areas.
@@ -671,8 +709,6 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           </section>
         ) : null}
 
-        {/* ---- Investment: a proposal's prices, when sales priced it ---- */}
-        {isProposal && deckState === 'failed' && hasRates(p) ? <Investment p={p} /> : null}
 
         {/* ---- Approve, or send changes ---- */}
         <section className={`flex flex-col gap-4 rounded-3xl p-5 sm:p-6 print:hidden ${changed ? 'border-2 border-accent bg-bg' : 'bg-bg'}`} aria-labelledby="decide-title">
