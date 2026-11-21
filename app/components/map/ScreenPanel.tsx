@@ -12,7 +12,7 @@ import { PinStatusDot } from './PinStatusDot';
 import { DownloadButtons } from '@/components/spec/DownloadButtons';
 import { getAssets } from '@/lib/catalogue';
 import { fileUrl } from '@/lib/api';
-import { isCleared, screenPhotos } from '@/lib/insights';
+import { deckMallForApp, isCleared, mallPhoto, screenPhotos } from '@/lib/insights';
 import { usePortalUser } from '@/lib/portal/store';
 import { useAdminSession } from '@/components/auth/AdminSession';
 import { AddMallToRequest, AddScreenButton } from '@/components/request/AddToRequest';
@@ -254,9 +254,27 @@ function MallOverview({
 }) {
   const confirmedCount = specs.filter((spec) => pins[spec.id]?.source === 'confirmed').length;
   const toCheckCount = specs.length - confirmedCount;
+  // The mall's photo (the admin's upload, else the malls deck's). Public
+  // visitors only see it once its rights are cleared.
+  const { user } = usePortalUser();
+  const { isAdmin } = useAdminSession();
+  const deck = deckMallForApp(mall.id);
+  const shot = deck ? mallPhoto(deck.id) : null;
+  const photo = shot && (isCleared(shot) || Boolean(user) || isAdmin) ? shot : null;
 
   return (
     <div className="flex flex-col gap-5">
+      {photo ? (
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-subtle">
+          {/* eslint-disable-next-line @next/next/no-img-element -- photo from the API's file store */}
+          <img src={photo.src} alt={`${mall.name} mall`} width={photo.width || undefined} height={photo.height || undefined} decoding="async" className="aspect-video w-full object-cover" />
+          {!isCleared(photo) ? (
+            <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white" title="Internal use until rights are cleared">
+              Rights pending
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2">
         <span className="text-label-md uppercase text-fg-subtle">{MALL_GROUP_LABELS[mall.group]}</span>
         <h2 className="text-display-lg text-fg">{mall.name}</h2>
