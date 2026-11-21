@@ -567,7 +567,7 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
         </div>
       ) : null}
 
-      <main className={`mx-auto flex max-w-5xl flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12 print:gap-6 print:py-6 ${editable ? 'pb-32 sm:pb-32' : ''}`}>
+      <main className={`mx-auto flex max-w-5xl flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12 print:gap-6 print:py-6 ${editable && changed ? 'pb-32 sm:pb-32' : ''}`}>
         {/* ---- Summary ---- */}
         <section className="flex flex-col gap-4">
           <span className="text-label-md font-semibold uppercase text-accent">{p.client && p.client !== 'No client yet' ? `Prepared for ${p.client}` : `Primedia Malls ${w.noun}`}</span>
@@ -820,24 +820,16 @@ function Booking({ p, shareKey, changesPending = false, reload }: { p: SharedPro
           )}
         </section>
 
-        {editable ? (
+        {editable && changed ? (
           <div className="fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-bg/95 backdrop-blur print:hidden">
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
-              <span className="min-w-0 flex-1 truncate text-body-sm text-fg-muted sm:flex-none">
-                {changed ? 'You have changes that aren’t sent yet.' : `${total} ${lines.some((l) => l.screen.site) ? (total === 1 ? 'site' : 'sites') : total === 1 ? 'screen' : 'screens'} · ${formatRange(edits.start, edits.end)}`}
-              </span>
+              <span className="min-w-0 flex-1 truncate text-body-sm text-fg-muted sm:flex-none">You have changes that aren’t sent yet.</span>
               <div className="flex shrink-0 justify-end gap-2">
-                {changed ? (
-                  <>
-                    <button type="button" onClick={resetEdits} className={`${btnSecondary} hidden sm:inline-flex`}>Undo</button>
-                    {shareKey ? (
-                      <button type="button" onClick={() => document.getElementById('decide-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Review and send changes</button>
-                    ) : (
-                      <EmailButton up align="right" href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} justify-center`}>Send changes to {first}</EmailButton>
-                    )}
-                  </>
+                <button type="button" onClick={resetEdits} className={`${btnSecondary} hidden sm:inline-flex`}>Undo</button>
+                {shareKey ? (
+                  <button type="button" onClick={() => document.getElementById('decide-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`${btnPrimary} flex-1 justify-center sm:flex-none`}>Review and send changes</button>
                 ) : (
-                  <button type="button" onClick={() => document.getElementById('decide-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className={`${btnPrimary} justify-center whitespace-nowrap`}>Approve or decline ↓</button>
+                  <EmailButton up align="right" href={mail(`Changes to: ${p.name}`, changesBody)} className={`${btnPrimary} justify-center`}>Send changes to {first}</EmailButton>
                 )}
               </div>
             </div>
