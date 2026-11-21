@@ -161,23 +161,32 @@ export function BriefDrop({ inventory, onDraft, pims = false, compact = false }:
         </button>
         <span role="status" className="sr-only">{status ?? ''}</span>
         {menu ? (
-          <div role="menu" aria-label="What to make from the file" className="absolute inset-x-0 top-full z-popover mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-border bg-bg p-2 shadow-3 sm:grid-cols-2">
-            {([
-              ['proposal', 'Make a proposal', 'From a brief or booking sheet: the AI picks the screens, client and dates.'],
-              ['sitelist', 'Make a site list', 'From a PIMS export or booking: every site, with its spec sheet and template.'],
-            ] as const).map(([m, label, hint]) => (
-              <button
-                key={m}
-                type="button"
-                role="menuitem"
-                autoFocus={m === (pims ? 'sitelist' : 'proposal')}
-                onClick={() => choose(m)}
-                className="flex flex-col gap-0.5 rounded-xl px-4 py-3 text-left hover:bg-accent-subtle focus-visible:bg-accent-subtle focus-visible:outline-none"
-              >
-                <span className="text-body-md font-semibold text-fg">{label}</span>
-                <span className="text-body-sm text-fg-muted">{hint}</span>
-              </button>
-            ))}
+          <div role="menu" aria-labelledby="make-title" className="absolute inset-x-0 top-full z-popover mt-2 rounded-3xl border border-border bg-bg p-3 shadow-4 sm:p-4">
+            <p id="make-title" className="px-1 pb-3 text-body-md font-semibold text-fg">What do you want to make from the file?</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {([
+                ['proposal', 'Make a proposal', 'From a brief or booking sheet: the AI picks the screens, client and dates.', 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6'],
+                ['sitelist', 'Make a site list', 'From a PIMS export or booking: every site, with its spec sheet and template.', 'M4 6h16M4 12h16M4 18h16M8 4v4M8 10v4M8 16v4'],
+              ] as const).map(([m, label, hint, icon]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="menuitem"
+                  autoFocus={m === (pims ? 'sitelist' : 'proposal')}
+                  onClick={() => choose(m)}
+                  className="group flex items-start gap-4 rounded-2xl border-2 border-border bg-bg-subtle p-5 text-left transition-colors hover:border-accent hover:bg-accent-subtle focus-visible:border-accent focus-visible:bg-accent-subtle focus-visible:outline-none"
+                >
+                  <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-fg-on-accent">
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
+                  </span>
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="text-body-lg font-semibold text-fg">{label}</span>
+                    <span className="text-body-sm text-fg-muted">{hint}</span>
+                    <span className="mt-2 text-body-sm font-semibold text-accent group-hover:underline">Choose file →</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
         <div className="hidden">
