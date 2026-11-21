@@ -190,8 +190,14 @@ function Form({ user }: { user: PortalUser }) {
     setPicked(new Map(chosen.map((i) => [i.key, rows.get(i.key)!.item] as const)));
     // A site list: keep every row; a matched row brings its screen (size, spec sheet, template).
     const used = new Set<string>();
+    // The rows read here (Excel, CSV) are the document's own, with its pixel sizes: they win over the
+    // server's reading, keeping the AI's screen match for each site code it matched.
+    const aiMatch = new Map((draft.sites ?? []).filter((x) => x.match).map((x) => [x.siteNo, x.match] as const));
+    const sites = docRows.length && (draft.sites?.length || make === 'sitelist' || kind === 'sitelist')
+      ? docRows.map(({ rate: _rate, ...r }) => ({ ...r, match: aiMatch.get(r.siteNo) ?? null }))
+      : draft.sites ?? [];
     setSiteLines(
-      (draft.sites ?? []).map((r, n) => {
+      sites.map((r, n) => {
         const row = r.match ? rows.get(r.match) : undefined;
         const screen = row?.item.kind === 'screen' ? row.item : undefined;
         let ref = r.siteNo || `line-${n + 1}`;
@@ -218,7 +224,7 @@ function Form({ user }: { user: PortalUser }) {
       draft,
       file,
       truncated,
-      kept: chosen.length + (draft.sites?.length ?? 0),
+      kept: chosen.length + sites.length,
       dropped: draft.items.length - chosen.length,
       undo: () => {
         setName(before.name);
@@ -268,8 +274,8 @@ function Form({ user }: { user: PortalUser }) {
               <p className="text-body-md text-fg">{aiDraft.draft.summary}</p>
               {docPriced ? <p className="text-body-sm font-semibold text-success-fg">Prices for {docPriced} {docPriced === 1 ? 'line' : 'lines'} from the document go on the rate card (as prices for the whole flight; change that on the rate card if they’re weekly).</p> : null}
               <p className="text-body-sm text-fg-muted">
-                {aiDraft.draft.sites?.length
-                  ? `All ${aiDraft.draft.sites.length} sites from the document are in the site list: ${aiDraft.draft.sites.filter((x) => x.match).length} matched to screens on the site, ${aiDraft.draft.sites.filter((x) => !x.match).length} marked “check”.`
+                {siteLines.length
+                  ? `All ${siteLines.length} sites from the document are in the site list: ${siteLines.filter((x) => x.specId).length} matched to screens on the site, ${siteLines.filter((x) => !x.specId).length} marked “check”.`
                   : `${aiDraft.kept} ${aiDraft.kept === 1 ? 'screen' : 'screens'} chosen${aiDraft.dropped ? ` (${aiDraft.dropped} suggestion${aiDraft.dropped === 1 ? '' : 's'} not found and left out)` : ''}.`}{' '}
                 Check the details and screens below, then create it.
               </p>

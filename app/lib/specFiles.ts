@@ -30,17 +30,28 @@ export function specFiles(spec: Specification, catalogue: Catalogue): SpecFiles 
   if (mine.sheet || mine.template) return { ...mine, from: null };
   const size = getScreenSize(spec);
   if (!size) return { ...mine, from: null };
+  const found = filesForSize(size.width, size.height, spec.title, catalogue, spec.id);
+  return found.from ? found : { ...mine, from: null };
+}
+
+/**
+ * The files for artwork of a given pixel size: the network format of that
+ * size (the closest name to `title` wins), or none. For a site list line
+ * whose document gives a size its matched screen doesn't have.
+ */
+export function filesForSize(width: number, height: number, name: string, catalogue: Catalogue, not?: string): SpecFiles {
+  const size = { width, height };
   const formats = getMalls(catalogue)
     .filter((m) => m.group === 'formats')
     .flatMap((m) => m.specIds)
     .map((id) => catalogue.specifications[id])
-    .filter((f): f is Specification => Boolean(f) && f.id !== spec.id)
+    .filter((f): f is Specification => Boolean(f) && f.id !== not)
     .filter((f) => {
       const s = getScreenSize(f);
       return s?.width === size.width && s?.height === size.height;
     });
-  const title = words(spec.title);
+  const title = words(name);
   const score = (f: Specification) => words(f.title).filter((w) => title.includes(w)).length;
   const best = [...formats].sort((a, b) => score(b) - score(a)).find((f) => own(f, catalogue).sheet || own(f, catalogue).template);
-  return best ? { ...own(best, catalogue), from: best } : { ...mine, from: null };
+  return best ? { ...own(best, catalogue), from: best } : { sheet: null, template: null, from: null };
 }

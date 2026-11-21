@@ -75,51 +75,98 @@ function cellsOf(line: string): string[] {
   return out;
 }
 
-const COLUMNS: Record<keyof Omit<SiteRow, 'no'>, RegExp> = {
-  siteNo: /^(site ?(no|num|number|code|id|ref)|package|code|ref(erence)?|panel ?(no|id))\b/i,
+type Column = keyof Omit<SiteRow, 'no'> | 'package' | 'format' | 'pixelWidth' | 'pixelHeight';
+
+/** Heading names per column. The first heading that fits a column takes it. */
+const COLUMNS: Partial<Record<Column, RegExp>> = {
+  siteNo: /^(site ?(no|num|number|code|id|ref)|code|ref(erence)?|panel ?(no|id))\b/i,
+  // A package name ("Cape Gate - Digi Impact Package 01 {CA02}"): the reference only when there's no site code.
+  package: /^package\b/i,
   location: /^(location|site ?name|description|desc|screen|position)\b/i,
   mall: /^(area|mall|centre|center|venue|property)\b/i,
   town: /^(town|city|region|province|suburb)\b/i,
-  size: /^(size|dimensions?|format|resolution)\b/i,
+  // Pixels, never millimetres: PIMS also lists "Display Height (mm)" and "Display Width (mm)", which aren't the artwork size.
+  pixelWidth: /^(pix(c)?els? ?width|width ?\(?(px|pixels?)\)?|res(olution)? ?width)\b/i,
+  pixelHeight: /^(pix(c)?els? ?height|height ?\(?(px|pixels?)\)?|res(olution)? ?height)\b/i,
+  size: /^(size|dimensions?|resolution|pix(c)?els?)\b(?! ?(width|height|pitch))(?!.*\b(mm|sqr|m2|metres?|meters?)\b)/i,
+  format: /^(media ?(format|type)|format)\b/i,
   start: /^(start|from|flt ?from|flight ?from|start ?date|on ?air)\b/i,
   end: /^(end|to|flt ?to|flight ?to|end ?date|off ?air)\b/i,
   // The price before discount: "Rate", "Rate card", "Price", "Cost", "Amount", "Gross"; not "Net" or "Total".
-  rate: /^(rate( ?card)?|price|cost|amount|gross|media ?(rate|cost))\b/i,
+  rate: /^((monthly ?)?rate( ?card)?|price|cost|amount|gross|media ?(rate|cost))\b/i,
 };
+
+/** A pixel count from a cell: "1920", "1 920", "1920px". */
+const px = (v: string) => {
+  const n = Number(v.replace(/[\s,]|px$/gi, ''));
+  return Number.isInteger(n) && n >= 16 && n <= 20000 ? n : null;
+};
+
+/** "1920 x 1080", "1920×1080px" → "1920x1080"; anything else as written. */
+const sizeText = (v: string, heightFirst = false) => {
+  const m = v.match(/^\s*(\d[\d ]{1,5})\s*(?:px)?\s*[x×*]\s*(\d[\d ]{1,5})\s*(?:px)?\s*$/i);
+  if (!m) return v; // "Various", "1.92m X 1.08m", "3840m X 2160m": not a pixel size.
+  const [a, b] = [m[1].replace(/ /g, ''), m[2].replace(/ /g, '')];
+  return heightFirst ? `${b}x${a}` : `${a}x${b}`;
+};
+
+/** "Cape Gate - Digital Impact Checkers Court - Package 01  {CH20}" → "Digital Impact Checkers Court". */
+function packagePlace(name: string, mall: string): string {
+  let t = tidy(name.replace(/\{[^}]*\}/g, ''));
+  const first = mall.toLowerCase().replace(/\s+mall$/, '').split(' ')[0];
+  const dash = t.search(/\s*-\s*/);
+  if (first && dash > 0 && t.slice(0, dash).toLowerCase().includes(first)) t = t.slice(dash).replace(/^\s*-\s*/, '');
+  return tidy(t.replace(/\s*-?\s*package\s*\d+\s*$/i, ''));
+}
 
 function fromTable(text: string): SiteRow[] {
   const lines = text.split('\n');
   for (let h = 0; h < lines.length; h += 1) {
     const head = cellsOf(lines[h]);
-    if (head.length < 2) continue;
-    const col: Partial<Record<keyof typeof COLUMNS, number>> = {};
+    if (head.filter(Boolean).length < 2) continue;
+    const col: Partial<Record<Column, number>> = {};
     head.forEach((name, i) => {
-      for (const [key, re] of Object.entries(COLUMNS) as [keyof typeof COLUMNS, RegExp][]) {
+      for (const [key, re] of Object.entries(COLUMNS) as [Column, RegExp][]) {
         if (col[key] === undefined && re.test(name)) {
           col[key] = i;
           break;
         }
       }
     });
-    if (col.location === undefined && col.siteNo === undefined) continue;
-    if (col.location === undefined && col.mall === undefined && col.rate === undefined) continue;
+    const ref = col.siteNo ?? col.package;
+    if (col.location === undefined && ref === undefined) continue;
+    if (col.location === undefined && col.mall === undefined && col.format === undefined && col.pixelWidth === undefined && col.rate === undefined) continue;
+    // "Size(HxW)": height first, so turned round to width × height.
+    const heightFirst = col.size !== undefined && /\bh\s*[x×]\s*w\b/i.test(head[col.size] ?? '');
     const rows: SiteRow[] = [];
+    // PIMS reports put each mall on a row of its own above its sites, and name a package only on its first site.
+    let section = '';
+    let pkg = '';
     for (const line of lines.slice(h + 1)) {
       const c = cellsOf(line);
-      const get = (k: keyof typeof COLUMNS) => (col[k] === undefined ? '' : tidy(c[col[k]!] ?? ''));
-      if (/^(total|sub ?total|grand total)\b/i.test(c[0] ?? '') || /^---/.test(line)) break;
-      if (!get('location') && !get('siteNo') && !get('mall')) {
-        if (rows.length) break;
+      const get = (k: Column) => (col[k] === undefined ? '' : tidy(c[col[k]!] ?? ''));
+      if (/^(total|sub ?total|grand total)\b/i.test(c.find(Boolean) ?? '') || /^---/.test(line)) break;
+      const filled = c.filter(Boolean);
+      const reference = col.siteNo !== undefined ? get('siteNo') : '';
+      if (filled.length === 1 && !reference && !get('location') && !get('mall')) {
+        section = tidy(filled[0]);
+        pkg = '';
         continue;
       }
+      if (!get('location') && !reference && !get('package') && !get('mall')) continue;
+      if (get('package')) pkg = get('package');
       const split = splitMall(get('location'));
+      const mall = get('mall') || section || split.mall;
+      const place = get('mall') || section ? get('location') : split.location || get('location');
+      const w = px(get('pixelWidth'));
+      const hgt = px(get('pixelHeight'));
       rows.push({
         no: rows.length + 1,
-        siteNo: get('siteNo').replace(/^package[\s-]*/i, ''),
+        siteNo: (reference || get('package')).replace(/^package[\s-]*/i, ''),
         town: get('town'),
-        mall: get('mall') || split.mall,
-        location: get('mall') ? get('location') : split.location || get('location'),
-        size: get('size'),
+        mall,
+        location: place || (pkg ? packagePlace(pkg, mall) : '') || get('format'),
+        size: w && hgt ? `${w}x${hgt}` : sizeText(get('size'), heightFirst),
         start: isoDate(get('start')),
         end: isoDate(get('end')),
         rate: col.rate === undefined ? null : readPrice(c[col.rate] ?? ''),
@@ -149,12 +196,31 @@ function fromPrinted(text: string): SiteRow[] {
       mall: split.mall,
       location: split.location,
       size: '',
-      start: isoDate(m[4]),
-      end: isoDate(m[5]),
+      // "Flt To" may be printed before "Flt From": the earlier date is the start.
+      start: [isoDate(m[4]), isoDate(m[5])].sort()[0] ?? null,
+      end: [isoDate(m[4]), isoDate(m[5])].sort()[1] ?? null,
       rate: null,
     });
   }
-  return rows;
+  return withoutComment(rows, /\bcomment\b/i.test(flat));
+}
+
+/**
+ * Reports with a Comment column print it straight after the location
+ * ("…Hi Fi Corp,Edgars Cell c"): the same words at the end of every row are
+ * the comment, not part of the place. Never strips a whole location.
+ */
+function withoutComment<T extends { location: string }>(rows: T[], hasComment: boolean): T[] {
+  if (!hasComment || rows.length < 2) return rows;
+  let tail = rows[0].location;
+  for (const r of rows) {
+    let n = 0;
+    while (n < tail.length && n < r.location.length && tail[tail.length - 1 - n].toLowerCase() === r.location[r.location.length - 1 - n].toLowerCase()) n += 1;
+    tail = tail.slice(tail.length - n);
+  }
+  const cut = tail.trim();
+  if (cut.length < 3 || !/[a-z]/i.test(cut) || rows.some((r) => tidy(r.location).length <= cut.length)) return rows;
+  return rows.map((r) => ({ ...r, location: tidy(r.location.slice(0, r.location.length - tail.length)) }));
 }
 
 /** Every site the document lists, in order; empty when it isn't a site list. */

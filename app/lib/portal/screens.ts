@@ -4,7 +4,7 @@ import { downloadUrl } from '@/lib/api';
 import { mallName as publicName, packageByCode, mapIdOf } from '@/lib/insights';
 import { mallPlace } from '@/lib/sites';
 import { formatAspectRatio, getMalls, getScreenSize } from '@/lib/malls';
-import { specFiles } from '@/lib/specFiles';
+import { filesForSize, specFiles } from '@/lib/specFiles';
 import type { CampaignItem } from './types';
 
 /**
@@ -68,6 +68,35 @@ function fromSpec(spec: Specification | undefined, catalogue: Catalogue) {
     sheet: spec ? sheetFor(spec, catalogue) : null,
     template: spec ? templateFor(spec, catalogue) : null,
     specTitle: spec?.title ?? null,
+  };
+}
+
+/** "1080x1920" → 1080 × 1920. */
+export function pixelSize(size: string | undefined): { width: number; height: number } | null {
+  const m = (size ?? '').match(/^\s*(\d{2,5})\s*[x×]\s*(\d{2,5})\s*(px)?\s*$/i);
+  return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
+}
+
+/**
+ * A site list line's own pixel size (the document's Pixel Width × Pixel
+ * Height) is the artwork size, even when its matched screen says otherwise
+ * (e.g. a 4K Digi Engage matched to the HD one). The files then come from
+ * the screen when it's that size, else from the network format of that size.
+ */
+function docSize(size: string, spec: Specification | undefined, title: string, catalogue: Catalogue) {
+  const px = pixelSize(size);
+  if (!px) return {};
+  const specSize = spec ? getScreenSize(spec) : null;
+  if (specSize && specSize.width === px.width && specSize.height === px.height) return {};
+  const files = filesForSize(px.width, px.height, `${spec?.title ?? ''} ${title}`, catalogue);
+  return {
+    width: px.width,
+    height: px.height,
+    orientation: orientationOf(px.width, px.height),
+    ratio: formatAspectRatio(px),
+    sheet: files.sheet,
+    template: files.template,
+    ...(spec ? {} : { specId: files.from?.id ?? null, specTitle: files.from?.title ?? null }),
   };
 }
 
@@ -148,6 +177,7 @@ export function screensFor(item: CampaignItem, catalogue: Catalogue): BookedScre
         title: item.location || spec?.title || item.siteNo,
         qty: 1,
         ...fromSpec(spec, catalogue),
+        ...docSize(item.size, spec, item.location, catalogue),
         assumed: null,
         sites: null,
         site: { siteNo: item.siteNo, no: item.no, town: item.town, size: item.size, start: item.start, end: item.end, matched: Boolean(spec) },

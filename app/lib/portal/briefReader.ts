@@ -155,7 +155,8 @@ async function xlsx(files: Map<string, () => Promise<string>>): Promise<string> 
         return isDateCol && /^\d{5}(\.\d+)?$/.test(v) ? excelDate(Number(v)) : v;
       });
       if (cells.filter((x) => /[a-z]/i.test(x)).length >= 3 && cells.some((x) => /date|from|start/i.test(x))) headings = cells;
-      return out.join('\t').trim();
+      // Trim the end only: empty cells at the start keep every row's columns under its heading.
+      return out.join('\t').replace(/\s+$/, '');
     });
     parts.push(`--- Sheet ${i + 1} ---\n${rows.filter(Boolean).join('\n')}`);
   }

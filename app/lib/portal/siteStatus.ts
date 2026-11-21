@@ -5,6 +5,7 @@
  * the site's own malls (not the AI), so it's the same every time.
  */
 import type { Catalogue } from '@data-model';
+import { getScreenSize } from '@/lib/malls';
 import type { Mall } from '@/lib/malls';
 import type { SiteItem } from './types';
 
@@ -75,17 +76,36 @@ export function unmatchedSummary(lines: readonly SiteItem[], malls: readonly Mal
   });
 }
 
+/** Site codes name the format: "MEN/MAPP/001/02" is a Digi Engage, "WES/MTV/003B" a Digi Icon TV, "CAP/VID/002" a Digital Impact. */
+const CODE_FORMAT: Record<string, { code?: RegExp; title: RegExp }> = {
+  MAPP: { code: /(^|-)MAPP$/i, title: /digi ?engage/i },
+  MTV: { title: /digi ?icon|icon ?tv/i },
+  VID: { title: /digi(tal)? ?impact/i },
+};
+
 /**
- * A site-list line whose site code names a format (e.g. "MEN/MAPP/001/02":
- * MAPP sites are Digi Engage screens) matches that mall's screen of the
- * format, without relying on the AI. Null when the mall has no such screen.
+ * A site-list line whose site code names a format matches that mall's screen
+ * of the format, without relying on the AI: the one of the line's own pixel
+ * size where the document gives it, else the one whose name shares the most
+ * words with the line's place, else the mall's only one. Null when the mall
+ * has no such screen.
  */
-export function formatScreen(line: Pick<SiteItem, 'siteNo' | 'mall'>, malls: readonly Mall[], catalogue: Catalogue): { specId: string; appMallId: string } | null {
+export function formatScreen(line: Pick<SiteItem, 'siteNo' | 'mall'> & { readonly size?: string; readonly location?: string }, malls: readonly Mall[], catalogue: Catalogue): { specId: string; appMallId: string } | null {
   const kind = line.siteNo.toUpperCase().split(/[/\s-]+/)[1] ?? '';
-  if (kind !== 'MAPP') return null;
+  const rule = CODE_FORMAT[kind];
+  if (!rule) return null;
   const mall = findMall(line.mall, malls);
   if (!mall) return null;
-  const specId = mall.specIds.find((id) => /(^|-)MAPP$/i.test(catalogue.specifications[id]?.code ?? ''))
-    ?? mall.specIds.find((id) => /digi engage/i.test(catalogue.specifications[id]?.title ?? ''));
-  return specId ? { specId, appMallId: mall.id } : null;
+  const specs = mall.specIds
+    .map((id) => catalogue.specifications[id])
+    .filter((x): x is NonNullable<typeof x> => Boolean(x && !x.archivedAt))
+    .filter((x) => (rule.code && rule.code.test(x.code ?? '')) || rule.title.test(x.title));
+  if (!specs.length) return null;
+  const px = (line.size ?? '').match(/^(\d{2,5})x(\d{2,5})$/i);
+  const sized = px ? specs.filter((x) => { const z = getScreenSize(x); return z?.width === Number(px[1]) && z?.height === Number(px[2]); }) : [];
+  const pool = sized.length ? sized : specs;
+  const place = new Set(mallWords(line.location ?? '').split(' ').filter((w) => w.length > 2 && !/^(digi|digital|impact|engage|icon|package|slot)$/.test(w)));
+  const score = (t: string) => mallWords(t).split(' ').filter((w) => place.has(w)).length;
+  const best = [...pool].sort((a, b) => score(b.title) - score(a.title))[0];
+  return best ? { specId: best.id, appMallId: mall.id } : null;
 }
